@@ -1,0 +1,34 @@
+# Build optimizations for faster compile times
+
+[build]
+# Use all available CPU cores for parallel compilation
+jobs = -1
+
+[target.x86_64-pc-windows-msvc]
+# Use faster linker on Windows (if available)
+# Uncomment if you have lld installed: rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[profile.dev]
+# Faster debug builds - less optimization but faster compile
+opt-level = 0
+debug = true
+# Split debug info for faster linking
+split-debuginfo = "packed"
+
+[profile.dev.package."*"]
+# Optimize dependencies even in dev mode (they rarely change)
+opt-level = 2
+
+[profile.release]
+# Maximum optimization for release builds
+opt-level = 3
+lto = "thin"           # Link-time optimization (thin is faster than fat)
+codegen-units = 1      # Better optimization, slower compile
+strip = true           # Strip symbols for smaller binary
+
+[profile.release-fast]
+# Fast release builds for testing (less optimized but quicker to build)
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false
