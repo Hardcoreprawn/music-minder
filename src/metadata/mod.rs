@@ -113,28 +113,25 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
     };
     
     // Write title
-    if let Some(ref title) = track.title {
-        if should_write(tag.title().as_deref(), "title", &mut fields_skipped) {
+    if let Some(ref title) = track.title
+        && should_write(tag.title().as_deref(), "title", &mut fields_skipped) {
             tag.set_title(title.clone());
             fields_updated += 1;
         }
-    }
     
     // Write artist
-    if let Some(ref artist) = track.artist {
-        if should_write(tag.artist().as_deref(), "artist", &mut fields_skipped) {
+    if let Some(ref artist) = track.artist
+        && should_write(tag.artist().as_deref(), "artist", &mut fields_skipped) {
             tag.set_artist(artist.clone());
             fields_updated += 1;
         }
-    }
     
     // Write album
-    if let Some(ref album) = track.album {
-        if should_write(tag.album().as_deref(), "album", &mut fields_skipped) {
+    if let Some(ref album) = track.album
+        && should_write(tag.album().as_deref(), "album", &mut fields_skipped) {
             tag.set_album(album.clone());
             fields_updated += 1;
         }
-    }
     
     // Write track number
     if let Some(track_num) = track.track_number {

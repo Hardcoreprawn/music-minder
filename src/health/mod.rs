@@ -393,13 +393,11 @@ pub async fn delete_health(pool: &SqlitePool, path: &str) -> sqlx::Result<bool> 
 pub async fn has_file_changed(pool: &SqlitePool, path: &Path) -> sqlx::Result<bool> {
     let path_str = path.to_string_lossy().to_string();
     
-    if let Some(health) = get_health(pool, &path_str).await? {
-        if let Some(stored_hash) = health.file_hash {
-            if let Ok(current_hash) = compute_file_hash(path) {
+    if let Some(health) = get_health(pool, &path_str).await?
+        && let Some(stored_hash) = health.file_hash
+            && let Ok(current_hash) = compute_file_hash(path) {
                 return Ok(stored_hash != current_hash);
             }
-        }
-    }
     
     // No previous record or can't compute hash - treat as changed
     Ok(true)

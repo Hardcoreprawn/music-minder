@@ -588,12 +588,11 @@ fn main() -> anyhow::Result<()> {
                     success_count, skip_count, fail_count);
                 
                 // Show health summary if tracking
-                if let Some(ref p) = pool {
-                    if let Ok(summary) = health::get_summary(p).await {
+                if let Some(ref p) = pool
+                    && let Ok(summary) = health::get_summary(p).await {
                         println!("\nHealth Summary: {} ok, {} errors, {} no match",
                             summary.ok, summary.errors, summary.no_match);
                     }
-                }
                 
                 if *dry_run && *write {
                     println!("\nRun without --dry-run to write tags.");

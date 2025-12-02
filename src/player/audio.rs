@@ -339,11 +339,10 @@ impl AudioThreadContext {
                 self.decoder = None;
             }
             PlayerCommand::Seek(pos) => {
-                if let Some(ref mut dec) = self.decoder {
-                    if let Err(e) = dec.seek(pos) {
+                if let Some(ref mut dec) = self.decoder
+                    && let Err(e) = dec.seek(pos) {
                         tracing::warn!("Seek failed: {}", e);
                     }
-                }
             }
             PlayerCommand::Shutdown => return false,
         }
@@ -446,11 +445,10 @@ fn audio_thread_main(
         };
 
         // Process command if received
-        if let Some(cmd) = command {
-            if !ctx.handle_command(cmd, &state) {
+        if let Some(cmd) = command
+            && !ctx.handle_command(cmd, &state) {
                 break;
             }
-        }
 
         // Decode audio when playing
         if state.read().status == PlaybackStatus::Playing {

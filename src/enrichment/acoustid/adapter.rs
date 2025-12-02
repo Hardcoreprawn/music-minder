@@ -24,7 +24,7 @@ pub fn to_identifications(
     Ok(response
         .results
         .into_iter()
-        .flat_map(|result| convert_result_to_identifications(result))
+        .flat_map(convert_result_to_identifications)
         .collect())
 }
 
@@ -48,9 +48,7 @@ fn convert_recording_to_identifications(
 ) -> Vec<TrackIdentification> {
     // Get artist info from first artist
     let (artist_name, artist_id) = recording
-        .artists
-        .iter()
-        .next()
+        .artists.first()
         .map(|a| (Some(a.name.clone()), Some(a.id.clone())))
         .unwrap_or((None, None));
 

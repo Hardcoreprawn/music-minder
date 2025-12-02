@@ -29,7 +29,7 @@ pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentificatio
         year,
         duration: response
             .length
-            .map(|ms| std::time::Duration::from_millis(ms)),
+            .map(std::time::Duration::from_millis),
         artist_id,
         release_id,
         release_type,
@@ -105,9 +105,7 @@ fn extract_release_info(
         .or_else(|| {
             // Fall back to any official release
             releases
-                .iter()
-                .filter(|r| r.status.as_deref() == Some("Official"))
-                .next()
+                .iter().find(|r| r.status.as_deref() == Some("Official"))
         })
         .or_else(|| releases.first());
 

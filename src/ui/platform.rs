@@ -12,11 +12,10 @@ use std::path::PathBuf;
 /// 5. Current directory (last resort)
 pub fn get_user_music_folder() -> PathBuf {
     // Use the dirs crate which handles Windows known folders properly
-    if let Some(music) = dirs::audio_dir() {
-        if music.exists() {
+    if let Some(music) = dirs::audio_dir()
+        && music.exists() {
             return music;
         }
-    }
     
     // Try OneDrive Music folder (common for Windows users)
     if let Some(user_profile) = std::env::var_os("USERPROFILE") {

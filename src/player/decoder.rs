@@ -150,11 +150,10 @@ impl AudioDecoder {
                     Some(symphonia::core::meta::StandardTagKey::Date) => {
                         // Try to parse year from date
                         let s = tag.value.to_string();
-                        if let Some(year_str) = s.split('-').next() {
-                            if let Ok(y) = year_str.parse() {
+                        if let Some(year_str) = s.split('-').next()
+                            && let Ok(y) = year_str.parse() {
                                 info.year = Some(y);
                             }
-                        }
                     }
                     Some(symphonia::core::meta::StandardTagKey::Genre) => {
                         info.genre = Some(tag.value.to_string());

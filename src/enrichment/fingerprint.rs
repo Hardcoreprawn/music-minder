@@ -34,17 +34,11 @@ const FPCALC_PATHS: &[&str] = &[
 
 /// Find the fpcalc executable, checking common installation paths
 fn find_fpcalc() -> Option<&'static str> {
-    for path in FPCALC_PATHS {
-        if Command::new(path)
+    FPCALC_PATHS.iter().find(|&path| Command::new(path)
             .arg("-version")
             .output()
             .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            return Some(path);
-        }
-    }
-    None
+            .unwrap_or(false)).map(|v| v as _)
 }
 
 /// Generate an audio fingerprint for the given file

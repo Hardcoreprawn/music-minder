@@ -98,8 +98,8 @@ impl EnrichmentService {
         };
 
         // Step 4: Optionally enrich with MusicBrainz
-        if self.config.use_musicbrainz {
-            if let Some(ref recording_id) = identification.track.recording_id {
+        if self.config.use_musicbrainz
+            && let Some(ref recording_id) = identification.track.recording_id {
                 // Add a small delay to respect MusicBrainz rate limits (1 req/sec)
                 tokio::time::sleep(Duration::from_millis(1100)).await;
 
@@ -114,7 +114,6 @@ impl EnrichmentService {
                     }
                 }
             }
-        }
 
         Ok(identification)
     }
@@ -213,8 +212,8 @@ fn calculate_match_score(
     }
     
     // Check if artist matches embedded metadata
-    if let Some(ref artist) = identification.track.artist {
-        if let Some(meta) = existing_meta {
+    if let Some(ref artist) = identification.track.artist
+        && let Some(meta) = existing_meta {
             let artist_lower = artist.to_lowercase();
             let existing_lower = meta.artist.to_lowercase();
             if !meta.artist.is_empty() &&
@@ -222,7 +221,6 @@ fn calculate_match_score(
                 score += 0.10; // Boost for artist match
             }
         }
-    }
 
     // Penalize undesirable release types based on secondary types
     for secondary_type in &identification.track.secondary_types {

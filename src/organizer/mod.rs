@@ -180,14 +180,13 @@ pub fn undo_move(record: &MoveRecord) -> Result<()> {
 
 /// Recursively removes empty directories up the tree
 fn remove_empty_dirs(path: &Path) -> Result<()> {
-    if path.is_dir() {
-        if fs::read_dir(path)?.next().is_none() {
+    if path.is_dir()
+        && fs::read_dir(path)?.next().is_none() {
             fs::remove_dir(path)?;
             if let Some(parent) = path.parent() {
                 let _ = remove_empty_dirs(parent);
             }
         }
-    }
     Ok(())
 }
 
