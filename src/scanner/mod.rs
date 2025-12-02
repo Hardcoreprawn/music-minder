@@ -1,3 +1,8 @@
+//! Directory scanning for audio files.
+//!
+//! Provides async streaming of discovered audio file paths within a directory tree.
+//! Filters for common audio formats: MP3, FLAC, OGG, M4A, WAV.
+
 use futures::stream::Stream;
 use std::path::PathBuf;
 use tokio::sync::mpsc;

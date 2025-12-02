@@ -1,3 +1,11 @@
+//! Database module for track, artist, and album persistence.
+//!
+//! Uses SQLx with SQLite for lightweight, embedded database storage.
+//! Provides async operations for:
+//! - Track CRUD operations
+//! - Artist and album management  
+//! - Batch updates for file organization
+
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::migrate::MigrateDatabase;
 use crate::model::Track;

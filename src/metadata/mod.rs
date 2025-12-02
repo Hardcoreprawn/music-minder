@@ -1,3 +1,14 @@
+//! Audio file metadata reading and writing.
+//!
+//! Uses the lofty crate for format-independent metadata access.
+//! Supports reading from and writing to MP3, FLAC, OGG, M4A, and WAV files.
+//!
+//! # Features
+//! - Read track metadata (title, artist, album, year, track number)
+//! - Preview metadata changes before writing
+//! - Write enriched metadata from identification services
+//! - Support for MusicBrainz recording IDs
+
 use anyhow::{Context, Result};
 use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, TaggedFileExt};

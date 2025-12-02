@@ -1,3 +1,8 @@
+//! Core data models for the music library.
+//!
+//! Defines the primary entities: `Track`, `Artist`, and `Album`.
+//! These are derived from SQLx for database mapping.
+
 use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow)]

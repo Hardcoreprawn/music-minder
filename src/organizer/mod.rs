@@ -1,3 +1,14 @@
+//! File organization and movement utilities.
+//!
+//! Provides functionality to organize music files into a structured directory
+//! hierarchy based on metadata patterns like `{Artist}/{Album}/{TrackNum} - {Title}.{ext}`.
+//!
+//! # Features
+//! - Pattern-based file organization
+//! - Preview mode to see changes before applying
+//! - Undo support with logged move operations
+//! - Automatic cleanup of empty directories
+
 use crate::metadata::TrackMetadata;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

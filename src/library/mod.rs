@@ -1,3 +1,8 @@
+//! Library scanning and management.
+//!
+//! Coordinates the scanning of directories for audio files, reading their
+//! metadata, and storing track information in the database.
+
 use crate::{db, metadata, scanner};
 use futures::{Stream, StreamExt};
 use sqlx::SqlitePool;
