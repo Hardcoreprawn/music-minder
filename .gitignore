@@ -4,6 +4,14 @@
 Cargo.lock
 .env
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Test and output directories
+/test_music/
+/organized_music/
 
 # Added by cargo
 #
