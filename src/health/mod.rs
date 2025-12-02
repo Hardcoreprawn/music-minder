@@ -1,14 +1,14 @@
 //! File health tracking module
-//! 
-//! Tracks the health status of audio files to identify corrupt, 
+//!
+//! Tracks the health status of audio files to identify corrupt,
 //! problematic, or unidentifiable files in your music library.
 
 use chrono::{DateTime, Utc};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqlitePool;
-use std::path::Path;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
 
 /// Health status of an audio file
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,7 +135,11 @@ impl FileHealth {
     }
 
     /// Create a record for a file with an error
-    pub fn error(path: impl Into<String>, error_type: ErrorType, message: impl Into<String>) -> Self {
+    pub fn error(
+        path: impl Into<String>,
+        error_type: ErrorType,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             id: None,
             path: path.into(),
@@ -209,14 +213,14 @@ pub fn compute_file_hash(path: &Path) -> std::io::Result<String> {
     let mut file = File::open(path)?;
     let metadata = file.metadata()?;
     let file_size = metadata.len();
-    
+
     let mut hasher = Sha256::new();
-    
+
     // Hash file size first (so different sized files have different hashes)
     hasher.update(file_size.to_le_bytes());
-    
+
     const CHUNK_SIZE: u64 = 1024 * 1024; // 1MB
-    
+
     if file_size <= CHUNK_SIZE * 2 {
         // Small file - hash the whole thing
         let mut buffer = Vec::new();
@@ -225,17 +229,17 @@ pub fn compute_file_hash(path: &Path) -> std::io::Result<String> {
     } else {
         // Large file - hash first and last 1MB
         let mut buffer = vec![0u8; CHUNK_SIZE as usize];
-        
+
         // First chunk
         file.read_exact(&mut buffer)?;
         hasher.update(&buffer);
-        
+
         // Last chunk
         file.seek(SeekFrom::End(-(CHUNK_SIZE as i64)))?;
         file.read_exact(&mut buffer)?;
         hasher.update(&buffer);
     }
-    
+
     let result = hasher.finalize();
     Ok(format!("{:x}", result))
 }
@@ -266,7 +270,9 @@ impl From<FileHealthRow> for FileHealth {
             id: Some(row.id),
             path: row.path,
             status: row.status.parse().unwrap_or(HealthStatus::Unknown),
-            error_type: row.error_type.map(|s| s.parse().unwrap_or(ErrorType::Other("unknown".into()))),
+            error_type: row
+                .error_type
+                .map(|s| s.parse().unwrap_or(ErrorType::Other("unknown".into()))),
             error_message: row.error_message,
             acoustid_fingerprint: row.acoustid_fingerprint,
             acoustid_confidence: row.acoustid_confidence,
@@ -282,7 +288,7 @@ impl From<FileHealthRow> for FileHealth {
 pub async fn upsert_health(pool: &SqlitePool, health: &FileHealth) -> sqlx::Result<i64> {
     let last_checked = health.last_checked.to_rfc3339();
     let error_type = health.error_type.as_ref().map(|e| e.as_str().to_string());
-    
+
     let row: (i64,) = sqlx::query_as(
         r#"
         INSERT INTO file_health (
@@ -316,31 +322,31 @@ pub async fn upsert_health(pool: &SqlitePool, health: &FileHealth) -> sqlx::Resu
     .bind(&last_checked)
     .fetch_one(pool)
     .await?;
-    
+
     Ok(row.0)
 }
 
 /// Get health record for a specific file
 pub async fn get_health(pool: &SqlitePool, path: &str) -> sqlx::Result<Option<FileHealth>> {
-    let row: Option<FileHealthRow> = sqlx::query_as(
-        "SELECT * FROM file_health WHERE path = ?"
-    )
-    .bind(path)
-    .fetch_optional(pool)
-    .await?;
-    
+    let row: Option<FileHealthRow> = sqlx::query_as("SELECT * FROM file_health WHERE path = ?")
+        .bind(path)
+        .fetch_optional(pool)
+        .await?;
+
     Ok(row.map(|r| r.into()))
 }
 
 /// Get all files with a specific status
-pub async fn get_by_status(pool: &SqlitePool, status: HealthStatus) -> sqlx::Result<Vec<FileHealth>> {
-    let rows: Vec<FileHealthRow> = sqlx::query_as(
-        "SELECT * FROM file_health WHERE status = ? ORDER BY path"
-    )
-    .bind(status.as_str())
-    .fetch_all(pool)
-    .await?;
-    
+pub async fn get_by_status(
+    pool: &SqlitePool,
+    status: HealthStatus,
+) -> sqlx::Result<Vec<FileHealth>> {
+    let rows: Vec<FileHealthRow> =
+        sqlx::query_as("SELECT * FROM file_health WHERE status = ? ORDER BY path")
+            .bind(status.as_str())
+            .fetch_all(pool)
+            .await?;
+
     Ok(rows.into_iter().map(|r| r.into()).collect())
 }
 
@@ -355,12 +361,11 @@ pub struct HealthSummary {
 }
 
 pub async fn get_summary(pool: &SqlitePool) -> sqlx::Result<HealthSummary> {
-    let rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT status, COUNT(*) as count FROM file_health GROUP BY status"
-    )
-    .fetch_all(pool)
-    .await?;
-    
+    let rows: Vec<(String, i64)> =
+        sqlx::query_as("SELECT status, COUNT(*) as count FROM file_health GROUP BY status")
+            .fetch_all(pool)
+            .await?;
+
     let mut summary = HealthSummary::default();
     for (status, count) in rows {
         summary.total += count;
@@ -372,18 +377,18 @@ pub async fn get_summary(pool: &SqlitePool) -> sqlx::Result<HealthSummary> {
             _ => {}
         }
     }
-    
+
     Ok(summary)
 }
 
 /// Get all error files with their messages
 pub async fn get_errors(pool: &SqlitePool) -> sqlx::Result<Vec<FileHealth>> {
     let rows: Vec<FileHealthRow> = sqlx::query_as(
-        "SELECT * FROM file_health WHERE status = 'error' ORDER BY error_type, path"
+        "SELECT * FROM file_health WHERE status = 'error' ORDER BY error_type, path",
     )
     .fetch_all(pool)
     .await?;
-    
+
     Ok(rows.into_iter().map(|r| r.into()).collect())
 }
 
@@ -393,20 +398,21 @@ pub async fn delete_health(pool: &SqlitePool, path: &str) -> sqlx::Result<bool> 
         .bind(path)
         .execute(pool)
         .await?;
-    
+
     Ok(result.rows_affected() > 0)
 }
 
 /// Check if a file has changed since last check (by comparing hash)
 pub async fn has_file_changed(pool: &SqlitePool, path: &Path) -> sqlx::Result<bool> {
     let path_str = path.to_string_lossy().to_string();
-    
+
     if let Some(health) = get_health(pool, &path_str).await?
         && let Some(stored_hash) = health.file_hash
-            && let Ok(current_hash) = compute_file_hash(path) {
-                return Ok(stored_hash != current_hash);
-            }
-    
+        && let Ok(current_hash) = compute_file_hash(path)
+    {
+        return Ok(stored_hash != current_hash);
+    }
+
     // No previous record or can't compute hash - treat as changed
     Ok(true)
 }
@@ -414,8 +420,8 @@ pub async fn has_file_changed(pool: &SqlitePool, path: &Path) -> sqlx::Result<bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::io::Write;
+    use tempfile::tempdir;
 
     #[test]
     fn test_health_status_roundtrip() {
@@ -439,7 +445,10 @@ mod tests {
             ErrorType::Timeout,
             ErrorType::ApiError,
         ] {
-            assert_eq!(error_type.as_str().parse::<ErrorType>().unwrap(), error_type);
+            assert_eq!(
+                error_type.as_str().parse::<ErrorType>().unwrap(),
+                error_type
+            );
         }
     }
 
@@ -463,15 +472,15 @@ mod tests {
     fn test_compute_file_hash_small_file() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
-        
+
         let mut file = File::create(&file_path).unwrap();
         file.write_all(b"Hello, world!").unwrap();
         drop(file);
-        
+
         let hash = compute_file_hash(&file_path).unwrap();
         assert!(!hash.is_empty());
         assert_eq!(hash.len(), 64); // SHA256 hex
-        
+
         // Same content should give same hash
         let hash2 = compute_file_hash(&file_path).unwrap();
         assert_eq!(hash, hash2);
@@ -480,16 +489,16 @@ mod tests {
     #[test]
     fn test_compute_file_hash_different_content() {
         let dir = tempdir().unwrap();
-        
+
         let file1_path = dir.path().join("test1.txt");
         let file2_path = dir.path().join("test2.txt");
-        
+
         std::fs::write(&file1_path, b"Content A").unwrap();
         std::fs::write(&file2_path, b"Content B").unwrap();
-        
+
         let hash1 = compute_file_hash(&file1_path).unwrap();
         let hash2 = compute_file_hash(&file2_path).unwrap();
-        
+
         assert_ne!(hash1, hash2);
     }
 
@@ -498,13 +507,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
         let db_url = format!("sqlite:{}", db_path.display());
-        
+
         let pool = crate::db::init_db(&db_url).await.unwrap();
-        
+
         let health = FileHealth::ok("/test/file.mp3", 0.95, None);
         let id = upsert_health(&pool, &health).await.unwrap();
         assert!(id > 0);
-        
+
         let retrieved = get_health(&pool, "/test/file.mp3").await.unwrap().unwrap();
         assert_eq!(retrieved.status, HealthStatus::Ok);
         assert_eq!(retrieved.acoustid_confidence, Some(0.95));
@@ -515,15 +524,26 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
         let db_url = format!("sqlite:{}", db_path.display());
-        
+
         let pool = crate::db::init_db(&db_url).await.unwrap();
-        
+
         // Add some records
-        upsert_health(&pool, &FileHealth::ok("/ok1.mp3", 0.9, None)).await.unwrap();
-        upsert_health(&pool, &FileHealth::ok("/ok2.mp3", 0.85, None)).await.unwrap();
-        upsert_health(&pool, &FileHealth::error("/bad.mp3", ErrorType::DecodeError, "corrupt")).await.unwrap();
-        upsert_health(&pool, &FileHealth::no_match("/unknown.mp3")).await.unwrap();
-        
+        upsert_health(&pool, &FileHealth::ok("/ok1.mp3", 0.9, None))
+            .await
+            .unwrap();
+        upsert_health(&pool, &FileHealth::ok("/ok2.mp3", 0.85, None))
+            .await
+            .unwrap();
+        upsert_health(
+            &pool,
+            &FileHealth::error("/bad.mp3", ErrorType::DecodeError, "corrupt"),
+        )
+        .await
+        .unwrap();
+        upsert_health(&pool, &FileHealth::no_match("/unknown.mp3"))
+            .await
+            .unwrap();
+
         let summary = get_summary(&pool).await.unwrap();
         assert_eq!(summary.total, 4);
         assert_eq!(summary.ok, 2);
@@ -536,16 +556,28 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
         let db_url = format!("sqlite:{}", db_path.display());
-        
+
         let pool = crate::db::init_db(&db_url).await.unwrap();
-        
-        upsert_health(&pool, &FileHealth::ok("/ok1.mp3", 0.9, None)).await.unwrap();
-        upsert_health(&pool, &FileHealth::error("/bad1.mp3", ErrorType::DecodeError, "err1")).await.unwrap();
-        upsert_health(&pool, &FileHealth::error("/bad2.mp3", ErrorType::EmptyFingerprint, "err2")).await.unwrap();
-        
+
+        upsert_health(&pool, &FileHealth::ok("/ok1.mp3", 0.9, None))
+            .await
+            .unwrap();
+        upsert_health(
+            &pool,
+            &FileHealth::error("/bad1.mp3", ErrorType::DecodeError, "err1"),
+        )
+        .await
+        .unwrap();
+        upsert_health(
+            &pool,
+            &FileHealth::error("/bad2.mp3", ErrorType::EmptyFingerprint, "err2"),
+        )
+        .await
+        .unwrap();
+
         let errors = get_by_status(&pool, HealthStatus::Error).await.unwrap();
         assert_eq!(errors.len(), 2);
-        
+
         let ok = get_by_status(&pool, HealthStatus::Ok).await.unwrap();
         assert_eq!(ok.len(), 1);
     }

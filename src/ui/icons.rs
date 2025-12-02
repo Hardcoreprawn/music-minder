@@ -1,5 +1,5 @@
 //! Icon constants using Unicode symbols that work in default fonts.
-//! 
+//!
 //! Uses geometric shapes and symbols from Unicode that render in most system fonts.
 
 use iced::widget::text;
@@ -30,7 +30,7 @@ pub const VOLUME_UP: &str = "🔊";
 pub const VOLUME_MUTE: &str = "🔇";
 
 // ============================================================================
-// Navigation Icons  
+// Navigation Icons
 // ============================================================================
 
 /// Folder/Library icon - CARD FILE BOX

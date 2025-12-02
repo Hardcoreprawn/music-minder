@@ -42,7 +42,7 @@ impl AcoustIdClient {
     /// - Send User-Agent header identifying the application
     pub fn new(api_key: impl Into<String>) -> Self {
         let http_client = reqwest::Client::builder()
-            .gzip(true)  // Accept gzip-compressed responses
+            .gzip(true) // Accept gzip-compressed responses
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",

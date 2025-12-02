@@ -77,14 +77,18 @@ mod tests {
         // Verify contents (checking file names)
         let file_names: Vec<String> = paths
             .iter()
-            .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()))
+            .filter_map(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         assert!(file_names.contains(&"song.mp3".to_string()));
         assert!(file_names.contains(&"music.flac".to_string()));
         assert!(file_names.contains(&"track.wav".to_string()));
         assert!(file_names.contains(&"UPPERCASE.OGG".to_string()));
-        
+
         assert!(!file_names.contains(&"notes.txt".to_string()));
         assert!(!file_names.contains(&"image.png".to_string()));
     }

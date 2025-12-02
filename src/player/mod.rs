@@ -27,17 +27,17 @@ mod queue;
 mod state;
 mod visualization;
 
-pub use audio::{AudioOutput, AudioConfig};
+pub use audio::{AudioConfig, AudioOutput};
 pub use decoder::AudioDecoder;
 pub use queue::{PlayQueue, QueueItem};
-pub use state::{PlayerState, PlaybackStatus, PlayerCommand};
+pub use state::{PlaybackStatus, PlayerCommand, PlayerState};
 pub use visualization::{SpectrumData, VisualizationMode, Visualizer};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
+use parking_lot::RwLock;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use parking_lot::RwLock;
 
 /// The integrated audio player.
 ///
@@ -67,14 +67,10 @@ impl Player {
         let state = Arc::new(RwLock::new(PlayerState::default()));
         let (command_tx, command_rx) = bounded(32);
         let (viz_tx, viz_rx) = bounded(4); // Small buffer, drop old frames
-        
+
         // Try to initialize audio output
-        let audio = AudioOutput::new(
-            Arc::clone(&state),
-            command_rx,
-            viz_tx,
-        ).ok()?;
-        
+        let audio = AudioOutput::new(Arc::clone(&state), command_rx, viz_tx).ok()?;
+
         Some(Self {
             state,
             command_tx,
@@ -88,9 +84,11 @@ impl Player {
     pub fn play_file(&mut self, path: PathBuf) -> Result<(), PlayerError> {
         self.queue.clear();
         self.queue.add(QueueItem::from_path(path.clone()));
-        self.command_tx.send(PlayerCommand::Load(path))
+        self.command_tx
+            .send(PlayerCommand::Load(path))
             .map_err(|_| PlayerError::ChannelClosed)?;
-        self.command_tx.send(PlayerCommand::Play)
+        self.command_tx
+            .send(PlayerCommand::Play)
             .map_err(|_| PlayerError::ChannelClosed)?;
         Ok(())
     }
@@ -102,13 +100,15 @@ impl Player {
 
     /// Play / resume playback.
     pub fn play(&self) -> Result<(), PlayerError> {
-        self.command_tx.send(PlayerCommand::Play)
+        self.command_tx
+            .send(PlayerCommand::Play)
             .map_err(|_| PlayerError::ChannelClosed)
     }
 
     /// Pause playback.
     pub fn pause(&self) -> Result<(), PlayerError> {
-        self.command_tx.send(PlayerCommand::Pause)
+        self.command_tx
+            .send(PlayerCommand::Pause)
             .map_err(|_| PlayerError::ChannelClosed)
     }
 
@@ -124,13 +124,15 @@ impl Player {
 
     /// Stop playback.
     pub fn stop(&self) -> Result<(), PlayerError> {
-        self.command_tx.send(PlayerCommand::Stop)
+        self.command_tx
+            .send(PlayerCommand::Stop)
             .map_err(|_| PlayerError::ChannelClosed)
     }
 
     /// Seek to a position (0.0 - 1.0).
     pub fn seek(&self, position: f32) -> Result<(), PlayerError> {
-        self.command_tx.send(PlayerCommand::Seek(position.clamp(0.0, 1.0)))
+        self.command_tx
+            .send(PlayerCommand::Seek(position.clamp(0.0, 1.0)))
             .map_err(|_| PlayerError::ChannelClosed)
     }
 
@@ -147,9 +149,11 @@ impl Player {
     /// Skip to next track in queue.
     pub fn skip_forward(&mut self) -> Result<(), PlayerError> {
         if let Some(item) = self.queue.skip_forward() {
-            self.command_tx.send(PlayerCommand::Load(item.path.clone()))
+            self.command_tx
+                .send(PlayerCommand::Load(item.path.clone()))
                 .map_err(|_| PlayerError::ChannelClosed)?;
-            self.command_tx.send(PlayerCommand::Play)
+            self.command_tx
+                .send(PlayerCommand::Play)
                 .map_err(|_| PlayerError::ChannelClosed)?;
         }
         Ok(())
@@ -162,9 +166,11 @@ impl Player {
             // Restart current track
             self.seek(0.0)
         } else if let Some(item) = self.queue.previous() {
-            self.command_tx.send(PlayerCommand::Load(item.path.clone()))
+            self.command_tx
+                .send(PlayerCommand::Load(item.path.clone()))
                 .map_err(|_| PlayerError::ChannelClosed)?;
-            self.command_tx.send(PlayerCommand::Play)
+            self.command_tx
+                .send(PlayerCommand::Play)
                 .map_err(|_| PlayerError::ChannelClosed)?;
             Ok(())
         } else {
@@ -206,20 +212,16 @@ impl Default for Player {
 
 /// List available audio output devices.
 pub fn list_audio_devices() -> Vec<String> {
-    use cpal::traits::{HostTrait, DeviceTrait};
+    use cpal::traits::{DeviceTrait, HostTrait};
     let host = cpal::default_host();
     host.output_devices()
-        .map(|devices| {
-            devices
-                .filter_map(|d| d.name().ok())
-                .collect()
-        })
+        .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
         .unwrap_or_default()
 }
 
 /// Get the current/default audio device name.
 pub fn current_audio_device() -> String {
-    use cpal::traits::{HostTrait, DeviceTrait};
+    use cpal::traits::{DeviceTrait, HostTrait};
     let host = cpal::default_host();
     host.default_output_device()
         .and_then(|d| d.name().ok())
@@ -231,16 +233,16 @@ pub fn current_audio_device() -> String {
 pub enum PlayerError {
     #[error("Audio output initialization failed: {0}")]
     AudioInit(String),
-    
+
     #[error("Failed to decode audio: {0}")]
     Decode(String),
-    
+
     #[error("Audio channel closed")]
     ChannelClosed,
-    
+
     #[error("Unsupported audio format: {0}")]
     UnsupportedFormat(String),
-    
+
     #[error("File not found: {0}")]
     FileNotFound(String),
 }
@@ -261,10 +263,10 @@ mod tests {
     fn test_queue_operations() {
         let mut queue = PlayQueue::new();
         assert!(queue.is_empty());
-        
+
         queue.add(QueueItem::from_path(PathBuf::from("test.mp3")));
         assert_eq!(queue.len(), 1);
-        
+
         queue.clear();
         assert!(queue.is_empty());
     }

@@ -32,12 +32,11 @@ pub fn to_identifications(
 /// Each recording is expanded with all its release groups to enable better matching
 fn convert_result_to_identifications(result: dto::LookupResult) -> Vec<TrackIdentification> {
     let score = result.score;
-    
-    result.recordings
+
+    result
+        .recordings
         .into_iter()
-        .flat_map(|recording| {
-            convert_recording_to_identifications(recording, score)
-        })
+        .flat_map(|recording| convert_recording_to_identifications(recording, score))
         .collect()
 }
 
@@ -48,17 +47,21 @@ fn convert_recording_to_identifications(
 ) -> Vec<TrackIdentification> {
     // Get artist info from first artist
     let (artist_name, artist_id) = recording
-        .artists.first()
+        .artists
+        .first()
         .map(|a| (Some(a.name.clone()), Some(a.id.clone())))
         .unwrap_or((None, None));
 
     let title = recording.title.clone();
     let recording_id = recording.id.clone();
-    let duration = recording.duration.map(|d| std::time::Duration::from_secs(d as u64));
+    let duration = recording
+        .duration
+        .map(|d| std::time::Duration::from_secs(d as u64));
 
     // If we have release groups, create one identification per release group
     if !recording.releasegroups.is_empty() {
-        recording.releasegroups
+        recording
+            .releasegroups
             .into_iter()
             .map(|rg| {
                 let track = IdentifiedTrack {
@@ -107,7 +110,9 @@ fn convert_recording_to_identifications(
 }
 
 /// Select the best identification from a list (highest score)
-pub fn best_identification(identifications: Vec<TrackIdentification>) -> Option<TrackIdentification> {
+pub fn best_identification(
+    identifications: Vec<TrackIdentification>,
+) -> Option<TrackIdentification> {
     identifications.into_iter().max_by(|a, b| {
         a.score
             .partial_cmp(&b.score)
@@ -159,7 +164,10 @@ mod tests {
 
         let identifications = to_identifications(response).unwrap();
         assert_eq!(identifications.len(), 1);
-        assert_eq!(identifications[0].track.title, Some("Test Song".to_string()));
+        assert_eq!(
+            identifications[0].track.title,
+            Some("Test Song".to_string())
+        );
         assert_eq!(identifications[0].score, 0.9);
         assert_eq!(identifications[0].source, EnrichmentSource::AcoustId);
     }

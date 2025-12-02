@@ -76,11 +76,11 @@ impl MusicBrainzClient {
             .map_err(|e| EnrichmentError::Network(e.to_string()))?;
 
         let status = response.status();
-        
+
         if status == reqwest::StatusCode::NOT_FOUND {
             return Err(EnrichmentError::NoMatches);
         }
-        
+
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(EnrichmentError::RateLimited);
         }

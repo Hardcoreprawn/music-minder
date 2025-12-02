@@ -1,7 +1,7 @@
 //! Play queue management.
 
-use std::path::PathBuf;
 use super::state::TrackInfo;
+use std::path::PathBuf;
 
 /// A single item in the play queue.
 #[derive(Debug, Clone)]
@@ -20,7 +20,10 @@ impl QueueItem {
 
     /// Create a queue item with metadata.
     pub fn with_info(path: PathBuf, info: TrackInfo) -> Self {
-        Self { path, info: Some(info) }
+        Self {
+            path,
+            info: Some(info),
+        }
     }
 
     /// Get the display title.
@@ -128,7 +131,7 @@ impl PlayQueue {
         if from < self.items.len() && to < self.items.len() && from != to {
             let item = self.items.remove(from);
             self.items.insert(to, item);
-            
+
             // Adjust current position
             let pos = self.position as usize;
             if from == pos {
@@ -291,18 +294,18 @@ mod tests {
     fn test_queue_basic() {
         let mut queue = PlayQueue::new();
         assert!(queue.is_empty());
-        
+
         queue.add(make_item("a.mp3"));
         queue.add(make_item("b.mp3"));
         queue.add(make_item("c.mp3"));
-        
+
         assert_eq!(queue.len(), 3);
         assert!(queue.current().is_none()); // Not started yet
-        
+
         // First skip_forward() starts playback
         assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3"));
         assert_eq!(queue.current_index(), Some(0));
-        
+
         assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("b.mp3"));
         assert_eq!(queue.current_index(), Some(1));
     }
@@ -313,7 +316,7 @@ mod tests {
         queue.set_repeat(RepeatMode::All);
         queue.add(make_item("a.mp3"));
         queue.add(make_item("b.mp3"));
-        
+
         queue.skip_forward(); // a
         queue.skip_forward(); // b
         assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3")); // wraps
@@ -325,7 +328,7 @@ mod tests {
         queue.set_repeat(RepeatMode::One);
         queue.add(make_item("a.mp3"));
         queue.add(make_item("b.mp3"));
-        
+
         queue.skip_forward(); // a
         assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3")); // stays
     }
@@ -336,9 +339,9 @@ mod tests {
         queue.add(make_item("a.mp3"));
         queue.add(make_item("c.mp3"));
         queue.skip_forward(); // Start playing a
-        
+
         queue.add_next(make_item("b.mp3"));
-        
+
         assert_eq!(queue.items()[0].path, PathBuf::from("a.mp3"));
         assert_eq!(queue.items()[1].path, PathBuf::from("b.mp3"));
         assert_eq!(queue.items()[2].path, PathBuf::from("c.mp3"));

@@ -6,10 +6,10 @@
 //! - Artist and album management  
 //! - Batch updates for file organization
 
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::migrate::MigrateDatabase;
-use crate::model::Track;
 use crate::metadata::TrackMetadata;
+use crate::model::Track;
+use sqlx::migrate::MigrateDatabase;
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
 pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
     if !sqlx::Sqlite::database_exists(db_url).await.unwrap_or(false) {
@@ -21,9 +21,7 @@ pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
         .connect(db_url)
         .await?;
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     Ok(pool)
 }
@@ -45,12 +43,17 @@ pub async fn get_or_create_artist(pool: &SqlitePool, name: &str) -> sqlx::Result
     }
 }
 
-pub async fn get_or_create_album(pool: &SqlitePool, title: &str, artist_id: Option<i64>) -> sqlx::Result<i64> {
-    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM albums WHERE title = ? AND artist_id IS ?")
-        .bind(title)
-        .bind(artist_id)
-        .fetch_optional(pool)
-        .await?;
+pub async fn get_or_create_album(
+    pool: &SqlitePool,
+    title: &str,
+    artist_id: Option<i64>,
+) -> sqlx::Result<i64> {
+    let row: Option<(i64,)> =
+        sqlx::query_as("SELECT id FROM albums WHERE title = ? AND artist_id IS ?")
+            .bind(title)
+            .bind(artist_id)
+            .fetch_optional(pool)
+            .await?;
 
     if let Some((id,)) = row {
         Ok(id)
@@ -100,12 +103,18 @@ pub async fn insert_track(
 }
 
 pub async fn get_all_tracks(pool: &SqlitePool) -> sqlx::Result<Vec<Track>> {
-    sqlx::query_as::<_, Track>("SELECT id, title, artist_id, album_id, path, duration, track_number FROM tracks")
-        .fetch_all(pool)
-        .await
+    sqlx::query_as::<_, Track>(
+        "SELECT id, title, artist_id, album_id, path, duration, track_number FROM tracks",
+    )
+    .fetch_all(pool)
+    .await
 }
 
-pub async fn update_track_path(pool: &SqlitePool, track_id: i64, new_path: &str) -> sqlx::Result<()> {
+pub async fn update_track_path(
+    pool: &SqlitePool,
+    track_id: i64,
+    new_path: &str,
+) -> sqlx::Result<()> {
     sqlx::query("UPDATE tracks SET path = ? WHERE id = ?")
         .bind(new_path)
         .bind(track_id)
@@ -122,19 +131,19 @@ pub async fn batch_update_track_paths(
 ) -> sqlx::Result<usize> {
     let mut tx = pool.begin().await?;
     let mut success_count = 0;
-    
+
     for (track_id, new_path) in updates {
         let result = sqlx::query("UPDATE tracks SET path = ? WHERE id = ?")
             .bind(new_path)
             .bind(track_id)
             .execute(&mut *tx)
             .await;
-        
+
         if result.is_ok() {
             success_count += 1;
         }
     }
-    
+
     tx.commit().await?;
     Ok(success_count)
 }
@@ -160,7 +169,9 @@ pub struct TrackWithMetadata {
     pub album_name: String,
 }
 
-pub async fn get_all_tracks_with_metadata(pool: &SqlitePool) -> sqlx::Result<Vec<TrackWithMetadata>> {
+pub async fn get_all_tracks_with_metadata(
+    pool: &SqlitePool,
+) -> sqlx::Result<Vec<TrackWithMetadata>> {
     sqlx::query_as::<_, TrackWithMetadata>(
         r#"
         SELECT 
@@ -170,7 +181,7 @@ pub async fn get_all_tracks_with_metadata(pool: &SqlitePool) -> sqlx::Result<Vec
         FROM tracks t
         LEFT JOIN artists a ON t.artist_id = a.id
         LEFT JOIN albums al ON t.album_id = al.id
-        "#
+        "#,
     )
     .fetch_all(pool)
     .await
@@ -185,10 +196,10 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
         let db_url = format!("sqlite:{}", db_path.display());
-        
+
         let pool = init_db(&db_url).await.expect("Failed to init db");
         assert!(db_path.exists());
-        
+
         // Verify we can query the tables
         let tracks = get_all_tracks(&pool).await.expect("Failed to query tracks");
         assert!(tracks.is_empty());
@@ -222,13 +233,17 @@ mod tests {
         let pool = init_db(&db_url).await.unwrap();
 
         let artist_id = get_or_create_artist(&pool, "Test Artist").await.unwrap();
-        
+
         // Create album
-        let album_id1 = get_or_create_album(&pool, "Test Album", Some(artist_id)).await.unwrap();
+        let album_id1 = get_or_create_album(&pool, "Test Album", Some(artist_id))
+            .await
+            .unwrap();
         assert!(album_id1 > 0);
 
         // Get same album - should return same ID
-        let album_id2 = get_or_create_album(&pool, "Test Album", Some(artist_id)).await.unwrap();
+        let album_id2 = get_or_create_album(&pool, "Test Album", Some(artist_id))
+            .await
+            .unwrap();
         assert_eq!(album_id1, album_id2);
     }
 
@@ -248,12 +263,20 @@ mod tests {
         };
 
         let artist_id = get_or_create_artist(&pool, &meta.artist).await.unwrap();
-        let album_id = get_or_create_album(&pool, &meta.album, Some(artist_id)).await.unwrap();
-        
-        // Insert track
-        let track_id = insert_track(&pool, &meta, "/test/path.mp3", Some(artist_id), Some(album_id))
+        let album_id = get_or_create_album(&pool, &meta.album, Some(artist_id))
             .await
             .unwrap();
+
+        // Insert track
+        let track_id = insert_track(
+            &pool,
+            &meta,
+            "/test/path.mp3",
+            Some(artist_id),
+            Some(album_id),
+        )
+        .await
+        .unwrap();
         assert!(track_id > 0);
 
         // Verify track exists
@@ -262,7 +285,9 @@ mod tests {
         assert_eq!(track.path, "/test/path.mp3");
 
         // Update path
-        update_track_path(&pool, track_id, "/new/path.mp3").await.unwrap();
+        update_track_path(&pool, track_id, "/new/path.mp3")
+            .await
+            .unwrap();
         let updated = get_track_by_id(&pool, track_id).await.unwrap().unwrap();
         assert_eq!(updated.path, "/new/path.mp3");
     }
@@ -283,10 +308,18 @@ mod tests {
         };
 
         let artist_id = get_or_create_artist(&pool, &meta.artist).await.unwrap();
-        let album_id = get_or_create_album(&pool, &meta.album, Some(artist_id)).await.unwrap();
-        insert_track(&pool, &meta, "/test/path.mp3", Some(artist_id), Some(album_id))
+        let album_id = get_or_create_album(&pool, &meta.album, Some(artist_id))
             .await
             .unwrap();
+        insert_track(
+            &pool,
+            &meta,
+            "/test/path.mp3",
+            Some(artist_id),
+            Some(album_id),
+        )
+        .await
+        .unwrap();
 
         let tracks = get_all_tracks_with_metadata(&pool).await.unwrap();
         assert_eq!(tracks.len(), 1);
@@ -319,10 +352,28 @@ mod tests {
         };
 
         let artist_id = get_or_create_artist(&pool, "Artist").await.unwrap();
-        let album_id = get_or_create_album(&pool, "Album", Some(artist_id)).await.unwrap();
-        
-        let id1 = insert_track(&pool, &meta1, "/old/path1.mp3", Some(artist_id), Some(album_id)).await.unwrap();
-        let id2 = insert_track(&pool, &meta2, "/old/path2.mp3", Some(artist_id), Some(album_id)).await.unwrap();
+        let album_id = get_or_create_album(&pool, "Album", Some(artist_id))
+            .await
+            .unwrap();
+
+        let id1 = insert_track(
+            &pool,
+            &meta1,
+            "/old/path1.mp3",
+            Some(artist_id),
+            Some(album_id),
+        )
+        .await
+        .unwrap();
+        let id2 = insert_track(
+            &pool,
+            &meta2,
+            "/old/path2.mp3",
+            Some(artist_id),
+            Some(album_id),
+        )
+        .await
+        .unwrap();
 
         // Batch update paths
         let updates = vec![

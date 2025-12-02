@@ -76,9 +76,7 @@ impl PlayerState {
     pub fn format_info(&self) -> String {
         format!(
             "{}Hz / {}ch / {}bit",
-            self.sample_rate,
-            self.channels,
-            self.bits_per_sample
+            self.sample_rate, self.channels, self.bits_per_sample
         )
     }
 }
@@ -89,7 +87,7 @@ pub fn format_duration(d: Duration) -> String {
     let hours = secs / 3600;
     let mins = (secs % 3600) / 60;
     let secs = secs % 60;
-    
+
     if hours > 0 {
         format!("{}:{:02}:{:02}", hours, mins, secs)
     } else {
@@ -161,7 +159,7 @@ mod tests {
     fn test_position_fraction() {
         let mut state = PlayerState::default();
         assert_eq!(state.position_fraction(), 0.0);
-        
+
         state.duration = Duration::from_secs(100);
         state.position = Duration::from_secs(50);
         assert!((state.position_fraction() - 0.5).abs() < 0.01);

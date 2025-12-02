@@ -3,11 +3,11 @@
 //! Each subcommand is implemented as a function that takes the parsed arguments
 //! and returns an `anyhow::Result<()>`.
 
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
-use crate::{db, enrichment, health, library, metadata, organizer, diagnostics};
+use crate::{db, diagnostics, enrichment, health, library, metadata, organizer};
 
 /// Music Minder CLI
 #[derive(Parser)]
@@ -33,7 +33,11 @@ pub enum Commands {
         #[arg(short, long)]
         destination: PathBuf,
         /// Pattern for organizing files (default: {Artist}/{Album}/{TrackNum} - {Title}.{ext})
-        #[arg(short, long, default_value = "{Artist}/{Album}/{TrackNum} - {Title}.{ext}")]
+        #[arg(
+            short,
+            long,
+            default_value = "{Artist}/{Album}/{TrackNum} - {Title}.{ext}"
+        )]
         pattern: String,
         /// Dry run - show what would be done without actually moving files
         #[arg(long)]
@@ -138,7 +142,7 @@ pub enum Commands {
 /// (meaning the GUI should launch).
 pub fn run_command(cli: &Cli) -> anyhow::Result<bool> {
     let rt = Runtime::new()?;
-    
+
     match &cli.command {
         Some(Commands::Scan { path }) => {
             cmd_scan(&rt, path)?;
@@ -148,11 +152,20 @@ pub fn run_command(cli: &Cli) -> anyhow::Result<bool> {
             cmd_list(&rt)?;
             Ok(true)
         }
-        Some(Commands::Organize { destination, pattern, dry_run }) => {
+        Some(Commands::Organize {
+            destination,
+            pattern,
+            dry_run,
+        }) => {
             cmd_organize(&rt, destination, pattern, *dry_run)?;
             Ok(true)
         }
-        Some(Commands::Identify { path, api_key, write, fill_only }) => {
+        Some(Commands::Identify {
+            path,
+            api_key,
+            write,
+            fill_only,
+        }) => {
             cmd_identify(&rt, path, api_key.as_deref(), *write, *fill_only)?;
             Ok(true)
         }
@@ -160,15 +173,57 @@ pub fn run_command(cli: &Cli) -> anyhow::Result<bool> {
             cmd_check_tools()?;
             Ok(true)
         }
-        Some(Commands::WriteTags { path, title, artist, album, track, year, fill_only, preview }) => {
-            cmd_write_tags(path, title.as_deref(), artist.as_deref(), album.as_deref(), *track, *year, *fill_only, *preview)?;
+        Some(Commands::WriteTags {
+            path,
+            title,
+            artist,
+            album,
+            track,
+            year,
+            fill_only,
+            preview,
+        }) => {
+            cmd_write_tags(
+                path,
+                title.as_deref(),
+                artist.as_deref(),
+                album.as_deref(),
+                *track,
+                *year,
+                *fill_only,
+                *preview,
+            )?;
             Ok(true)
         }
-        Some(Commands::Enrich { path, api_key, write, fill_only, recursive, min_confidence, dry_run, db }) => {
-            cmd_enrich(&rt, path, api_key.as_deref(), *write, *fill_only, *recursive, *min_confidence, *dry_run, db.as_ref())?;
+        Some(Commands::Enrich {
+            path,
+            api_key,
+            write,
+            fill_only,
+            recursive,
+            min_confidence,
+            dry_run,
+            db,
+        }) => {
+            cmd_enrich(
+                &rt,
+                path,
+                api_key.as_deref(),
+                *write,
+                *fill_only,
+                *recursive,
+                *min_confidence,
+                *dry_run,
+                db.as_ref(),
+            )?;
             Ok(true)
         }
-        Some(Commands::Check { path, db, errors_only, verbose }) => {
+        Some(Commands::Check {
+            path,
+            db,
+            errors_only,
+            verbose,
+        }) => {
             cmd_check(&rt, path.as_ref(), db, *errors_only, *verbose)?;
             Ok(true)
         }
@@ -189,12 +244,12 @@ fn cmd_scan(rt: &Runtime, path: &PathBuf) -> anyhow::Result<()> {
         let db_url = "sqlite:music_minder.db";
         let pool = db::init_db(db_url).await.expect("Failed to init DB");
         println!("Scanning directory: {:?}", path);
-        
+
         use futures::StreamExt;
         let stream = library::scan_library(pool, path.clone());
         let mut stream = std::pin::pin!(stream);
         let mut count = 0;
-        
+
         while let Some(event) = stream.next().await {
             match event {
                 library::ScanEvent::Processed(_) => {
@@ -219,7 +274,9 @@ fn cmd_list(rt: &Runtime) -> anyhow::Result<()> {
     rt.block_on(async {
         let db_url = "sqlite:music_minder.db";
         let pool = db::init_db(db_url).await.expect("Failed to init DB");
-        let tracks = db::get_all_tracks(&pool).await.expect("Failed to get tracks");
+        let tracks = db::get_all_tracks(&pool)
+            .await
+            .expect("Failed to get tracks");
         for track in tracks {
             println!("{} - {}", track.title, track.path);
         }
@@ -227,26 +284,33 @@ fn cmd_list(rt: &Runtime) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cmd_organize(rt: &Runtime, destination: &PathBuf, pattern: &str, dry_run: bool) -> anyhow::Result<()> {
+fn cmd_organize(
+    rt: &Runtime,
+    destination: &PathBuf,
+    pattern: &str,
+    dry_run: bool,
+) -> anyhow::Result<()> {
     rt.block_on(async {
         let db_url = "sqlite:music_minder.db";
         let pool = db::init_db(db_url).await.expect("Failed to init DB");
-        let tracks = db::get_all_tracks(&pool).await.expect("Failed to get tracks");
-        
+        let tracks = db::get_all_tracks(&pool)
+            .await
+            .expect("Failed to get tracks");
+
         println!("Organizing {} tracks...", tracks.len());
         println!("Pattern: {}", pattern);
         println!("Destination: {:?}", destination);
-        
+
         if dry_run {
             println!("\n[DRY RUN MODE - No files will be moved]\n");
         }
-        
+
         let mut success_count = 0;
         let mut error_count = 0;
-        
+
         for track in tracks {
             let source_path = PathBuf::from(&track.path);
-            
+
             // Read metadata from file
             if let Ok(meta) = metadata::read(&source_path) {
                 match organizer::organize_track(&source_path, &meta, pattern, destination) {
@@ -256,8 +320,14 @@ fn cmd_organize(rt: &Runtime, destination: &PathBuf, pattern: &str, dry_run: boo
                         } else {
                             println!("MOVED: {} -> {:?}", track.path, new_path);
                             // Update database with new path
-                            let _ = db::insert_track(&pool, &meta, new_path.to_str().unwrap_or(""), 
-                                                    track.artist_id, track.album_id).await;
+                            let _ = db::insert_track(
+                                &pool,
+                                &meta,
+                                new_path.to_str().unwrap_or(""),
+                                track.artist_id,
+                                track.album_id,
+                            )
+                            .await;
                         }
                         success_count += 1;
                     }
@@ -268,13 +338,22 @@ fn cmd_organize(rt: &Runtime, destination: &PathBuf, pattern: &str, dry_run: boo
                 }
             }
         }
-        
-        println!("\nCompleted: {} successful, {} errors", success_count, error_count);
+
+        println!(
+            "\nCompleted: {} successful, {} errors",
+            success_count, error_count
+        );
     });
     Ok(())
 }
 
-fn cmd_identify(rt: &Runtime, path: &PathBuf, api_key: Option<&str>, write: bool, fill_only: bool) -> anyhow::Result<()> {
+fn cmd_identify(
+    rt: &Runtime,
+    path: &PathBuf,
+    api_key: Option<&str>,
+    write: bool,
+    fill_only: bool,
+) -> anyhow::Result<()> {
     rt.block_on(async {
         // Check for API key
         let api_key = match api_key {
@@ -329,9 +408,12 @@ fn cmd_identify(rt: &Runtime, path: &PathBuf, api_key: Option<&str>, write: bool
                 }
                 if let Some(ref recording_id) = result.track.recording_id {
                     println!();
-                    println!("  MusicBrainz: https://musicbrainz.org/recording/{}", recording_id);
+                    println!(
+                        "  MusicBrainz: https://musicbrainz.org/recording/{}",
+                        recording_id
+                    );
                 }
-                
+
                 // Write tags if requested
                 if write {
                     println!();
@@ -341,7 +423,10 @@ fn cmd_identify(rt: &Runtime, path: &PathBuf, api_key: Option<&str>, write: bool
                     };
                     match metadata::write(path, &result.track, &options) {
                         Ok(write_result) => {
-                            println!("✓ Tags written ({} fields updated)", write_result.fields_updated);
+                            println!(
+                                "✓ Tags written ({} fields updated)",
+                                write_result.fields_updated
+                            );
                             if !write_result.fields_skipped.is_empty() {
                                 println!("  Skipped: {}", write_result.fields_skipped.join(", "));
                             }
@@ -367,7 +452,7 @@ fn cmd_identify(rt: &Runtime, path: &PathBuf, api_key: Option<&str>, write: bool
 
 fn cmd_check_tools() -> anyhow::Result<()> {
     println!("Checking enrichment tools...\n");
-    
+
     // Check fpcalc
     if let Some(version) = enrichment::fingerprint::get_fpcalc_version() {
         println!("✓ fpcalc: {}", version);
@@ -375,7 +460,7 @@ fn cmd_check_tools() -> anyhow::Result<()> {
         println!("✗ fpcalc: NOT FOUND");
         print_fpcalc_install_instructions();
     }
-    
+
     println!();
     println!("API Keys:");
     if std::env::var("ACOUSTID_API_KEY").is_ok() {
@@ -384,20 +469,20 @@ fn cmd_check_tools() -> anyhow::Result<()> {
         println!("✗ ACOUSTID_API_KEY: not set");
         println!("  Get one at: https://acoustid.org/new-application");
     }
-    
+
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn cmd_write_tags(
-    path: &std::path::Path, 
-    title: Option<&str>, 
-    artist: Option<&str>, 
-    album: Option<&str>, 
-    track: Option<u32>, 
-    year: Option<i32>, 
-    fill_only: bool, 
-    preview: bool
+    path: &std::path::Path,
+    title: Option<&str>,
+    artist: Option<&str>,
+    album: Option<&str>,
+    track: Option<u32>,
+    year: Option<i32>,
+    fill_only: bool,
+    preview: bool,
 ) -> anyhow::Result<()> {
     // Build identified track from CLI args
     let identified = enrichment::domain::IdentifiedTrack {
@@ -408,12 +493,12 @@ fn cmd_write_tags(
         year,
         ..Default::default()
     };
-    
+
     let options = metadata::WriteOptions2 {
         only_fill_empty: fill_only,
         write_musicbrainz_ids: false,
     };
-    
+
     if preview {
         match metadata::preview_write(path, &identified, &options) {
             Ok(preview_result) => {
@@ -425,7 +510,10 @@ fn cmd_write_tags(
                         if change.current_value.is_empty() {
                             println!("  {} : (empty) → {}", change.field, change.new_value);
                         } else {
-                            println!("  {} : {} → {}", change.field, change.current_value, change.new_value);
+                            println!(
+                                "  {} : {} → {}",
+                                change.field, change.current_value, change.new_value
+                            );
                         }
                     }
                     println!("\nRun without --preview to apply changes.");
@@ -526,10 +614,11 @@ fn cmd_enrich(
         let mut fail_count = 0;
 
         for (i, file_path) in files.iter().enumerate() {
-            let filename = file_path.file_name()
+            let filename = file_path
+                .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("?");
-            
+
             print!("[{}/{}] {}... ", i + 1, files.len(), filename);
             use std::io::Write;
             std::io::stdout().flush().unwrap();
@@ -547,7 +636,8 @@ fn cmd_enrich(
                             &path_str,
                             result.score as f64,
                             result.track.recording_id.clone(),
-                        ).with_file_info(file_path);
+                        )
+                        .with_file_info(file_path);
                         let _ = health::upsert_health(p, &health_record).await;
                     }
 
@@ -575,8 +665,8 @@ fn cmd_enrich(
                     println!("✗ No match");
                     // Track health: No match
                     if let Some(ref p) = pool {
-                        let health_record = health::FileHealth::no_match(&path_str)
-                            .with_file_info(file_path);
+                        let health_record =
+                            health::FileHealth::no_match(&path_str).with_file_info(file_path);
                         let _ = health::upsert_health(p, &health_record).await;
                     }
                     skip_count += 1;
@@ -592,11 +682,9 @@ fn cmd_enrich(
                         } else {
                             health::ErrorType::Other("enrichment_error".to_string())
                         };
-                        let health_record = health::FileHealth::error(
-                            &path_str,
-                            error_type,
-                            e.to_string(),
-                        ).with_file_info(file_path);
+                        let health_record =
+                            health::FileHealth::error(&path_str, error_type, e.to_string())
+                                .with_file_info(file_path);
                         let _ = health::upsert_health(p, &health_record).await;
                     }
                     fail_count += 1;
@@ -610,16 +698,21 @@ fn cmd_enrich(
         }
 
         println!();
-        println!("Done! {} identified, {} no match, {} errors", 
-            success_count, skip_count, fail_count);
-        
+        println!(
+            "Done! {} identified, {} no match, {} errors",
+            success_count, skip_count, fail_count
+        );
+
         // Show health summary if tracking
         if let Some(ref p) = pool
-            && let Ok(summary) = health::get_summary(p).await {
-                println!("\nHealth Summary: {} ok, {} errors, {} no match",
-                    summary.ok, summary.errors, summary.no_match);
-            }
-        
+            && let Ok(summary) = health::get_summary(p).await
+        {
+            println!(
+                "\nHealth Summary: {} ok, {} errors, {} no match",
+                summary.ok, summary.errors, summary.no_match
+            );
+        }
+
         if dry_run && write {
             println!("\nRun without --dry-run to write tags.");
         }
@@ -627,7 +720,13 @@ fn cmd_enrich(
     Ok(())
 }
 
-fn cmd_check(rt: &Runtime, path: Option<&PathBuf>, db_path: &std::path::Path, errors_only: bool, verbose: bool) -> anyhow::Result<()> {
+fn cmd_check(
+    rt: &Runtime,
+    path: Option<&PathBuf>,
+    db_path: &std::path::Path,
+    errors_only: bool,
+    verbose: bool,
+) -> anyhow::Result<()> {
     rt.block_on(async {
         let db_url = format!("sqlite:{}", db_path.display());
         let pool = match db::init_db(&db_url).await {
@@ -651,7 +750,11 @@ fn cmd_check(rt: &Runtime, path: Option<&PathBuf>, db_path: &std::path::Path, er
             ];
             let mut records = Vec::new();
             for status in all_statuses {
-                records.extend(health::get_by_status(&pool, status).await.unwrap_or_default());
+                records.extend(
+                    health::get_by_status(&pool, status)
+                        .await
+                        .unwrap_or_default(),
+                );
             }
             records
         };
@@ -659,7 +762,8 @@ fn cmd_check(rt: &Runtime, path: Option<&PathBuf>, db_path: &std::path::Path, er
         // Filter by path if provided
         let records: Vec<_> = if let Some(filter_path) = path {
             let filter_str = filter_path.to_string_lossy();
-            records.into_iter()
+            records
+                .into_iter()
                 .filter(|r| r.path.starts_with(filter_str.as_ref()))
                 .collect()
         } else {
@@ -669,7 +773,10 @@ fn cmd_check(rt: &Runtime, path: Option<&PathBuf>, db_path: &std::path::Path, er
         if records.is_empty() {
             println!("No health records found.");
             if path.is_some() {
-                println!("Try running 'enrich --db {}' first to scan files.", db_path.display());
+                println!(
+                    "Try running 'enrich --db {}' first to scan files.",
+                    db_path.display()
+                );
             }
         } else {
             // Print summary
@@ -708,9 +815,9 @@ fn cmd_check(rt: &Runtime, path: Option<&PathBuf>, db_path: &std::path::Path, er
 
 fn cmd_diagnose(format: &str) -> anyhow::Result<()> {
     println!("Running system diagnostics...\n");
-    
+
     let report = diagnostics::DiagnosticReport::generate();
-    
+
     match format {
         "json" => {
             println!("{}", report.to_json());
@@ -719,7 +826,7 @@ fn cmd_diagnose(format: &str) -> anyhow::Result<()> {
             report.print();
         }
     }
-    
+
     Ok(())
 }
 
@@ -763,7 +870,8 @@ fn collect_audio_files(path: &PathBuf, recursive: bool) -> Vec<PathBuf> {
 
 /// Check if a path has an audio file extension
 fn is_audio_file(path: &std::path::Path) -> bool {
-    let ext = path.extension()
+    let ext = path
+        .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase());
     matches!(ext.as_deref(), Some("mp3" | "flac" | "ogg" | "m4a" | "wav"))

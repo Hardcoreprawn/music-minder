@@ -4,16 +4,22 @@ use iced::Task;
 use smallvec::smallvec;
 use std::path::PathBuf;
 
-use crate::{db, library, metadata, organizer, enrichment, player, diagnostics};
+use crate::{db, diagnostics, enrichment, library, metadata, organizer, player};
 
 use super::messages::Message;
 use super::platform::get_user_music_folder;
-use super::state::{AppState, EnrichmentState, LoadedState, OrganizeView, ActivePane, VisualizationMode};
+use super::state::{
+    ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, VisualizationMode,
+};
 
 /// Helper to load tracks from database
 fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {
     Task::perform(
-        async move { db::get_all_tracks_with_metadata(&pool).await.map_err(|e| e.to_string()) },
+        async move {
+            db::get_all_tracks_with_metadata(&pool)
+                .await
+                .map_err(|e| e.to_string())
+        },
         Message::TracksLoaded,
     )
 }
@@ -21,7 +27,12 @@ fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {
 /// Helper to pick a folder
 fn pick_folder_task(on_pick: fn(Option<PathBuf>) -> Message) -> Task<Message> {
     Task::perform(
-        async { rfd::AsyncFileDialog::new().pick_folder().await.map(|h| h.path().to_path_buf()) },
+        async {
+            rfd::AsyncFileDialog::new()
+                .pick_folder()
+                .await
+                .map(|h| h.path().to_path_buf())
+        },
         on_pick,
     )
 }
@@ -39,21 +50,24 @@ fn run_diagnostics_task() -> Task<Message> {
 }
 
 /// Handle database initialization
-pub fn handle_db_init(state: &mut AppState, result: Result<sqlx::SqlitePool, String>) -> Task<Message> {
+pub fn handle_db_init(
+    state: &mut AppState,
+    result: Result<sqlx::SqlitePool, String>,
+) -> Task<Message> {
     match result {
         Ok(pool) => {
             let music_folder = get_user_music_folder();
             let fpcalc_available = enrichment::fingerprint::is_fpcalc_available();
             let api_key = std::env::var("ACOUSTID_API_KEY").unwrap_or_default();
-            
+
             // Try to initialize player
             let player_instance = player::Player::new();
             let player_state = player::PlayerState::default();
-            
+
             // Get audio device info
             let audio_devices = player::list_audio_devices();
             let current_audio_device = player::current_audio_device();
-            
+
             *state = AppState::Loaded(Box::new(LoadedState {
                 pool: pool.clone(),
                 active_pane: ActivePane::Library,
@@ -92,10 +106,7 @@ pub fn handle_db_init(state: &mut AppState, result: Result<sqlx::SqlitePool, Str
                 diagnostics_loading: true,
             }));
             // Load tracks and run diagnostics in parallel
-            Task::batch([
-                load_tracks_task(pool),
-                run_diagnostics_task(),
-            ])
+            Task::batch([load_tracks_task(pool), run_diagnostics_task()])
         }
         Err(e) => {
             *state = AppState::Error(e);
@@ -127,7 +138,11 @@ pub fn handle_scan(s: &mut LoadedState, msg: &Message) -> Task<Message> {
             match event {
                 library::ScanEvent::Processed(path) => {
                     s.scan_count += 1;
-                    s.status_message = format!("Scanned {} files. Last: {:?}", s.scan_count, path.file_name().unwrap_or_default());
+                    s.status_message = format!(
+                        "Scanned {} files. Last: {:?}",
+                        s.scan_count,
+                        path.file_name().unwrap_or_default()
+                    );
                 }
                 library::ScanEvent::Error(path, err) => {
                     s.status_message = format!("Error scanning {:?}: {}", path, err);
@@ -142,18 +157,30 @@ pub fn handle_scan(s: &mut LoadedState, msg: &Message) -> Task<Message> {
 /// Handle organize-related messages
 pub fn handle_organize(s: &mut LoadedState, msg: Message) -> Task<Message> {
     match msg {
-        Message::OrganizeDestinationChanged(dest) => { s.organize_destination = PathBuf::from(dest); }
-        Message::OrganizePatternChanged(pattern) => { s.organize_pattern = pattern; }
-        Message::PickOrganizeDestination => return pick_folder_task(Message::OrganizeDestinationPicked),
-        Message::OrganizeDestinationPicked(Some(path)) => { s.organize_destination = path; }
+        Message::OrganizeDestinationChanged(dest) => {
+            s.organize_destination = PathBuf::from(dest);
+        }
+        Message::OrganizePatternChanged(pattern) => {
+            s.organize_pattern = pattern;
+        }
+        Message::PickOrganizeDestination => {
+            return pick_folder_task(Message::OrganizeDestinationPicked);
+        }
+        Message::OrganizeDestinationPicked(Some(path)) => {
+            s.organize_destination = path;
+        }
         Message::OrganizePreviewPressed => {
             s.organize_preview.clear();
             s.organize_view = OrganizeView::Preview;
             s.preview_loading = true;
             s.preview_scroll_offset = 0.0;
         }
-        Message::OrganizePreviewBatch(batch) => { s.organize_preview.extend(batch); }
-        Message::OrganizePreviewComplete => { s.preview_loading = false; }
+        Message::OrganizePreviewBatch(batch) => {
+            s.organize_preview.extend(batch);
+        }
+        Message::OrganizePreviewComplete => {
+            s.preview_loading = false;
+        }
         Message::OrganizeCancelPressed => {
             s.organize_view = OrganizeView::Input;
             s.organize_preview.clear();
@@ -162,7 +189,9 @@ pub fn handle_organize(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::OrganizeConfirmPressed => return start_organize(s),
         Message::OrganizeFileComplete(result) => {
             s.organize_progress += 1;
-            if let Err(e) = result { s.organize_errors.push(e); }
+            if let Err(e) = result {
+                s.organize_errors.push(e);
+            }
         }
         Message::OrganizeFinished => return finish_organize(s),
         _ => {}
@@ -184,7 +213,10 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
 
     Task::perform(
         async move {
-            let mut undo_log = organizer::UndoLog { moves: vec![], timestamp: Some(chrono::Utc::now().to_rfc3339()) };
+            let mut undo_log = organizer::UndoLog {
+                moves: vec![],
+                timestamp: Some(chrono::Utc::now().to_rfc3339()),
+            };
             let mut results = vec![];
 
             for preview in previews {
@@ -195,15 +227,22 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
                 let res = tokio::task::spawn_blocking(move || {
                     let meta = metadata::read(&src)?;
                     organizer::organize_track(&src, &meta, &pat, &dest).map(|p| (src, p))
-                }).await;
+                })
+                .await;
 
                 match res {
                     Ok(Ok((src, new_path))) => {
                         let path_str = new_path.to_string_lossy().to_string();
-                        if let Err(e) = db::update_track_path(&pool, preview.track_id, &path_str).await {
+                        if let Err(e) =
+                            db::update_track_path(&pool, preview.track_id, &path_str).await
+                        {
                             results.push(Err(format!("DB error: {}", e)));
                         } else {
-                            undo_log.moves.push(organizer::MoveRecord { source: src, destination: new_path, track_id: preview.track_id });
+                            undo_log.moves.push(organizer::MoveRecord {
+                                source: src,
+                                destination: new_path,
+                                track_id: preview.track_id,
+                            });
                             results.push(Ok(()));
                         }
                     }
@@ -227,7 +266,10 @@ fn finish_organize(s: &mut LoadedState) -> Task<Message> {
     s.status_message = if errors == 0 {
         format!("Organized {} files successfully.", success)
     } else {
-        format!("Organized {} of {} files. {} errors.", success, s.organize_total, errors)
+        format!(
+            "Organized {} of {} files. {} errors.",
+            success, s.organize_total, errors
+        )
     };
     s.organize_view = OrganizeView::Input;
     s.organize_preview.clear();
@@ -247,13 +289,22 @@ pub fn handle_undo(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         .await
                         .map_err(|e| format!("Task error: {}", e))?;
 
-                    let Some(log) = log else { return Err("No undo history available".to_string()) };
+                    let Some(log) = log else {
+                        return Err("No undo history available".to_string());
+                    };
 
                     let mut count = 0;
                     for rec in &log.moves {
                         let r = rec.clone();
-                        if let Ok(Ok(())) = tokio::task::spawn_blocking(move || organizer::undo_move(&r)).await {
-                            let _ = db::update_track_path(&pool, rec.track_id, &rec.source.to_string_lossy()).await;
+                        if let Ok(Ok(())) =
+                            tokio::task::spawn_blocking(move || organizer::undo_move(&r)).await
+                        {
+                            let _ = db::update_track_path(
+                                &pool,
+                                rec.track_id,
+                                &rec.source.to_string_lossy(),
+                            )
+                            .await;
                             count += 1;
                         }
                     }
@@ -265,8 +316,13 @@ pub fn handle_undo(s: &mut LoadedState, msg: Message) -> Task<Message> {
         }
         Message::UndoComplete(result) => {
             match result {
-                Ok(n) => { s.status_message = format!("Undo complete. Restored {} files.", n); s.can_undo = false; }
-                Err(e) => { s.status_message = format!("Undo failed: {}", e); }
+                Ok(n) => {
+                    s.status_message = format!("Undo complete. Restored {} files.", n);
+                    s.can_undo = false;
+                }
+                Err(e) => {
+                    s.status_message = format!("Undo failed: {}", e);
+                }
             }
             load_tracks_task(s.pool.clone())
         }
@@ -286,26 +342,32 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
             s.enrichment.last_error = None;
         }
         Message::EnrichmentIdentifyPressed => {
-            let Some(idx) = s.enrichment.selected_track else { return Task::none() };
-            let Some(track) = s.tracks.get(idx) else { return Task::none() };
-            
+            let Some(idx) = s.enrichment.selected_track else {
+                return Task::none();
+            };
+            let Some(track) = s.tracks.get(idx) else {
+                return Task::none();
+            };
+
             if s.enrichment.api_key.is_empty() {
-                s.enrichment.last_error = Some("API key required. Get one at acoustid.org".to_string());
+                s.enrichment.last_error =
+                    Some("API key required. Get one at acoustid.org".to_string());
                 return Task::none();
             }
-            
+
             if !s.enrichment.fpcalc_available {
-                s.enrichment.last_error = Some("fpcalc not installed. Run 'check-tools' for help.".to_string());
+                s.enrichment.last_error =
+                    Some("fpcalc not installed. Run 'check-tools' for help.".to_string());
                 return Task::none();
             }
-            
+
             s.enrichment.is_identifying = true;
             s.enrichment.last_result = None;
             s.enrichment.last_error = None;
-            
+
             let path = PathBuf::from(&track.path);
             let api_key = s.enrichment.api_key.clone();
-            
+
             return Task::perform(
                 async move {
                     let config = enrichment::EnrichmentConfig {
@@ -315,7 +377,10 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         ..Default::default()
                     };
                     let service = enrichment::EnrichmentService::new(config);
-                    service.identify_track(&path).await.map_err(|e| e.to_string())
+                    service
+                        .identify_track(&path)
+                        .await
+                        .map_err(|e| e.to_string())
                 },
                 Message::EnrichmentIdentifyResult,
             );
@@ -338,17 +403,23 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
             s.enrichment.last_error = None;
         }
         Message::EnrichmentWriteTagsPressed => {
-            let Some(idx) = s.enrichment.selected_track else { return Task::none() };
-            let Some(track) = s.tracks.get(idx) else { return Task::none() };
-            let Some(ref result) = s.enrichment.last_result else { return Task::none() };
-            
+            let Some(idx) = s.enrichment.selected_track else {
+                return Task::none();
+            };
+            let Some(track) = s.tracks.get(idx) else {
+                return Task::none();
+            };
+            let Some(ref result) = s.enrichment.last_result else {
+                return Task::none();
+            };
+
             let path = PathBuf::from(&track.path);
             let identified = result.track.clone();
-            
+
             return Task::perform(
                 async move {
                     let options = metadata::WriteOptions2 {
-                        only_fill_empty: false,  // Overwrite with enriched data
+                        only_fill_empty: false, // Overwrite with enriched data
                         write_musicbrainz_ids: true,
                     };
                     tokio::task::spawn_blocking(move || {
@@ -383,12 +454,12 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
 pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
     // Ensure player is initialized
     s.ensure_player();
-    
+
     let Some(ref mut player) = s.player else {
         s.status_message = "Audio output not available".to_string();
         return Task::none();
     };
-    
+
     match msg {
         Message::PlayerPlay => {
             // If queue is empty and nothing playing, start random shuffle
@@ -396,17 +467,17 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
                 // Trigger random shuffle instead
                 use rand::seq::SliceRandom;
                 let mut rng = rand::rng();
-                
+
                 let mut indices: Vec<usize> = (0..s.tracks.len()).collect();
                 indices.shuffle(&mut rng);
                 let count = 25.min(indices.len());
-                
+
                 for &idx in indices.iter().take(count) {
                     if let Some(track) = s.tracks.get(idx) {
                         player.queue_file(PathBuf::from(&track.path));
                     }
                 }
-                
+
                 if let Err(e) = player.skip_forward() {
                     s.status_message = format!("Play error: {}", e);
                     s.player_state = player.state();
@@ -466,7 +537,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
             if let Some(track) = s.tracks.get(idx) {
                 let path = PathBuf::from(&track.path);
                 let artist = &track.artist_name;
-                
+
                 // Queue remaining tracks from the same artist (simulates album context)
                 let mut queued_count = 0;
                 for (i, t) in s.tracks.iter().enumerate() {
@@ -475,11 +546,12 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         queued_count += 1;
                     }
                 }
-                
+
                 if let Err(e) = player.play_file(path) {
                     s.status_message = format!("Failed to play: {}", e);
                 } else {
-                    s.status_message = format!("Playing: {} (+{} queued)", track.title, queued_count);
+                    s.status_message =
+                        format!("Playing: {} (+{} queued)", track.title, queued_count);
                     s.player_state = player.state();
                     s.auto_queue_enabled = true; // Enable auto-queue
                 }
@@ -495,12 +567,12 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::PlayerShuffleRandom => {
             use rand::seq::SliceRandom;
             let mut rng = rand::rng();
-            
+
             // Pick 25 random tracks
             let mut indices: Vec<usize> = (0..s.tracks.len()).collect();
             indices.shuffle(&mut rng);
             let count = 25.min(indices.len());
-            
+
             // Clear and queue
             player.queue_mut().clear();
             for &idx in indices.iter().take(count) {
@@ -508,7 +580,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
                     player.queue_file(PathBuf::from(&track.path));
                 }
             }
-            
+
             // Start playing first track
             if let Err(e) = player.skip_forward() {
                 s.status_message = format!("Shuffle error: {}", e);
@@ -521,21 +593,21 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::PlayerTick => {
             // Update player state snapshot
             s.player_state = player.state();
-            
+
             // Auto-queue: if queue is running low (< 5 remaining), add more random tracks
             if s.auto_queue_enabled && !s.tracks.is_empty() {
                 let queue = player.queue();
                 let remaining = queue.remaining_count();
-                
+
                 if remaining < 5 {
                     use rand::seq::SliceRandom;
                     let mut rng = rand::rng();
-                    
+
                     // Add 8 more random tracks
                     let mut indices: Vec<usize> = (0..s.tracks.len()).collect();
                     indices.shuffle(&mut rng);
                     let add_count = 8.min(indices.len());
-                    
+
                     for &idx in indices.iter().take(add_count) {
                         if let Some(track) = s.tracks.get(idx) {
                             player.queue_file(PathBuf::from(&track.path));
@@ -571,7 +643,7 @@ pub fn handle_diagnostics(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::DiagnosticsRunPressed => {
             s.diagnostics_loading = true;
             s.diagnostics = None;
-            
+
             return Task::perform(
                 async {
                     tokio::task::spawn_blocking(diagnostics::DiagnosticReport::generate)

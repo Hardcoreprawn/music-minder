@@ -3,7 +3,7 @@
 //! Fetches album artwork from coverartarchive.org using MusicBrainz release IDs.
 //! No API key required.
 
-pub mod dto;
 mod client;
+pub mod dto;
 
-pub use client::{CoverArtClient, CoverArt, CoverSize};
+pub use client::{CoverArt, CoverArtClient, CoverSize};

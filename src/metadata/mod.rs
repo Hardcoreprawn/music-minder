@@ -55,7 +55,9 @@ pub fn read(path: &Path) -> Result<TrackMetadata> {
         .context("Failed to read file metadata")?;
 
     // Get the primary tag, or fall back to the first available tag
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
 
     // Extract fields with defaults
     let title = tag
@@ -86,7 +88,7 @@ pub fn read(path: &Path) -> Result<TrackMetadata> {
 }
 
 /// Write enrichment data to an audio file's tags
-/// 
+///
 /// This updates the file's embedded metadata tags with the identified track info.
 /// Supports MP3 (ID3v2), FLAC, M4A/AAC, OGG Vorbis, and other formats via lofty.
 pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> Result<WriteResult> {
@@ -95,10 +97,10 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
         .context("Failed to open file for writing")?
         .read()
         .context("Failed to read file for tag writing")?;
-    
+
     // Get the primary tag type for this format, or create one
     let tag_type = tagged_file.primary_tag_type();
-    
+
     // Get or create the tag
     let tag = if let Some(tag) = tagged_file.tag_mut(tag_type) {
         tag
@@ -107,43 +109,54 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
         tagged_file.insert_tag(Tag::new(tag_type));
         tagged_file.tag_mut(tag_type).expect("Just inserted tag")
     };
-    
+
     let mut fields_updated = 0;
     let mut fields_skipped = Vec::new();
-    
+
     // Helper to check if we should write a field
-    let should_write = |existing: Option<&str>, field_name: &str, skipped: &mut Vec<String>| -> bool {
-        if options.only_fill_empty {
-            let dominated = existing.map(|s| !s.is_empty() && s != "Unknown Title" && s != "Unknown Artist" && s != "Unknown Album").unwrap_or(false);
-            if dominated {
-                skipped.push(field_name.to_string());
-                return false;
+    let should_write =
+        |existing: Option<&str>, field_name: &str, skipped: &mut Vec<String>| -> bool {
+            if options.only_fill_empty {
+                let dominated = existing
+                    .map(|s| {
+                        !s.is_empty()
+                            && s != "Unknown Title"
+                            && s != "Unknown Artist"
+                            && s != "Unknown Album"
+                    })
+                    .unwrap_or(false);
+                if dominated {
+                    skipped.push(field_name.to_string());
+                    return false;
+                }
             }
-        }
-        true
-    };
-    
+            true
+        };
+
     // Write title
     if let Some(ref title) = track.title
-        && should_write(tag.title().as_deref(), "title", &mut fields_skipped) {
-            tag.set_title(title.clone());
-            fields_updated += 1;
-        }
-    
+        && should_write(tag.title().as_deref(), "title", &mut fields_skipped)
+    {
+        tag.set_title(title.clone());
+        fields_updated += 1;
+    }
+
     // Write artist
     if let Some(ref artist) = track.artist
-        && should_write(tag.artist().as_deref(), "artist", &mut fields_skipped) {
-            tag.set_artist(artist.clone());
-            fields_updated += 1;
-        }
-    
+        && should_write(tag.artist().as_deref(), "artist", &mut fields_skipped)
+    {
+        tag.set_artist(artist.clone());
+        fields_updated += 1;
+    }
+
     // Write album
     if let Some(ref album) = track.album
-        && should_write(tag.album().as_deref(), "album", &mut fields_skipped) {
-            tag.set_album(album.clone());
-            fields_updated += 1;
-        }
-    
+        && should_write(tag.album().as_deref(), "album", &mut fields_skipped)
+    {
+        tag.set_album(album.clone());
+        fields_updated += 1;
+    }
+
     // Write track number
     if let Some(track_num) = track.track_number {
         let existing = tag.track();
@@ -154,7 +167,7 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
             fields_skipped.push("track_number".to_string());
         }
     }
-    
+
     // Write total tracks
     if let Some(total) = track.total_tracks {
         let existing = tag.track_total();
@@ -165,7 +178,7 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
             fields_skipped.push("total_tracks".to_string());
         }
     }
-    
+
     // Write year
     if let Some(year) = track.year {
         let existing = tag.year();
@@ -176,7 +189,7 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
             fields_skipped.push("year".to_string());
         }
     }
-    
+
     // Write MusicBrainz IDs if enabled
     if options.write_musicbrainz_ids {
         if let Some(ref recording_id) = track.recording_id {
@@ -192,11 +205,11 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
             fields_updated += 1;
         }
     }
-    
+
     // Save the file
     tag.save_to_path(path, WriteOptions::default())
         .context("Failed to write tags to file")?;
-    
+
     Ok(WriteResult {
         fields_updated,
         fields_skipped,
@@ -204,11 +217,15 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
 }
 
 /// Preview what changes would be made without actually writing
-pub fn preview_write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> Result<WritePreview> {
+pub fn preview_write(
+    path: &Path,
+    track: &IdentifiedTrack,
+    options: &WriteOptions2,
+) -> Result<WritePreview> {
     let current = read(path)?;
-    
+
     let mut changes = Vec::new();
-    
+
     // Helper to add a change
     let mut add_change = |field: &str, current_val: &str, new_val: Option<&str>| {
         if let Some(new) = new_val {
@@ -222,13 +239,16 @@ pub fn preview_write(path: &Path, track: &IdentifiedTrack, options: &WriteOption
             }
         }
     };
-    
+
     add_change("title", &current.title, track.title.as_deref());
     add_change("artist", &current.artist, track.artist.as_deref());
     add_change("album", &current.album, track.album.as_deref());
-    
+
     if let Some(track_num) = track.track_number {
-        let current_str = current.track_number.map(|n| n.to_string()).unwrap_or_default();
+        let current_str = current
+            .track_number
+            .map(|n| n.to_string())
+            .unwrap_or_default();
         if !options.only_fill_empty || current.track_number.is_none() {
             changes.push(FieldChange {
                 field: "track_number".to_string(),
@@ -237,7 +257,7 @@ pub fn preview_write(path: &Path, track: &IdentifiedTrack, options: &WriteOption
             });
         }
     }
-    
+
     if let Some(year) = track.year {
         changes.push(FieldChange {
             field: "year".to_string(),
@@ -245,7 +265,7 @@ pub fn preview_write(path: &Path, track: &IdentifiedTrack, options: &WriteOption
             new_value: year.to_string(),
         });
     }
-    
+
     Ok(WritePreview { changes })
 }
 
@@ -288,14 +308,14 @@ mod tests {
         let result = read(path);
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_write_options_default() {
         let options = WriteOptions2::default();
         assert!(!options.only_fill_empty);
         assert!(!options.write_musicbrainz_ids);
     }
-    
+
     #[test]
     fn test_write_result_fields() {
         let result = WriteResult {
@@ -305,19 +325,19 @@ mod tests {
         assert_eq!(result.fields_updated, 3);
         assert_eq!(result.fields_skipped.len(), 1);
     }
-    
+
     #[test]
     fn test_preview_on_non_audio_returns_error() {
         let mut file = NamedTempFile::new().expect("Failed to create temp file");
         writeln!(file, "Not an audio file").expect("Failed to write");
-        
+
         let track = IdentifiedTrack::default();
         let options = WriteOptions2::default();
-        
+
         let result = preview_write(file.path(), &track, &options);
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_write_preview_changes() {
         // Test the FieldChange struct
@@ -330,17 +350,15 @@ mod tests {
         assert_eq!(change.current_value, "Unknown Title");
         assert_eq!(change.new_value, "Real Title");
     }
-    
+
     #[test]
     fn test_write_preview_struct() {
         let preview = WritePreview {
-            changes: vec![
-                FieldChange {
-                    field: "artist".to_string(),
-                    current_value: "".to_string(),
-                    new_value: "Queen".to_string(),
-                },
-            ],
+            changes: vec![FieldChange {
+                field: "artist".to_string(),
+                current_value: "".to_string(),
+                new_value: "Queen".to_string(),
+            }],
         };
         assert_eq!(preview.changes.len(), 1);
         assert_eq!(preview.changes[0].new_value, "Queen");

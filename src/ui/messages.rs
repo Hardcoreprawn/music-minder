@@ -1,10 +1,10 @@
 //! Message types for the Music Minder UI.
 
-use std::path::PathBuf;
-use sqlx::SqlitePool;
-use iced::widget::scrollable::Viewport;
-use crate::{db, library, organizer, enrichment, diagnostics};
 use super::state::{ActivePane, VisualizationMode};
+use crate::{db, diagnostics, enrichment, library, organizer};
+use iced::widget::scrollable::Viewport;
+use sqlx::SqlitePool;
+use std::path::PathBuf;
 
 /// All possible messages that can be sent in the application
 #[derive(Debug, Clone)]
@@ -12,10 +12,10 @@ pub enum Message {
     // Initialization
     DbInitialized(Result<SqlitePool, String>),
     FontLoaded,
-    
+
     // Navigation
     SwitchPane(ActivePane),
-    
+
     // Scan messages
     PathChanged(String),
     PickPath,
@@ -25,11 +25,11 @@ pub enum Message {
     ScanEventReceived(library::ScanEvent),
     ScanFinished,
     TracksLoaded(Result<Vec<db::TrackWithMetadata>, String>),
-    
+
     // Scroll messages
     ScrollChanged(Viewport),
     PreviewScrollChanged(Viewport),
-    
+
     // Organize messages
     OrganizeDestinationChanged(String),
     OrganizePatternChanged(String),
@@ -42,11 +42,11 @@ pub enum Message {
     OrganizeFileComplete(Result<(i64, String), String>),
     OrganizeFinished,
     OrganizeCancelPressed,
-    
+
     // Undo messages
     UndoPressed,
     UndoComplete(Result<usize, String>),
-    
+
     // Enrichment messages
     EnrichmentApiKeyChanged(String),
     EnrichmentTrackSelected(usize),
@@ -55,7 +55,7 @@ pub enum Message {
     EnrichmentClearResult,
     EnrichmentWriteTagsPressed,
     EnrichmentWriteTagsResult(Result<usize, String>),
-    
+
     // Player messages
     PlayerPlay,
     PlayerPause,
@@ -65,14 +65,14 @@ pub enum Message {
     PlayerPrevious,
     PlayerSeek(f32),
     PlayerVolumeChanged(f32),
-    PlayerPlayTrack(usize),           // Play track at index from library
-    PlayerQueueTrack(usize),          // Add track to queue
-    PlayerShuffleRandom,              // Shuffle 20-30 random tracks
-    PlayerSelectDevice(String),        // Switch audio output device
-    PlayerTick,                        // Timer tick for updating UI
-    PlayerVisualizationTick,           // Fast tick for visualization
+    PlayerPlayTrack(usize),     // Play track at index from library
+    PlayerQueueTrack(usize),    // Add track to queue
+    PlayerShuffleRandom,        // Shuffle 20-30 random tracks
+    PlayerSelectDevice(String), // Switch audio output device
+    PlayerTick,                 // Timer tick for updating UI
+    PlayerVisualizationTick,    // Fast tick for visualization
     PlayerVisualizationModeChanged(VisualizationMode),
-    
+
     // Diagnostics messages
     DiagnosticsRunPressed,
     DiagnosticsComplete(diagnostics::DiagnosticReport),

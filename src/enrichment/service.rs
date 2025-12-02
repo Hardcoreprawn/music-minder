@@ -73,7 +73,10 @@ impl EnrichmentService {
     ///
     /// Returns the best match with confidence >= min_confidence, or NoMatches error.
     /// Uses smart matching to prefer results that match existing file metadata/path.
-    pub async fn identify_track(&self, path: &Path) -> Result<TrackIdentification, EnrichmentError> {
+    pub async fn identify_track(
+        &self,
+        path: &Path,
+    ) -> Result<TrackIdentification, EnrichmentError> {
         // Step 1: Generate fingerprint
         let fp = fingerprint::generate_fingerprint(path)?;
 
@@ -90,7 +93,9 @@ impl EnrichmentService {
             .max_by(|a, b| {
                 let score_a = calculate_match_score(a, path, existing_meta.as_ref());
                 let score_b = calculate_match_score(b, path, existing_meta.as_ref());
-                score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+                score_a
+                    .partial_cmp(&score_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
         let Some(mut identification) = best else {
@@ -99,21 +104,22 @@ impl EnrichmentService {
 
         // Step 4: Optionally enrich with MusicBrainz
         if self.config.use_musicbrainz
-            && let Some(ref recording_id) = identification.track.recording_id {
-                // Add a small delay to respect MusicBrainz rate limits (1 req/sec)
-                tokio::time::sleep(Duration::from_millis(1100)).await;
+            && let Some(ref recording_id) = identification.track.recording_id
+        {
+            // Add a small delay to respect MusicBrainz rate limits (1 req/sec)
+            tokio::time::sleep(Duration::from_millis(1100)).await;
 
-                match self.musicbrainz.lookup_recording(recording_id).await {
-                    Ok(mb_result) => {
-                        // Merge MusicBrainz data into our identification
-                        identification.track.merge(&mb_result.track);
-                    }
-                    Err(e) => {
-                        // Log but don't fail - AcoustID data is still useful
-                        tracing::warn!("MusicBrainz lookup failed: {}", e);
-                    }
+            match self.musicbrainz.lookup_recording(recording_id).await {
+                Ok(mb_result) => {
+                    // Merge MusicBrainz data into our identification
+                    identification.track.merge(&mb_result.track);
+                }
+                Err(e) => {
+                    // Log but don't fail - AcoustID data is still useful
+                    tracing::warn!("MusicBrainz lookup failed: {}", e);
                 }
             }
+        }
 
         Ok(identification)
     }
@@ -191,36 +197,39 @@ fn calculate_match_score(
 
     // Extract hints from file path
     let path_str = file_path.to_string_lossy().to_lowercase();
-    
+
     // Boost score if album name matches path or existing metadata
     if let Some(ref album) = identification.track.album {
         let album_lower = album.to_lowercase();
-        
+
         // Check if album appears in file path
         if path_str.contains(&album_lower) {
             score += 0.15; // Significant boost for path match
         }
-        
+
         // Check if album matches existing embedded metadata
         if let Some(meta) = existing_meta {
             let existing_lower = meta.album.to_lowercase();
-            if !meta.album.is_empty() && 
-               (album_lower.contains(&existing_lower) || existing_lower.contains(&album_lower)) {
+            if !meta.album.is_empty()
+                && (album_lower.contains(&existing_lower) || existing_lower.contains(&album_lower))
+            {
                 score += 0.20; // Even bigger boost for embedded tag match
             }
         }
     }
-    
+
     // Check if artist matches embedded metadata
     if let Some(ref artist) = identification.track.artist
-        && let Some(meta) = existing_meta {
-            let artist_lower = artist.to_lowercase();
-            let existing_lower = meta.artist.to_lowercase();
-            if !meta.artist.is_empty() &&
-               (artist_lower.contains(&existing_lower) || existing_lower.contains(&artist_lower)) {
-                score += 0.10; // Boost for artist match
-            }
+        && let Some(meta) = existing_meta
+    {
+        let artist_lower = artist.to_lowercase();
+        let existing_lower = meta.artist.to_lowercase();
+        if !meta.artist.is_empty()
+            && (artist_lower.contains(&existing_lower) || existing_lower.contains(&artist_lower))
+        {
+            score += 0.10; // Boost for artist match
         }
+    }
 
     // Penalize undesirable release types based on secondary types
     for secondary_type in &identification.track.secondary_types {
@@ -229,8 +238,11 @@ fn calculate_match_score(
             "karaoke" => score -= 0.25, // Heavily penalize karaoke versions
             "compilation" => {
                 // Boost compilation if path indicates it (Greatest Hits, Best Of, etc.)
-                if path_str.contains("greatest") || path_str.contains("hits") || 
-                   path_str.contains("best") || path_str.contains("collection") {
+                if path_str.contains("greatest")
+                    || path_str.contains("hits")
+                    || path_str.contains("best")
+                    || path_str.contains("collection")
+                {
                     score += 0.10; // Boost for compilation when path indicates it
                 } else {
                     score -= 0.05; // Mild penalty otherwise
@@ -252,8 +264,9 @@ fn calculate_match_score(
     }
 
     // Boost original studio albums (primary type = Album, no secondary types)
-    if identification.track.release_type.as_deref() == Some("Album") && 
-       identification.track.secondary_types.is_empty() {
+    if identification.track.release_type.as_deref() == Some("Album")
+        && identification.track.secondary_types.is_empty()
+    {
         score += 0.05; // Small boost for original studio albums
     }
 
@@ -280,7 +293,7 @@ mod tests {
             ..Default::default()
         };
         let service = EnrichmentService::new(config);
-        
+
         // Just verify it doesn't panic
         let _ = service.is_fingerprinting_available();
     }

@@ -1,9 +1,9 @@
 //! Application state types for the Music Minder UI.
 
+use crate::{db, diagnostics, enrichment, organizer, player};
 use smallvec::SmallVec;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
-use crate::{db, organizer, enrichment, player, diagnostics};
 
 /// Top-level application state
 ///
@@ -18,7 +18,7 @@ pub enum AppState {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum OrganizeView {
     #[default]
-    Input,      // Showing destination/pattern inputs
+    Input, // Showing destination/pattern inputs
     Preview,    // Showing dry-run preview
     Organizing, // Currently organizing files
 }
@@ -58,10 +58,10 @@ pub mod virtualization {
 /// State for a fully loaded application
 pub struct LoadedState {
     pub pool: SqlitePool,
-    
+
     // Active pane
     pub active_pane: ActivePane,
-    
+
     // Scan state - PathBuf avoids repeated String->PathBuf conversions
     pub scan_path: PathBuf,
     pub is_scanning: bool,
@@ -69,15 +69,15 @@ pub struct LoadedState {
     pub tracks_loading: bool,
     pub status_message: String,
     pub scan_count: usize,
-    
+
     // Scroll state for track list
     pub scroll_offset: f32,
     pub viewport_height: f32,
-    
+
     // Scroll state for preview list
     pub preview_scroll_offset: f32,
     pub preview_viewport_height: f32,
-    
+
     // Organize state - PathBuf for destination avoids conversions
     pub organize_destination: PathBuf,
     pub organize_pattern: String,
@@ -89,10 +89,10 @@ pub struct LoadedState {
     pub organize_errors: SmallVec<[String; 8]>,
     pub can_undo: bool,
     pub preview_loading: bool,
-    
+
     // Enrichment state
     pub enrichment: EnrichmentState,
-    
+
     // Player state
     pub player: Option<player::Player>,
     pub player_state: player::PlayerState,
@@ -101,7 +101,7 @@ pub struct LoadedState {
     pub auto_queue_enabled: bool,
     pub audio_devices: Vec<String>,
     pub current_audio_device: String,
-    
+
     // Diagnostics state
     pub diagnostics: Option<diagnostics::DiagnosticReport>,
     pub diagnostics_loading: bool,
@@ -117,14 +117,16 @@ impl LoadedState {
             }
         }
     }
-    
+
     /// Find track metadata for the currently playing file
     pub fn current_track_info(&self) -> Option<&db::TrackWithMetadata> {
         let current_path = self.player_state.current_track.as_ref()?;
         let current_path_str = current_path.to_string_lossy();
-        self.tracks.iter().find(|t| t.path == current_path_str.as_ref())
+        self.tracks
+            .iter()
+            .find(|t| t.path == current_path_str.as_ref())
     }
-    
+
     /// Find track metadata by path string
     pub fn track_info_by_path(&self, path: &std::path::Path) -> Option<&db::TrackWithMetadata> {
         let path_str = path.to_string_lossy();

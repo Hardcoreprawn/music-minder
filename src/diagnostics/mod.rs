@@ -1,5 +1,5 @@
 //! System Diagnostics Module
-//! 
+//!
 //! Provides LatencyMon-style system analysis to identify hardware and driver
 //! issues that could affect audio playback quality.
 //!
@@ -16,18 +16,18 @@
 //! or a custom driver). This module provides user-mode approximations and
 //! system configuration checks that correlate with audio performance.
 
-mod timer;
+mod audio;
 mod cpu;
 mod memory;
 mod power;
-mod audio;
 mod report;
+mod timer;
 
-pub use timer::*;
+pub use audio::*;
 pub use cpu::*;
 pub use memory::*;
 pub use power::*;
-pub use audio::*;
+pub use timer::*;
 
 /// Overall system readiness rating for audio work
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,7 +65,9 @@ impl AudioReadiness {
         match self {
             AudioReadiness::Excellent => "System is optimally configured for low-latency audio",
             AudioReadiness::Good => "System should handle audio playback without issues",
-            AudioReadiness::Fair => "Some configuration issues detected; occasional glitches possible",
+            AudioReadiness::Fair => {
+                "Some configuration issues detected; occasional glitches possible"
+            }
             AudioReadiness::Poor => "Significant issues detected; audio problems likely",
         }
     }
@@ -118,31 +120,31 @@ impl DiagnosticReport {
     /// Run all diagnostics and generate a report
     pub fn generate() -> Self {
         let mut checks = Vec::new();
-        
+
         // Timer resolution
         let timer_info = TimerInfo::query();
         if let Some(ref info) = timer_info {
             checks.push(info.to_check());
         }
-        
+
         // CPU info
         let cpu_info = CpuInfo::query();
         if let Some(ref info) = cpu_info {
             checks.extend(info.to_checks());
         }
-        
+
         // Memory info
         let memory_info = MemoryInfo::query();
         if let Some(ref info) = memory_info {
             checks.extend(info.to_checks());
         }
-        
+
         // Power plan
         let power_info = PowerInfo::query();
         if let Some(ref info) = power_info {
             checks.push(info.to_check());
         }
-        
+
         // Audio devices
         let audio_devices = AudioDeviceInfo::enumerate();
         if !audio_devices.is_empty() {
@@ -154,10 +156,10 @@ impl DiagnosticReport {
                 recommendation: None,
             });
         }
-        
+
         // Calculate overall rating
         let overall_rating = Self::calculate_rating(&checks);
-        
+
         DiagnosticReport {
             timestamp: chrono::Utc::now(),
             overall_rating,
@@ -169,11 +171,17 @@ impl DiagnosticReport {
             audio_devices,
         }
     }
-    
+
     fn calculate_rating(checks: &[DiagnosticCheck]) -> AudioReadiness {
-        let fail_count = checks.iter().filter(|c| c.status == CheckStatus::Fail).count();
-        let warning_count = checks.iter().filter(|c| c.status == CheckStatus::Warning).count();
-        
+        let fail_count = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Fail)
+            .count();
+        let warning_count = checks
+            .iter()
+            .filter(|c| c.status == CheckStatus::Warning)
+            .count();
+
         if fail_count >= 2 {
             AudioReadiness::Poor
         } else if fail_count == 1 || warning_count >= 3 {
@@ -184,10 +192,11 @@ impl DiagnosticReport {
             AudioReadiness::Excellent
         }
     }
-    
+
     /// Get only checks with issues (warnings or failures)
     pub fn issues(&self) -> Vec<&DiagnosticCheck> {
-        self.checks.iter()
+        self.checks
+            .iter()
             .filter(|c| matches!(c.status, CheckStatus::Warning | CheckStatus::Fail))
             .collect()
     }

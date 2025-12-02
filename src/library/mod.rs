@@ -16,10 +16,7 @@ pub enum ScanEvent {
 
 /// Scans a directory and updates the database with found tracks.
 /// Returns a stream of ScanEvents.
-pub fn scan_library(
-    pool: SqlitePool,
-    root: PathBuf,
-) -> impl Stream<Item = ScanEvent> {
+pub fn scan_library(pool: SqlitePool, root: PathBuf) -> impl Stream<Item = ScanEvent> {
     let paths = scanner::scan(root);
 
     paths

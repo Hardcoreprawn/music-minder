@@ -17,7 +17,7 @@ use crate::enrichment::domain::{AudioFingerprint, EnrichmentError};
 /// Common installation paths for fpcalc on Windows
 #[cfg(windows)]
 const FPCALC_PATHS: &[&str] = &[
-    "fpcalc",  // In PATH
+    "fpcalc", // In PATH
     r"C:\Program Files\Chromaprint\fpcalc.exe",
     r"C:\Program Files\MusicBrainz Picard\fpcalc.exe",
     r"C:\Program Files (x86)\Chromaprint\fpcalc.exe",
@@ -26,7 +26,7 @@ const FPCALC_PATHS: &[&str] = &[
 
 #[cfg(not(windows))]
 const FPCALC_PATHS: &[&str] = &[
-    "fpcalc",  // In PATH
+    "fpcalc", // In PATH
     "/usr/bin/fpcalc",
     "/usr/local/bin/fpcalc",
     "/opt/homebrew/bin/fpcalc",
@@ -34,11 +34,16 @@ const FPCALC_PATHS: &[&str] = &[
 
 /// Find the fpcalc executable, checking common installation paths
 fn find_fpcalc() -> Option<&'static str> {
-    FPCALC_PATHS.iter().find(|&path| Command::new(path)
-            .arg("-version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)).map(|v| v as _)
+    FPCALC_PATHS
+        .iter()
+        .find(|&path| {
+            Command::new(path)
+                .arg("-version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
+        .map(|v| v as _)
 }
 
 /// Generate an audio fingerprint for the given file
@@ -49,7 +54,7 @@ pub fn generate_fingerprint(path: &Path) -> Result<AudioFingerprint, EnrichmentE
                 .to_string(),
         )
     })?;
-    
+
     let output = Command::new(fpcalc)
         .arg("-json")
         .arg(path)
@@ -70,8 +75,9 @@ pub fn generate_fingerprint(path: &Path) -> Result<AudioFingerprint, EnrichmentE
 
 /// Parse the JSON output from fpcalc
 fn parse_fpcalc_json(json: &str) -> Result<AudioFingerprint, EnrichmentError> {
-    let parsed: FpcalcOutput = serde_json::from_str(json)
-        .map_err(|e| EnrichmentError::FingerprintError(format!("Failed to parse fpcalc output: {}", e)))?;
+    let parsed: FpcalcOutput = serde_json::from_str(json).map_err(|e| {
+        EnrichmentError::FingerprintError(format!("Failed to parse fpcalc output: {}", e))
+    })?;
 
     Ok(AudioFingerprint {
         fingerprint: parsed.fingerprint,
@@ -109,9 +115,9 @@ mod tests {
     #[test]
     fn test_parse_fpcalc_json() {
         let json = r#"{"duration": 180.5, "fingerprint": "AQADtNIyRUkkZUqS"}"#;
-        
+
         let result = parse_fpcalc_json(json).unwrap();
-        
+
         assert_eq!(result.fingerprint, "AQADtNIyRUkkZUqS");
         assert_eq!(result.duration_secs, 181); // Rounded
     }
@@ -119,9 +125,9 @@ mod tests {
     #[test]
     fn test_parse_fpcalc_json_error() {
         let json = r#"{"error": "invalid"}"#;
-        
+
         let result = parse_fpcalc_json(json);
-        
+
         assert!(result.is_err());
     }
 
@@ -134,7 +140,7 @@ mod tests {
     #[test]
     fn test_fingerprint_nonexistent_file() {
         let result = generate_fingerprint(Path::new("/nonexistent/file.mp3"));
-        
+
         // Should fail (either fpcalc not found or file not found)
         assert!(result.is_err());
     }

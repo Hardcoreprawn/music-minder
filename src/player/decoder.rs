@@ -12,7 +12,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use symphonia::core::audio::{AudioBufferRef, Signal};
-use symphonia::core::codecs::{Decoder, DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
 use symphonia::core::io::MediaSourceStream;
@@ -40,45 +40,43 @@ impl AudioDecoder {
         // Create a media source stream
         let file = File::open(path)
             .map_err(|e| PlayerError::FileNotFound(format!("{}: {}", path.display(), e)))?;
-        
+
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        
+
         // Probe the format
         let mut hint = Hint::new();
         if let Some(ext) = path.extension() {
             hint.with_extension(&ext.to_string_lossy());
         }
-        
+
         let format_opts = FormatOptions {
             enable_gapless: true,
             ..Default::default()
         };
         let metadata_opts = MetadataOptions::default();
-        
+
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &format_opts, &metadata_opts)
             .map_err(|e| PlayerError::UnsupportedFormat(e.to_string()))?;
-        
+
         let reader = probed.format;
-        
+
         // Find the first audio track
         let track = reader
             .tracks()
             .iter()
             .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
             .ok_or_else(|| PlayerError::UnsupportedFormat("No audio track found".to_string()))?;
-        
+
         let track_id = track.id;
         let codec_params = track.codec_params.clone();
-        
+
         // Get audio parameters
-        let sample_rate = codec_params.sample_rate
+        let sample_rate = codec_params
+            .sample_rate
             .ok_or_else(|| PlayerError::Decode("Unknown sample rate".to_string()))?;
-        let channels = codec_params
-            .channels
-            .map(|c| c.count() as u16)
-            .unwrap_or(2);
-        
+        let channels = codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
+
         // Calculate duration
         let time_base = codec_params.time_base;
         let duration = if let Some(n_frames) = codec_params.n_frames {
@@ -92,13 +90,13 @@ impl AudioDecoder {
         } else {
             Duration::ZERO
         };
-        
+
         // Create decoder
         let decoder_opts = DecoderOptions::default();
         let decoder = symphonia::default::get_codecs()
             .make(&codec_params, &decoder_opts)
             .map_err(|e| PlayerError::Decode(e.to_string()))?;
-        
+
         Ok(Self {
             reader,
             decoder,
@@ -129,7 +127,7 @@ impl AudioDecoder {
     pub fn metadata(&mut self) -> TrackInfo {
         // Extract metadata from the format reader
         let mut info = TrackInfo::default();
-        
+
         if let Some(metadata) = self.reader.metadata().current() {
             for tag in metadata.tags() {
                 match tag.std_key {
@@ -151,9 +149,10 @@ impl AudioDecoder {
                         // Try to parse year from date
                         let s = tag.value.to_string();
                         if let Some(year_str) = s.split('-').next()
-                            && let Ok(y) = year_str.parse() {
-                                info.year = Some(y);
-                            }
+                            && let Ok(y) = year_str.parse()
+                        {
+                            info.year = Some(y);
+                        }
                     }
                     Some(symphonia::core::meta::StandardTagKey::Genre) => {
                         info.genre = Some(tag.value.to_string());
@@ -162,7 +161,7 @@ impl AudioDecoder {
                 }
             }
         }
-        
+
         info
     }
 
@@ -171,20 +170,20 @@ impl AudioDecoder {
         if self.duration.is_zero() {
             return Ok(());
         }
-        
+
         let target_time = self.duration.as_secs_f64() * position as f64;
         let seek_to = SeekTo::Time {
             time: Time::from(target_time),
             track_id: Some(self.track_id),
         };
-        
+
         self.reader
             .seek(SeekMode::Accurate, seek_to)
             .map_err(|e| PlayerError::Decode(format!("Seek failed: {}", e)))?;
-        
+
         // Reset decoder state after seeking
         self.decoder.reset();
-        
+
         Ok(())
     }
 
@@ -200,7 +199,9 @@ impl AudioDecoder {
             // Read next packet
             let packet = match self.reader.next_packet() {
                 Ok(p) => p,
-                Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                Err(SymphoniaError::IoError(e))
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
                     return Ok(None); // End of stream
                 }
                 Err(SymphoniaError::ResetRequired) => {
@@ -209,12 +210,12 @@ impl AudioDecoder {
                 }
                 Err(e) => return Err(PlayerError::Decode(e.to_string())),
             };
-            
+
             // Skip packets from other tracks
             if packet.track_id() != self.track_id {
                 continue;
             }
-            
+
             // Calculate timestamp
             let timestamp = if let Some(tb) = self.time_base {
                 let time = tb.calc_time(packet.ts());
@@ -222,14 +223,14 @@ impl AudioDecoder {
             } else {
                 Duration::ZERO
             };
-            
+
             // Decode packet
             let decoded = match self.decoder.decode(&packet) {
                 Ok(d) => d,
                 Err(SymphoniaError::DecodeError(_)) => continue, // Skip bad frame
                 Err(e) => return Err(PlayerError::Decode(e.to_string())),
             };
-            
+
             // Convert to f32 samples
             let channels = self.channels;
             let samples = Self::convert_to_f32(&decoded, channels);
@@ -237,9 +238,9 @@ impl AudioDecoder {
                 samples: samples.len() / channels as usize,
                 timestamp,
             };
-            
+
             callback(&samples);
-            
+
             return Ok(Some(frame));
         }
     }
@@ -253,17 +254,17 @@ impl AudioDecoder {
                 if plane_slice.is_empty() {
                     return Vec::new();
                 }
-                
+
                 let frames = plane_slice[0].len();
                 let num_channels = plane_slice.len();
                 let mut output = Vec::with_capacity(frames * num_channels);
-                
+
                 for frame in 0..frames {
                     for plane in plane_slice {
                         output.push(plane[frame]);
                     }
                 }
-                
+
                 output
             }
             AudioBufferRef::S16(buf) => {
@@ -309,7 +310,6 @@ impl AudioDecoder {
             _ => Vec::new(),
         }
     }
-
 }
 
 /// Information about a decoded frame.

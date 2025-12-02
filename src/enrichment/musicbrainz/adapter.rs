@@ -36,9 +36,7 @@ pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentificatio
         track_number,
         total_tracks,
         year,
-        duration: response
-            .length
-            .map(std::time::Duration::from_millis),
+        duration: response.length.map(std::time::Duration::from_millis),
         artist_id,
         release_id,
         release_type,
@@ -105,7 +103,8 @@ fn extract_release_info(releases: &[dto::Release]) -> ReleaseInfo {
         .or_else(|| {
             // Fall back to any official release
             releases
-                .iter().find(|r| r.status.as_deref() == Some("Official"))
+                .iter()
+                .find(|r| r.status.as_deref() == Some("Official"))
         })
         .or_else(|| releases.first());
 
@@ -170,7 +169,10 @@ mod tests {
 
         let identification = to_identification(recording);
 
-        assert_eq!(identification.track.recording_id, Some("rec-123".to_string()));
+        assert_eq!(
+            identification.track.recording_id,
+            Some("rec-123".to_string())
+        );
         assert_eq!(identification.track.title, Some("Test Song".to_string()));
         assert_eq!(identification.source, EnrichmentSource::MusicBrainz);
         assert_eq!(identification.score, 1.0);

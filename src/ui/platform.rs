@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// Get the user's Music folder, with fallbacks for various OS configurations.
-/// 
+///
 /// Checks in order:
 /// 1. System audio directory (via `dirs` crate)
 /// 2. OneDrive Music folder (Windows)
@@ -13,10 +13,11 @@ use std::path::PathBuf;
 pub fn get_user_music_folder() -> PathBuf {
     // Use the dirs crate which handles Windows known folders properly
     if let Some(music) = dirs::audio_dir()
-        && music.exists() {
-            return music;
-        }
-    
+        && music.exists()
+    {
+        return music;
+    }
+
     // Try OneDrive Music folder (common for Windows users)
     if let Some(user_profile) = std::env::var_os("USERPROFILE") {
         let onedrive_music = PathBuf::from(&user_profile).join("OneDrive").join("Music");
@@ -29,12 +30,12 @@ pub fn get_user_music_folder() -> PathBuf {
             return music_path;
         }
     }
-    
+
     // Fallback to home directory
     if let Some(home) = dirs::home_dir() {
         return home;
     }
-    
+
     // Last resort: current directory
     std::env::current_dir().unwrap_or_default()
 }
@@ -42,7 +43,7 @@ pub fn get_user_music_folder() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn get_music_folder_returns_valid_path() {
         let path = get_user_music_folder();

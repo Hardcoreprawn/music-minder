@@ -31,14 +31,15 @@
 //! println!("Title: {:?}, Artist: {:?}", result.track.title, result.track.artist);
 //! ```
 
-pub mod domain;
 pub mod acoustid;
-pub mod musicbrainz;
 pub mod coverart;
+pub mod domain;
 pub mod fingerprint;
+pub mod musicbrainz;
 pub mod service;
 
-pub use domain::{TrackIdentification, IdentifiedTrack, EnrichmentSource, EnrichmentError, AudioFingerprint};
-pub use service::{EnrichmentService, EnrichmentConfig, identify_track};
-pub use coverart::{CoverArtClient, CoverArt, CoverSize};
-
+pub use coverart::{CoverArt, CoverArtClient, CoverSize};
+pub use domain::{
+    AudioFingerprint, EnrichmentError, EnrichmentSource, IdentifiedTrack, TrackIdentification,
+};
+pub use service::{EnrichmentConfig, EnrichmentService, identify_track};

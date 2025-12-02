@@ -6,10 +6,10 @@
 //! - `library`: Library pane with track list and organization
 //! - `diagnostics`: System diagnostics view
 
-mod layout;
-mod player;
-mod library;
 mod diagnostics_view;
 mod helpers;
+mod layout;
+mod library;
+mod player;
 
 pub use layout::loaded_view;

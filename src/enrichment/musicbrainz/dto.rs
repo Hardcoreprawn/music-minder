@@ -258,7 +258,10 @@ mod contract_tests {
 
         assert_eq!(recording.artist_credit.len(), 2);
         assert_eq!(recording.artist_credit[0].artist.name, "Queen");
-        assert_eq!(recording.artist_credit[0].joinphrase, Some(" & ".to_string()));
+        assert_eq!(
+            recording.artist_credit[0].joinphrase,
+            Some(" & ".to_string())
+        );
         assert_eq!(recording.artist_credit[1].artist.name, "David Bowie");
     }
 

@@ -1,12 +1,12 @@
 //! Async streams for background operations (scanning, preview generation).
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use sqlx::SqlitePool;
+use super::messages::Message;
+use crate::{db, library, metadata, organizer};
 use futures::StreamExt;
 use rayon::prelude::*;
-use crate::{db, library, metadata, organizer};
-use super::messages::Message;
+use sqlx::SqlitePool;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Create a stream that scans a library directory and emits scan events
 pub fn scan_stream(pool: SqlitePool, path: PathBuf) -> impl futures::Stream<Item = Message> {
@@ -23,45 +23,64 @@ pub fn preview_stream(
     destination: PathBuf,
 ) -> impl futures::Stream<Item = Message> {
     futures::stream::unfold(
-        PreviewStreamState::Init { pool, pattern, destination },
+        PreviewStreamState::Init {
+            pool,
+            pattern,
+            destination,
+        },
         |state| async move {
             match state {
-                PreviewStreamState::Init { pool, pattern, destination } => {
+                PreviewStreamState::Init {
+                    pool,
+                    pattern,
+                    destination,
+                } => {
                     // Load tracks from DB
                     let tracks = match db::get_all_tracks_with_metadata(&pool).await {
                         Ok(t) => t,
-                        Err(_) => return Some((Message::OrganizePreviewComplete, PreviewStreamState::Done)),
+                        Err(_) => {
+                            return Some((
+                                Message::OrganizePreviewComplete,
+                                PreviewStreamState::Done,
+                            ));
+                        }
                     };
                     eprintln!("[Preview] Loaded {} tracks from DB", tracks.len());
-                    
+
                     // Use Arc to avoid cloning the full track list on each iteration
                     let tracks = Arc::new(tracks);
-                    
+
                     // Pre-allocate preview vector capacity hint
                     // Send empty batch to show we started
                     Some((
                         Message::OrganizePreviewBatch(Vec::with_capacity(0)),
-                        PreviewStreamState::Processing { 
-                            tracks, 
-                            index: 0, 
-                            pattern, 
+                        PreviewStreamState::Processing {
+                            tracks,
+                            index: 0,
+                            pattern,
                             destination,
                             batch_size: 500, // Larger batches for rayon efficiency
-                        }
+                        },
                     ))
                 }
-                PreviewStreamState::Processing { tracks, index, pattern, destination, batch_size } => {
+                PreviewStreamState::Processing {
+                    tracks,
+                    index,
+                    pattern,
+                    destination,
+                    batch_size,
+                } => {
                     if index >= tracks.len() {
                         eprintln!("[Preview] Complete - processed {} tracks", tracks.len());
                         return Some((Message::OrganizePreviewComplete, PreviewStreamState::Done));
                     }
-                    
+
                     // Process a batch of tracks with parallel file exists checks via rayon
                     let end = (index + batch_size).min(tracks.len());
                     let batch_tracks: Vec<_> = tracks[index..end].to_vec();
                     let pattern_clone = pattern.clone();
                     let dest_clone = destination.clone();
-                    
+
                     // Do file checks in blocking task using rayon for parallelism
                     let batch_previews = tokio::task::spawn_blocking(move || {
                         // Parallel iteration with rayon - checks file existence concurrently
@@ -89,22 +108,24 @@ pub fn preview_stream(
                                 ))
                             })
                             .collect::<Vec<_>>()
-                    }).await.unwrap_or_default();
-                    
+                    })
+                    .await
+                    .unwrap_or_default();
+
                     Some((
                         Message::OrganizePreviewBatch(batch_previews),
-                        PreviewStreamState::Processing { 
-                            tracks, 
-                            index: end, 
-                            pattern, 
+                        PreviewStreamState::Processing {
+                            tracks,
+                            index: end,
+                            pattern,
                             destination,
                             batch_size,
-                        }
+                        },
                     ))
                 }
                 PreviewStreamState::Done => None,
             }
-        }
+        },
     )
 }
 

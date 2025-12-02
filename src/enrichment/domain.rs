@@ -67,25 +67,25 @@ pub struct AudioFingerprint {
 pub enum EnrichmentError {
     #[error("Failed to generate fingerprint: {0}")]
     FingerprintError(String),
-    
+
     #[error("API request failed: {0}")]
     ApiError(String),
-    
+
     #[error("Network error: {0}")]
     Network(String),
-    
+
     #[error("Failed to parse response: {0}")]
     Parse(String),
-    
+
     #[error("No matches found for fingerprint")]
     NoMatches,
-    
+
     #[error("Rate limited - try again later")]
     RateLimited,
-    
+
     #[error("Invalid API response: {0}")]
     InvalidResponse(String),
-    
+
     #[error("API contract violation: expected {expected}, got {actual}")]
     ContractViolation { expected: String, actual: String },
 }
@@ -93,16 +93,36 @@ pub enum EnrichmentError {
 impl IdentifiedTrack {
     /// Merge another identification into this one, preferring non-None values
     pub fn merge(&mut self, other: &IdentifiedTrack) {
-        if self.title.is_none() { self.title = other.title.clone(); }
-        if self.artist.is_none() { self.artist = other.artist.clone(); }
-        if self.album.is_none() { self.album = other.album.clone(); }
-        if self.track_number.is_none() { self.track_number = other.track_number; }
-        if self.total_tracks.is_none() { self.total_tracks = other.total_tracks; }
-        if self.year.is_none() { self.year = other.year; }
-        if self.duration.is_none() { self.duration = other.duration; }
-        if self.recording_id.is_none() { self.recording_id = other.recording_id.clone(); }
-        if self.artist_id.is_none() { self.artist_id = other.artist_id.clone(); }
-        if self.release_id.is_none() { self.release_id = other.release_id.clone(); }
+        if self.title.is_none() {
+            self.title = other.title.clone();
+        }
+        if self.artist.is_none() {
+            self.artist = other.artist.clone();
+        }
+        if self.album.is_none() {
+            self.album = other.album.clone();
+        }
+        if self.track_number.is_none() {
+            self.track_number = other.track_number;
+        }
+        if self.total_tracks.is_none() {
+            self.total_tracks = other.total_tracks;
+        }
+        if self.year.is_none() {
+            self.year = other.year;
+        }
+        if self.duration.is_none() {
+            self.duration = other.duration;
+        }
+        if self.recording_id.is_none() {
+            self.recording_id = other.recording_id.clone();
+        }
+        if self.artist_id.is_none() {
+            self.artist_id = other.artist_id.clone();
+        }
+        if self.release_id.is_none() {
+            self.release_id = other.release_id.clone();
+        }
     }
 }
 
@@ -117,16 +137,16 @@ mod tests {
             artist: None,
             ..Default::default()
         };
-        
+
         let other = IdentifiedTrack {
             title: Some("Other Title".to_string()), // Should NOT override
             artist: Some("Artist".to_string()),     // Should fill in
             album: Some("Album".to_string()),       // Should fill in
             ..Default::default()
         };
-        
+
         track.merge(&other);
-        
+
         assert_eq!(track.title, Some("Song".to_string())); // Kept original
         assert_eq!(track.artist, Some("Artist".to_string())); // Filled in
         assert_eq!(track.album, Some("Album".to_string())); // Filled in

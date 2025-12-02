@@ -80,7 +80,7 @@ impl Visualizer {
     pub fn new(fft_size: usize) -> Self {
         let mut planner = RealFftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(fft_size);
-        
+
         // Hann window for reduced spectral leakage
         let window: Vec<f32> = (0..fft_size)
             .map(|i| {
@@ -88,9 +88,9 @@ impl Visualizer {
                 0.5 * (1.0 - x.cos())
             })
             .collect();
-        
+
         let num_bands = 32; // Classic 32-band spectrum
-        
+
         Self {
             fft,
             fft_size,
@@ -113,50 +113,53 @@ impl Visualizer {
         // Calculate levels from input
         let mut peak = 0.0f32;
         let mut sum_sq = 0.0f32;
-        
+
         for &sample in samples {
             peak = peak.max(sample.abs());
             sum_sq += sample * sample;
         }
-        
+
         let rms = if !samples.is_empty() {
             (sum_sq / samples.len() as f32).sqrt()
         } else {
             0.0
         };
-        
+
         // Store waveform samples (downsampled for display)
         let waveform: Vec<f32> = if samples.len() > 256 {
-            samples.iter().step_by(samples.len() / 256).copied().collect()
+            samples
+                .iter()
+                .step_by(samples.len() / 256)
+                .copied()
+                .collect()
         } else {
             samples.to_vec()
         };
-        
+
         // Add samples to FFT buffer
         for &sample in samples {
             self.input_buffer[self.buffer_pos] = sample;
             self.buffer_pos += 1;
-            
+
             if self.buffer_pos >= self.fft_size {
                 self.buffer_pos = 0;
-                
+
                 // Apply window function
-                let mut windowed: Vec<f32> = self.input_buffer
+                let mut windowed: Vec<f32> = self
+                    .input_buffer
                     .iter()
                     .zip(&self.window)
                     .map(|(s, w)| s * w)
                     .collect();
-                
+
                 // Perform FFT
-                self.fft.process_with_scratch(
-                    &mut windowed,
-                    &mut self.output_buffer,
-                    &mut self.scratch,
-                ).ok()?;
-                
+                self.fft
+                    .process_with_scratch(&mut windowed, &mut self.output_buffer, &mut self.scratch)
+                    .ok()?;
+
                 // Convert to magnitude spectrum with logarithmic frequency bands
                 let spectrum = self.compute_bands();
-                
+
                 return Some(SpectrumData {
                     spectrum,
                     bands: self.num_bands,
@@ -166,7 +169,7 @@ impl Visualizer {
                 });
             }
         }
-        
+
         None
     }
 
@@ -174,22 +177,22 @@ impl Visualizer {
     fn compute_bands(&mut self) -> Vec<f32> {
         let nyquist = self.output_buffer.len();
         let mut bands = vec![0.0f32; self.num_bands];
-        
+
         // Logarithmic frequency mapping
         // Band 0 covers lowest frequencies, band N-1 covers highest
         for (band_idx, band) in bands.iter_mut().enumerate() {
             // Calculate frequency range for this band (logarithmic)
             let low_ratio = (band_idx as f32 / self.num_bands as f32).powf(2.0);
             let high_ratio = ((band_idx + 1) as f32 / self.num_bands as f32).powf(2.0);
-            
+
             let low_bin = (low_ratio * nyquist as f32) as usize;
             let high_bin = (high_ratio * nyquist as f32).ceil() as usize;
             let high_bin = high_bin.min(nyquist);
-            
+
             if low_bin >= high_bin {
                 continue;
             }
-            
+
             // Average magnitude in this band
             let mut sum = 0.0f32;
             for bin in low_bin..high_bin {
@@ -197,24 +200,20 @@ impl Visualizer {
                 sum += mag;
             }
             let avg = sum / (high_bin - low_bin) as f32;
-            
+
             // Convert to dB scale (with floor at -60dB)
-            let db = if avg > 0.0 {
-                20.0 * avg.log10()
-            } else {
-                -60.0
-            };
-            
+            let db = if avg > 0.0 { 20.0 * avg.log10() } else { -60.0 };
+
             // Normalize to 0.0 - 1.0 range (-60dB to 0dB)
             *band = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
         }
-        
+
         // Apply smoothing (exponential moving average)
         for (i, band) in bands.iter_mut().enumerate() {
             *band = self.prev_spectrum[i] * self.smoothing + *band * (1.0 - self.smoothing);
             self.prev_spectrum[i] = *band;
         }
-        
+
         bands
     }
 
@@ -251,17 +250,15 @@ mod tests {
     #[test]
     fn test_visualizer_process() {
         let mut viz = Visualizer::new(256);
-        
+
         // Generate a sine wave
-        let samples: Vec<f32> = (0..512)
-            .map(|i| (i as f32 * 0.1).sin())
-            .collect();
-        
+        let samples: Vec<f32> = (0..512).map(|i| (i as f32 * 0.1).sin()).collect();
+
         // First call might not produce output
         let result1 = viz.process(&samples[..256]);
         // Second call should have enough data
         let result2 = viz.process(&samples[256..]);
-        
+
         // At least one should produce spectrum data
         assert!(result1.is_some() || result2.is_some());
     }

@@ -145,10 +145,10 @@ mod contract_tests {
             "status": "ok",
             "results": []
         }"#;
-        
-        let response: LookupResponse = serde_json::from_str(json)
-            .expect("Should parse minimal response");
-        
+
+        let response: LookupResponse =
+            serde_json::from_str(json).expect("Should parse minimal response");
+
         assert_eq!(response.status, "ok");
         assert!(response.results.is_empty());
         assert!(response.error.is_none());
@@ -171,18 +171,18 @@ mod contract_tests {
                 }]
             }]
         }"#;
-        
-        let response: LookupResponse = serde_json::from_str(json)
-            .expect("Should parse response with results");
-        
+
+        let response: LookupResponse =
+            serde_json::from_str(json).expect("Should parse response with results");
+
         assert_eq!(response.status, "ok");
         assert_eq!(response.results.len(), 1);
-        
+
         let result = &response.results[0];
         assert_eq!(result.id, "abc123");
         assert!((result.score - 0.95).abs() < 0.001);
         assert_eq!(result.recordings.len(), 1);
-        
+
         let recording = &result.recordings[0];
         assert_eq!(recording.id, "rec-mbid-123");
         assert_eq!(recording.title, Some("Test Song".to_string()));
@@ -201,10 +201,10 @@ mod contract_tests {
                 "message": "rate limit exceeded"
             }
         }"#;
-        
-        let response: LookupResponse = serde_json::from_str(json)
-            .expect("Should parse error response");
-        
+
+        let response: LookupResponse =
+            serde_json::from_str(json).expect("Should parse error response");
+
         assert_eq!(response.status, "error");
         assert!(response.error.is_some());
         let error = response.error.unwrap();
@@ -225,10 +225,10 @@ mod contract_tests {
                 }]
             }]
         }"#;
-        
-        let response: LookupResponse = serde_json::from_str(json)
-            .expect("Should parse sparse recording");
-        
+
+        let response: LookupResponse =
+            serde_json::from_str(json).expect("Should parse sparse recording");
+
         let recording = &response.results[0].recordings[0];
         assert_eq!(recording.id, "rec-123");
         assert!(recording.title.is_none());
@@ -259,10 +259,9 @@ mod contract_tests {
                 }]
             }]
         }"#;
-        
-        let response: LookupResponse = serde_json::from_str(json)
-            .expect("Should parse track info");
-        
+
+        let response: LookupResponse = serde_json::from_str(json).expect("Should parse track info");
+
         let release = &response.results[0].recordings[0].releases[0];
         let medium = &release.mediums.as_ref().unwrap()[0];
         assert_eq!(medium.position, Some(1));

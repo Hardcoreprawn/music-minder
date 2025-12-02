@@ -191,13 +191,12 @@ pub fn undo_move(record: &MoveRecord) -> Result<()> {
 
 /// Recursively removes empty directories up the tree
 fn remove_empty_dirs(path: &Path) -> Result<()> {
-    if path.is_dir()
-        && fs::read_dir(path)?.next().is_none() {
-            fs::remove_dir(path)?;
-            if let Some(parent) = path.parent() {
-                let _ = remove_empty_dirs(parent);
-            }
+    if path.is_dir() && fs::read_dir(path)?.next().is_none() {
+        fs::remove_dir(path)?;
+        if let Some(parent) = path.parent() {
+            let _ = remove_empty_dirs(parent);
         }
+    }
     Ok(())
 }
 
@@ -231,7 +230,7 @@ mod tests {
         let dest_root = Path::new("/music");
 
         let preview = preview_organize(source, &metadata, pattern, dest_root, 42);
-        
+
         assert_eq!(preview.source, source);
         assert_eq!(preview.track_id, 42);
         assert_eq!(
@@ -257,7 +256,7 @@ mod tests {
             Path::new("/out"),
             1,
         );
-        
+
         assert_eq!(
             preview.destination,
             PathBuf::from("/out/Artist/Album/00 - Song.flac")
@@ -281,7 +280,7 @@ mod tests {
             Path::new("/out"),
             1,
         );
-        
+
         assert_eq!(
             preview.destination,
             PathBuf::from("/out/AC_DC/Back_ In Black/What_.mp3")
@@ -294,11 +293,11 @@ mod tests {
         let source_dir = temp.path().join("source");
         let dest_dir = temp.path().join("dest");
         std::fs::create_dir_all(&source_dir).unwrap();
-        
+
         // Create a source file
         let source_file = source_dir.join("test.mp3");
         std::fs::write(&source_file, b"fake mp3 content").unwrap();
-        
+
         let metadata = TrackMetadata {
             title: "Test".to_string(),
             artist: "Artist".to_string(),
@@ -313,7 +312,7 @@ mod tests {
             "{Artist}/{Album}/{TrackNum} - {Title}.{ext}",
             &dest_dir,
         );
-        
+
         assert!(result.is_ok());
         let new_path = result.unwrap();
         assert!(new_path.exists());
@@ -328,24 +327,22 @@ mod tests {
     fn test_undo_log_save_and_load() {
         let temp = tempdir().unwrap();
         let _log_path = temp.path().join("undo.json");
-        
+
         // Override the log path for testing isn't easily possible with const,
         // but we can test the serialization
         let log = UndoLog {
-            moves: vec![
-                MoveRecord {
-                    source: PathBuf::from("/original/path.mp3"),
-                    destination: PathBuf::from("/new/path.mp3"),
-                    track_id: 42,
-                }
-            ],
+            moves: vec![MoveRecord {
+                source: PathBuf::from("/original/path.mp3"),
+                destination: PathBuf::from("/new/path.mp3"),
+                track_id: 42,
+            }],
             timestamp: Some("2025-01-01T00:00:00Z".to_string()),
         };
 
         // Test serialization
         let json = serde_json::to_string(&log).unwrap();
         let loaded: UndoLog = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(loaded.moves.len(), 1);
         assert_eq!(loaded.moves[0].track_id, 42);
         assert_eq!(loaded.moves[0].source, PathBuf::from("/original/path.mp3"));
@@ -358,11 +355,11 @@ mod tests {
         let moved_dir = temp.path().join("moved");
         std::fs::create_dir_all(&original_dir).unwrap();
         std::fs::create_dir_all(&moved_dir).unwrap();
-        
+
         // Create a "moved" file
         let moved_file = moved_dir.join("test.mp3");
         std::fs::write(&moved_file, b"content").unwrap();
-        
+
         let record = MoveRecord {
             source: original_dir.join("test.mp3"),
             destination: moved_file.clone(),
