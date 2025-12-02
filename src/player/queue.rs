@@ -170,7 +170,7 @@ impl PlayQueue {
     }
 
     /// Advance to next track and return it.
-    pub fn next(&mut self) -> Option<&QueueItem> {
+    pub fn skip_forward(&mut self) -> Option<&QueueItem> {
         if self.items.is_empty() {
             return None;
         }
@@ -299,11 +299,11 @@ mod tests {
         assert_eq!(queue.len(), 3);
         assert!(queue.current().is_none()); // Not started yet
         
-        // First next() starts playback
-        assert_eq!(queue.next().unwrap().path, PathBuf::from("a.mp3"));
+        // First skip_forward() starts playback
+        assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3"));
         assert_eq!(queue.current_index(), Some(0));
         
-        assert_eq!(queue.next().unwrap().path, PathBuf::from("b.mp3"));
+        assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("b.mp3"));
         assert_eq!(queue.current_index(), Some(1));
     }
 
@@ -314,9 +314,9 @@ mod tests {
         queue.add(make_item("a.mp3"));
         queue.add(make_item("b.mp3"));
         
-        queue.next(); // a
-        queue.next(); // b
-        assert_eq!(queue.next().unwrap().path, PathBuf::from("a.mp3")); // wraps
+        queue.skip_forward(); // a
+        queue.skip_forward(); // b
+        assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3")); // wraps
     }
 
     #[test]
@@ -326,8 +326,8 @@ mod tests {
         queue.add(make_item("a.mp3"));
         queue.add(make_item("b.mp3"));
         
-        queue.next(); // a
-        assert_eq!(queue.next().unwrap().path, PathBuf::from("a.mp3")); // stays
+        queue.skip_forward(); // a
+        assert_eq!(queue.skip_forward().unwrap().path, PathBuf::from("a.mp3")); // stays
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
         let mut queue = PlayQueue::new();
         queue.add(make_item("a.mp3"));
         queue.add(make_item("c.mp3"));
-        queue.next(); // Start playing a
+        queue.skip_forward(); // Start playing a
         
         queue.add_next(make_item("b.mp3"));
         

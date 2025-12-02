@@ -28,6 +28,7 @@ impl MemoryInfo {
     #[cfg(windows)]
     pub fn query() -> Option<Self> {
         #[repr(C)]
+        #[allow(clippy::upper_case_acronyms)]
         struct MEMORYSTATUSEX {
             dw_length: u32,
             dw_memory_load: u32,

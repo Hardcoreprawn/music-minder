@@ -36,16 +36,6 @@ impl HealthStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "ok" => HealthStatus::Ok,
-            "error" => HealthStatus::Error,
-            "no_match" => HealthStatus::NoMatch,
-            "low_confidence" => HealthStatus::LowConfidence,
-            _ => HealthStatus::Unknown,
-        }
-    }
-
     pub fn emoji(&self) -> &'static str {
         match self {
             HealthStatus::Ok => "✓",
@@ -54,6 +44,20 @@ impl HealthStatus {
             HealthStatus::LowConfidence => "~",
             HealthStatus::Unknown => "-",
         }
+    }
+}
+
+impl std::str::FromStr for HealthStatus {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "ok" => HealthStatus::Ok,
+            "error" => HealthStatus::Error,
+            "no_match" => HealthStatus::NoMatch,
+            "low_confidence" => HealthStatus::LowConfidence,
+            _ => HealthStatus::Unknown,
+        })
     }
 }
 
@@ -79,16 +83,20 @@ impl ErrorType {
             ErrorType::Other(s) => s,
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
-        match s {
+impl std::str::FromStr for ErrorType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
             "decode_error" => ErrorType::DecodeError,
             "empty_fingerprint" => ErrorType::EmptyFingerprint,
             "io_error" => ErrorType::IoError,
             "timeout" => ErrorType::Timeout,
             "api_error" => ErrorType::ApiError,
             s => ErrorType::Other(s.to_string()),
-        }
+        })
     }
 }
 
@@ -257,8 +265,8 @@ impl From<FileHealthRow> for FileHealth {
         FileHealth {
             id: Some(row.id),
             path: row.path,
-            status: HealthStatus::from_str(&row.status),
-            error_type: row.error_type.map(|s| ErrorType::from_str(&s)),
+            status: row.status.parse().unwrap_or(HealthStatus::Unknown),
+            error_type: row.error_type.map(|s| s.parse().unwrap_or(ErrorType::Other("unknown".into()))),
             error_message: row.error_message,
             acoustid_fingerprint: row.acoustid_fingerprint,
             acoustid_confidence: row.acoustid_confidence,
@@ -418,7 +426,7 @@ mod tests {
             HealthStatus::LowConfidence,
             HealthStatus::Unknown,
         ] {
-            assert_eq!(HealthStatus::from_str(status.as_str()), status);
+            assert_eq!(status.as_str().parse::<HealthStatus>().unwrap(), status);
         }
     }
 
@@ -431,7 +439,7 @@ mod tests {
             ErrorType::Timeout,
             ErrorType::ApiError,
         ] {
-            assert_eq!(ErrorType::from_str(error_type.as_str()), error_type);
+            assert_eq!(error_type.as_str().parse::<ErrorType>().unwrap(), error_type);
         }
     }
 

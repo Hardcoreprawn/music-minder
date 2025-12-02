@@ -6,9 +6,11 @@ use std::path::PathBuf;
 use crate::{db, organizer, enrichment, player, diagnostics};
 
 /// Top-level application state
+///
+/// Note: LoadedState is boxed to reduce stack size (Clippy large_enum_variant)
 pub enum AppState {
     Loading,
-    Loaded(LoadedState),
+    Loaded(Box<LoadedState>),
     Error(String),
 }
 

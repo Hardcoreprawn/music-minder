@@ -8,6 +8,7 @@
 ## Executive Summary
 
 The project is **well-structured for a prototype/early-stage project** with:
+
 - ✅ 90 passing tests
 - ✅ Clean module separation
 - ✅ Good use of async/await patterns
@@ -30,7 +31,7 @@ However, several files have grown large and some patterns need refinement for lo
 
 ### Recommended Structure After Refactoring
 
-```
+```text
 src/
 ├── main.rs              # Entry point only (~50 lines)
 ├── cli/
@@ -68,6 +69,7 @@ src/
 ## 2. Clippy & Linting
 
 ### 🔴 Critical: Build Errors
+
 The project currently fails to build due to 2 clippy errors that are treated as `deny`:
 
 ```rust
@@ -81,6 +83,7 @@ let particle_size = 1.0 + (seed * std::f32::consts::E).sin().abs() ...
 ### 🟡 Warnings to Address (30 total)
 
 1. **Collapsible `if` statements** (12 occurrences)
+
    ```rust
    // Before
    if let Some(x) = foo {
@@ -96,6 +99,7 @@ let particle_size = 1.0 + (seed * std::f32::consts::E).sin().abs() ...
    ```
 
 2. **`ptr_arg` - Use `&Path` instead of `&PathBuf`** (1 occurrence)
+
    ```rust
    // Before
    pub fn display_title(&self, path: &PathBuf) -> String
@@ -111,6 +115,7 @@ let particle_size = 1.0 + (seed * std::f32::consts::E).sin().abs() ...
 ### Recommended Clippy Configuration
 
 Add to `Cargo.toml`:
+
 ```toml
 [lints.clippy]
 # Treat these as errors
@@ -124,6 +129,7 @@ unwrap_used = "allow"
 ```
 
 Or add `.clippy.toml`:
+
 ```toml
 cognitive-complexity-threshold = 25
 too-many-arguments-threshold = 7
@@ -142,6 +148,7 @@ too-many-arguments-threshold = 7
 ### Recommendations
 
 1. **Standardize on `thiserror` for library code, `anyhow` for CLI/main**
+
    ```rust
    // src/health/error.rs
    #[derive(Debug, thiserror::Error)]
@@ -154,6 +161,7 @@ too-many-arguments-threshold = 7
    ```
 
 2. **Create a shared error module**
+
    ```rust
    // src/error.rs
    pub type Result<T> = std::result::Result<T, Error>;
@@ -173,6 +181,7 @@ too-many-arguments-threshold = 7
 ## 4. Testing
 
 ### Current State: ✅ Good
+
 - 90 tests passing
 - Most modules have unit tests
 - Integration tests via CLI commands
@@ -186,6 +195,7 @@ too-many-arguments-threshold = 7
 ### Recommendations
 
 1. **Add test utilities module**
+
    ```rust
    // src/test_utils.rs (behind #[cfg(test)])
    pub fn temp_db() -> SqlitePool { ... }
@@ -193,6 +203,7 @@ too-many-arguments-threshold = 7
    ```
 
 2. **Mock external APIs**
+
    ```rust
    // Use traits for clients
    #[async_trait]
@@ -209,6 +220,7 @@ too-many-arguments-threshold = 7
    ```
 
 3. **Add property-based testing for organizer**
+
    ```toml
    # Cargo.toml
    [dev-dependencies]
@@ -220,6 +232,7 @@ too-many-arguments-threshold = 7
 ## 5. Documentation
 
 ### Current State: 🟡 Partial
+
 - Module-level docs present in some files
 - No function-level docs on public APIs
 - Some modules have no docs at all
@@ -266,6 +279,7 @@ pub fn function(path: &Path) -> Result<T> { ... }
 ### Documentation CI
 
 Add to CI pipeline:
+
 ```bash
 # Fail on missing docs
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
@@ -281,6 +295,7 @@ cargo test --doc
 ### 🔴 Issues to Fix
 
 1. **Magic strings for database paths**
+
    ```rust
    // Before
    let db_url = "sqlite:music_minder.db";
@@ -293,6 +308,7 @@ cargo test --doc
    ```
 
 2. **Repeated path conversion**
+
    ```rust
    // Before (repeated everywhere)
    PathBuf::from(&track.path)
@@ -306,6 +322,7 @@ cargo test --doc
    ```
 
 3. **String allocation in hot paths**
+
    ```rust
    // Before (allocates every call)
    fn display_title(&self, path: &PathBuf) -> String {
@@ -331,23 +348,27 @@ cargo test --doc
 ## 7. Dependency Hygiene
 
 ### Current: ✅ Good
+
 Feature flags are already trimmed for tokio, chrono, etc.
 
 ### Suggestions
 
 1. **Audit unused dependencies**
+
    ```bash
    cargo install cargo-udeps
    cargo +nightly udeps
    ```
 
 2. **Check for security vulnerabilities**
+
    ```bash
    cargo install cargo-audit
    cargo audit
    ```
 
 3. **Update dependencies regularly**
+
    ```bash
    cargo install cargo-outdated
    cargo outdated
@@ -358,6 +379,7 @@ Feature flags are already trimmed for tokio, chrono, etc.
 ## 8. Performance Considerations
 
 ### Already Optimized ✅
+
 - Virtualized lists
 - Parallel file checks with Rayon
 - Batch database operations
@@ -374,25 +396,30 @@ Feature flags are already trimmed for tokio, chrono, etc.
 ## 9. Recommended Action Plan
 
 ### Phase 1: Fix Blocking Issues (Now)
+
 - [ ] Fix 2 clippy errors in `canvas.rs`
 - [ ] Address critical warnings
 
 ### Phase 2: Refactoring (1-2 days)
+
 - [ ] Extract CLI commands from `main.rs` to `src/cli/`
 - [ ] Split `views.rs` into `views/` folder
 - [ ] Rename `next()` methods to avoid Iterator confusion
 
 ### Phase 3: Documentation (1 day)
+
 - [ ] Add module docs to all public modules
 - [ ] Add function docs to public API
 - [ ] Add doc tests for key functions
 
 ### Phase 4: Testing Infrastructure (2-3 days)
+
 - [ ] Create test utilities module
 - [ ] Add trait-based mocking for external APIs
 - [ ] Add integration tests for workflows
 
 ### Phase 5: Polish (Ongoing)
+
 - [ ] Set up CI with clippy, doc checks, and formatting
 - [ ] Add pre-commit hooks for formatting
 - [ ] Regular dependency audits

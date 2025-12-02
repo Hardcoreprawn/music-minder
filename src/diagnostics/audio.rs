@@ -50,7 +50,7 @@ fn enumerate_wave_out_devices() -> Vec<AudioDeviceInfo> {
     use std::mem::MaybeUninit;
     
     #[repr(C)]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, clippy::upper_case_acronyms)]
     struct WAVEOUTCAPSW {
         wMid: u16,
         wPid: u16,
@@ -109,7 +109,7 @@ fn enumerate_wave_in_devices() -> Vec<AudioDeviceInfo> {
     use std::mem::MaybeUninit;
     
     #[repr(C)]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, clippy::upper_case_acronyms)]
     struct WAVEINCAPSW {
         wMid: u16,
         wPid: u16,

@@ -54,7 +54,7 @@ pub fn handle_db_init(state: &mut AppState, result: Result<sqlx::SqlitePool, Str
             let audio_devices = player::list_audio_devices();
             let current_audio_device = player::current_audio_device();
             
-            *state = AppState::Loaded(LoadedState {
+            *state = AppState::Loaded(Box::new(LoadedState {
                 pool: pool.clone(),
                 active_pane: ActivePane::Library,
                 scan_path: music_folder.clone(),
@@ -90,7 +90,7 @@ pub fn handle_db_init(state: &mut AppState, result: Result<sqlx::SqlitePool, Str
                 current_audio_device,
                 diagnostics: None,
                 diagnostics_loading: true,
-            });
+            }));
             // Load tracks and run diagnostics in parallel
             Task::batch([
                 load_tracks_task(pool),
@@ -407,7 +407,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
                     }
                 }
                 
-                if let Err(e) = player.next() {
+                if let Err(e) = player.skip_forward() {
                     s.status_message = format!("Play error: {}", e);
                     s.player_state = player.state();
                 } else {
@@ -443,7 +443,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
             s.player_state = player.state(); // Update state immediately for UI
         }
         Message::PlayerNext => {
-            if let Err(e) = player.next() {
+            if let Err(e) = player.skip_forward() {
                 s.status_message = format!("Next error: {}", e);
             }
             s.player_state = player.state(); // Update state immediately for UI
@@ -510,7 +510,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
             }
             
             // Start playing first track
-            if let Err(e) = player.next() {
+            if let Err(e) = player.skip_forward() {
                 s.status_message = format!("Shuffle error: {}", e);
             } else {
                 s.status_message = format!("Shuffled {} random tracks", count);

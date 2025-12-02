@@ -7,6 +7,15 @@
 use super::dto;
 use crate::enrichment::domain::{EnrichmentSource, IdentifiedTrack, TrackIdentification};
 
+/// Release info extracted from MusicBrainz: (album, release_id, track_num, total_tracks, year)
+type ReleaseInfo = (
+    Option<String>,
+    Option<String>,
+    Option<u32>,
+    Option<u32>,
+    Option<i32>,
+);
+
 /// Convert a MusicBrainz recording response to a TrackIdentification
 pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentification {
     // Build artist string from all credits
@@ -82,26 +91,17 @@ fn extract_release_types(releases: &[dto::Release]) -> (Option<String>, Option<V
 }
 
 /// Extract the best release info from available releases
-fn extract_release_info(
-    releases: &[dto::Release],
-) -> (
-    Option<String>,
-    Option<String>,
-    Option<u32>,
-    Option<u32>,
-    Option<i32>,
-) {
+fn extract_release_info(releases: &[dto::Release]) -> ReleaseInfo {
     // Prefer official album releases over singles/bootlegs
     let release = releases
         .iter()
-        .filter(|r| r.status.as_deref() == Some("Official"))
-        .filter(|r| {
-            r.release_group
-                .as_ref()
-                .and_then(|rg| rg.primary_type.as_deref())
-                == Some("Album")
+        .find(|r| {
+            r.status.as_deref() == Some("Official")
+                && r.release_group
+                    .as_ref()
+                    .and_then(|rg| rg.primary_type.as_deref())
+                    == Some("Album")
         })
-        .next()
         .or_else(|| {
             // Fall back to any official release
             releases

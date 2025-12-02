@@ -145,8 +145,8 @@ impl Player {
     }
 
     /// Skip to next track in queue.
-    pub fn next(&mut self) -> Result<(), PlayerError> {
-        if let Some(item) = self.queue.next() {
+    pub fn skip_forward(&mut self) -> Result<(), PlayerError> {
+        if let Some(item) = self.queue.skip_forward() {
             self.command_tx.send(PlayerCommand::Load(item.path.clone()))
                 .map_err(|_| PlayerError::ChannelClosed)?;
             self.command_tx.send(PlayerCommand::Play)
