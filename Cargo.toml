@@ -10,7 +10,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 clap = { version = "4.5.53", features = ["derive", "env"] }
 dirs = "5.0"
 futures = "0.3.31"
-iced = { version = "0.13.1", features = ["tokio", "canvas"] }
+iced = { version = "0.13.1", features = ["tokio", "canvas", "image"] }
 lofty = "0.22.4"
 rand = "0.9"                 # Random selection for shuffle
 rayon = "1.10"               # Parallel iterators for file checks

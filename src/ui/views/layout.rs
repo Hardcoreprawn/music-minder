@@ -153,42 +153,129 @@ fn sidebar_view(s: &LoadedState) -> Element<'_, Message> {
 /// Now Playing pane with large visualization
 fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
     use crate::ui::state::VisualizationMode;
-    use iced::widget::scrollable;
+    use iced::widget::{image, scrollable};
 
     let state = &s.player_state;
 
     // Current track info - use metadata if available
-    let (track_name, artist_name) = if let Some(track) = s.current_track_info() {
-        (track.title.clone(), track.artist_name.clone())
+    let (track_name, artist_name, album_name) = if let Some(track) = s.current_track_info() {
+        (
+            track.title.clone(),
+            track.artist_name.clone(),
+            track.album_name.clone(),
+        )
     } else if let Some(ref path) = state.current_track {
         let name = path
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
-        (name, String::new())
+        (name, String::new(), String::new())
     } else {
-        ("No Track Playing".to_string(), String::new())
+        (
+            "No Track Playing".to_string(),
+            String::new(),
+            String::new(),
+        )
+    };
+
+    // Cover art display (200x200 or placeholder)
+    let cover_size = 200.0;
+    let cover_widget: Element<Message> = if let Some(ref cover) = s.cover_art.current {
+        // Display the loaded cover art
+        image(image::Handle::from_bytes(cover.data.clone()))
+            .width(Length::Fixed(cover_size))
+            .height(Length::Fixed(cover_size))
+            .into()
+    } else if s.cover_art.loading {
+        // Show loading placeholder
+        container(text("Loading...").size(14).color([0.5, 0.5, 0.5]))
+            .width(Length::Fixed(cover_size))
+            .height(Length::Fixed(cover_size))
+            .center_x(Length::Fixed(cover_size))
+            .center_y(Length::Fixed(cover_size))
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color([0.15, 0.15, 0.18].into())),
+                border: iced::Border {
+                    color: [0.25, 0.25, 0.28].into(),
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            })
+            .into()
+    } else {
+        // Show placeholder when no cover available
+        container(
+            column![
+                text("♫").size(48).color([0.3, 0.3, 0.35]),
+                text("No Cover").size(12).color([0.4, 0.4, 0.45]),
+            ]
+            .align_x(iced::Alignment::Center)
+            .spacing(8),
+        )
+        .width(Length::Fixed(cover_size))
+        .height(Length::Fixed(cover_size))
+        .center_x(Length::Fixed(cover_size))
+        .center_y(Length::Fixed(cover_size))
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color([0.15, 0.15, 0.18].into())),
+            border: iced::Border {
+                color: [0.25, 0.25, 0.28].into(),
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
+    };
+
+    // Track info with cover source indicator
+    let cover_source_text = if let Some(ref cover) = s.cover_art.current {
+        let source = match cover.source {
+            crate::cover::CoverSource::Embedded => "embedded",
+            crate::cover::CoverSource::Sidecar(_) => "sidecar",
+            crate::cover::CoverSource::Cached(_) => "cached",
+            crate::cover::CoverSource::Remote => "remote",
+        };
+        text(format!("Cover: {}", source))
+            .size(10)
+            .color([0.4, 0.4, 0.45])
+    } else {
+        text("").size(10)
     };
 
     let track_display = if state.current_track.is_some() {
         container(
-            column![
-                text(track_name).size(32),
-                text(artist_name).size(20).color([0.7, 0.7, 0.7]),
-                text(state.format_info()).size(14).color([0.5, 0.5, 0.5]),
+            row![
+                cover_widget,
+                Space::with_width(20),
+                column![
+                    text(track_name).size(32),
+                    text(artist_name).size(20).color([0.7, 0.7, 0.7]),
+                    text(album_name).size(16).color([0.5, 0.5, 0.5]),
+                    Space::with_height(8),
+                    text(state.format_info()).size(14).color([0.5, 0.5, 0.5]),
+                    cover_source_text,
+                ]
+                .spacing(5),
             ]
-            .spacing(5),
+            .align_y(iced::Alignment::Start),
         )
         .padding(10)
     } else {
         container(
-            column![
-                text("No Track Playing").size(32).color([0.4, 0.4, 0.4]),
-                text("Select a track from the library to start playing")
-                    .size(14)
-                    .color([0.4, 0.4, 0.4]),
+            row![
+                cover_widget,
+                Space::with_width(20),
+                column![
+                    text("No Track Playing").size(32).color([0.4, 0.4, 0.4]),
+                    text("Select a track from the library to start playing")
+                        .size(14)
+                        .color([0.4, 0.4, 0.4]),
+                ]
+                .spacing(5),
             ]
-            .spacing(5),
+            .align_y(iced::Alignment::Start),
         )
         .padding(10)
     };
