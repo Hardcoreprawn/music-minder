@@ -5,6 +5,7 @@
 //! commands.
 
 pub mod cli;
+pub mod cover;
 pub mod db;
 pub mod diagnostics;
 pub mod enrichment;

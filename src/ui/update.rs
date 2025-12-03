@@ -4,12 +4,13 @@ use iced::Task;
 use smallvec::smallvec;
 use std::path::PathBuf;
 
-use crate::{db, diagnostics, enrichment, library, metadata, organizer, player};
+use crate::{cover, db, diagnostics, enrichment, library, metadata, organizer, player};
 
 use super::messages::Message;
 use super::platform::get_user_music_folder;
 use super::state::{
-    ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, VisualizationMode,
+    ActivePane, AppState, CoverArtState, EnrichmentState, LoadedState, OrganizeView,
+    VisualizationMode,
 };
 
 /// Helper to load tracks from database
@@ -46,6 +47,46 @@ fn run_diagnostics_task() -> Task<Message> {
                 .expect("Diagnostics task failed")
         },
         Message::DiagnosticsComplete,
+    )
+}
+
+/// Helper to resolve cover art in the background.
+///
+/// This is non-blocking and will never interfere with audio playback.
+/// It first tries local sources (embedded, sidecar) which are fast,
+/// then falls back to cache or remote fetch if a release ID is available.
+fn resolve_cover_art_task(
+    audio_path: PathBuf,
+    release_id: Option<String>,
+) -> Task<Message> {
+    let path_for_message = audio_path.clone();
+    Task::perform(
+        async move {
+            let resolver = cover::CoverResolver::new();
+            
+            // Try local sources first (fast, synchronous internally)
+            if let Some(cover) = resolver.resolve_local(&audio_path) {
+                return Ok(cover.into());
+            }
+            
+            // Try cached cover if we have a release ID
+            if let Some(ref id) = release_id {
+                if let Some(cover) = resolver.resolve_cached(id) {
+                    return Ok(cover.into());
+                }
+            }
+            
+            // Try remote fetch (slow, async)
+            if let Some(ref id) = release_id {
+                match resolver.fetch_remote(id).await {
+                    Ok(cover) => return Ok(cover.into()),
+                    Err(e) => return Err(e),
+                }
+            }
+            
+            Err("No cover art sources available".to_string())
+        },
+        move |result| Message::CoverArtResolved(path_for_message.clone(), result),
     )
 }
 
@@ -102,6 +143,7 @@ pub fn handle_db_init(
                 auto_queue_enabled: true,
                 audio_devices,
                 current_audio_device,
+                cover_art: Default::default(),
                 diagnostics: None,
                 diagnostics_loading: true,
             }));
@@ -547,13 +589,25 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
                     }
                 }
 
-                if let Err(e) = player.play_file(path) {
+                if let Err(e) = player.play_file(path.clone()) {
                     s.status_message = format!("Failed to play: {}", e);
                 } else {
                     s.status_message =
                         format!("Playing: {} (+{} queued)", track.title, queued_count);
                     s.player_state = player.state();
                     s.auto_queue_enabled = true; // Enable auto-queue
+                    
+                    // Trigger cover art resolution (non-blocking, background)
+                    // For now we only use local sources (embedded, sidecar) since
+                    // we don't have MusicBrainz release IDs in the track metadata yet.
+                    // TODO: Add release_id to TrackWithMetadata for remote fetching
+                    s.cover_art = CoverArtState {
+                        current: None,
+                        for_track: Some(path.clone()),
+                        loading: true,
+                        error: None,
+                    };
+                    return resolve_cover_art_task(path, None);
                 }
             }
         }
@@ -656,6 +710,22 @@ pub fn handle_diagnostics(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::DiagnosticsComplete(report) => {
             s.diagnostics_loading = false;
             s.diagnostics = Some(report);
+        }
+        Message::CoverArtResolved(path, result) => {
+            // Only update if this is still the current track
+            if s.cover_art.for_track.as_ref() == Some(&path) {
+                s.cover_art.loading = false;
+                match result {
+                    Ok(cover) => {
+                        s.cover_art.current = Some(cover);
+                        s.cover_art.error = None;
+                    }
+                    Err(e) => {
+                        s.cover_art.current = None;
+                        s.cover_art.error = Some(e);
+                    }
+                }
+            }
         }
         _ => {}
     }

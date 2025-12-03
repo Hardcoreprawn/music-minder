@@ -30,18 +30,26 @@
 - [x] **Cover Art**: Download from Cover Art Archive
 - [x] **Enrichment Service**: High-level orchestration with rate limiting
 
-## Phase 5: Integration (Current)
+## Phase 5: Integration ✅
 
 - [x] **CLI `identify` command**: Single file identification with smart matching
 - [x] **CLI `write-tags` command**: Write metadata to files with preview mode
 - [x] **Metadata Writing**: `--write` and `--fill-only` flags on identify
-- [ ] **CLI `enrich` command**: Batch enrichment for multiple files
-- [ ] **GUI Enrichment**: Cover art display, batch processing
+- [x] **CLI `enrich` command**: Batch enrichment with health tracking, dry-run, recursive scan
+- [ ] **GUI Enrichment**: Cover art display, batch processing in UI
+
+## Phase 6: Playback & UX (Current)
+
+- [x] **Audio playback**: Play tracks from library (already complete)
+- [x] **Now Playing view**: Track info, progress bar (already complete)
+- [x] **Cover art resolution**: Embedded, sidecar, cached, remote (non-blocking)
+- [ ] **Cover art display**: Show album art in Now Playing view
+- [ ] **Keyboard shortcuts**: Play/pause, next/prev, volume
 
 ## Backlog
 
 - [ ] Dark mode theme
-- [ ] Audio playback
 - [ ] Playlist management
 - [ ] Duplicate detection
 - [ ] Bulk metadata editing
+- [ ] MusicBrainz release ID in database (for remote cover fetching)

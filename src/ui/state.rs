@@ -1,6 +1,6 @@
 //! Application state types for the Music Minder UI.
 
-use crate::{db, diagnostics, enrichment, organizer, player};
+use crate::{cover, db, diagnostics, enrichment, organizer, player};
 use smallvec::SmallVec;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
@@ -102,6 +102,9 @@ pub struct LoadedState {
     pub audio_devices: Vec<String>,
     pub current_audio_device: String,
 
+    // Cover art state (non-blocking, resolved in background)
+    pub cover_art: CoverArtState,
+
     // Diagnostics state
     pub diagnostics: Option<diagnostics::DiagnosticReport>,
     pub diagnostics_loading: bool,
@@ -149,4 +152,42 @@ pub struct EnrichmentState {
     pub last_error: Option<String>,
     /// Whether fpcalc is available
     pub fpcalc_available: bool,
+}
+
+/// State for cover art display.
+///
+/// Cover art is resolved in the background to never block playback.
+/// The UI displays whatever is available, gracefully degrading to
+/// a placeholder if no art is found.
+#[derive(Default)]
+pub struct CoverArtState {
+    /// Current cover art data (if available)
+    pub current: Option<LoadedCoverArt>,
+    /// Path of the track this cover is for (to detect stale data)
+    pub for_track: Option<PathBuf>,
+    /// Whether a fetch is in progress
+    pub loading: bool,
+    /// Error message if fetch failed (for debugging)
+    pub error: Option<String>,
+}
+
+/// Cover art loaded and ready for display
+#[derive(Debug, Clone)]
+pub struct LoadedCoverArt {
+    /// Raw image bytes
+    pub data: Vec<u8>,
+    /// MIME type (image/jpeg, image/png)
+    pub mime_type: String,
+    /// Source of this cover (embedded, sidecar, cached, remote)
+    pub source: cover::CoverSource,
+}
+
+impl From<cover::CoverArt> for LoadedCoverArt {
+    fn from(cover: cover::CoverArt) -> Self {
+        Self {
+            data: cover.data,
+            mime_type: cover.mime_type,
+            source: cover.source,
+        }
+    }
 }

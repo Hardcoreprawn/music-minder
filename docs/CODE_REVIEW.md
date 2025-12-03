@@ -225,7 +225,7 @@ Includes `ResultExt` trait for context chaining.
 
 ## 5. Documentation
 
-### ✅ Implemented
+✅ Implemented
 
 All public modules now have documentation:
 

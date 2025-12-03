@@ -1,6 +1,6 @@
 //! Message types for the Music Minder UI.
 
-use super::state::{ActivePane, VisualizationMode};
+use super::state::{ActivePane, LoadedCoverArt, VisualizationMode};
 use crate::{db, diagnostics, enrichment, library, organizer};
 use iced::widget::scrollable::Viewport;
 use sqlx::SqlitePool;
@@ -76,4 +76,7 @@ pub enum Message {
     // Diagnostics messages
     DiagnosticsRunPressed,
     DiagnosticsComplete(diagnostics::DiagnosticReport),
+
+    // Cover art messages (background, non-blocking)
+    CoverArtResolved(PathBuf, Result<LoadedCoverArt, String>),
 }
