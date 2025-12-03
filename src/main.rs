@@ -8,6 +8,7 @@ pub mod cli;
 pub mod db;
 pub mod diagnostics;
 pub mod enrichment;
+pub mod error;
 pub mod health;
 pub mod library;
 pub mod metadata;

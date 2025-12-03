@@ -372,3 +372,151 @@ mod tests {
         assert!(!moved_file.exists());
     }
 }
+
+/// Property-based tests using proptest
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Generate valid filename characters (excluding path separators and invalid chars)
+    fn valid_filename_char() -> impl Strategy<Value = char> {
+        prop::char::range('!', '~').prop_filter("no invalid chars", |c| {
+            !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+        })
+    }
+
+    /// Generate a valid filename string
+    fn valid_filename() -> impl Strategy<Value = String> {
+        prop::collection::vec(valid_filename_char(), 1..50)
+            .prop_map(|chars| chars.into_iter().collect())
+    }
+
+    /// Generate an arbitrary string that might contain invalid characters
+    fn arbitrary_filename() -> impl Strategy<Value = String> {
+        prop::string::string_regex("[a-zA-Z0-9 /:*?\"<>|_-]{1,50}")
+            .unwrap()
+            .prop_filter("non-empty", |s| !s.is_empty())
+    }
+
+    proptest! {
+        /// Sanitized filenames should never contain path separators
+        #[test]
+        fn sanitize_removes_path_separators(input in arbitrary_filename()) {
+            let sanitized = sanitize_filename(&input);
+            prop_assert!(!sanitized.contains('/'), "Found / in: {}", sanitized);
+            prop_assert!(!sanitized.contains('\\'), "Found \\ in: {}", sanitized);
+        }
+
+        /// Sanitized filenames should never contain Windows-invalid characters
+        #[test]
+        fn sanitize_removes_invalid_chars(input in arbitrary_filename()) {
+            let sanitized = sanitize_filename(&input);
+            for c in [':', '*', '?', '"', '<', '>', '|'] {
+                prop_assert!(!sanitized.contains(c), "Found {} in: {}", c, sanitized);
+            }
+        }
+
+        /// Sanitized filename length should be same as input length
+        #[test]
+        fn sanitize_preserves_length(input in arbitrary_filename()) {
+            let sanitized = sanitize_filename(&input);
+            prop_assert_eq!(input.chars().count(), sanitized.chars().count());
+        }
+
+        /// Valid filenames should pass through unchanged
+        #[test]
+        fn sanitize_preserves_valid_names(input in valid_filename()) {
+            let sanitized = sanitize_filename(&input);
+            prop_assert_eq!(input, sanitized);
+        }
+
+        /// Preview organize should always produce a path under destination root
+        #[test]
+        fn preview_stays_under_dest_root(
+            artist in valid_filename(),
+            album in valid_filename(),
+            title in valid_filename(),
+            track_num in proptest::option::of(1u32..100),
+        ) {
+            let metadata = TrackMetadata {
+                title,
+                artist,
+                album,
+                duration: 180,
+                track_number: track_num,
+            };
+
+            let source = PathBuf::from("/source/test.mp3");
+            let dest_root = PathBuf::from("/music/library");
+
+            let preview = preview_organize(
+                &source,
+                &metadata,
+                "{Artist}/{Album}/{TrackNum} - {Title}.{ext}",
+                &dest_root,
+                1,
+            );
+
+            prop_assert!(
+                preview.destination.starts_with(&dest_root),
+                "Destination {:?} should start with {:?}",
+                preview.destination,
+                dest_root
+            );
+        }
+
+        /// Preview organize should preserve the file extension
+        #[test]
+        fn preview_preserves_extension(
+            ext in prop::sample::select(vec!["mp3", "flac", "ogg", "wav", "m4a"]),
+            title in valid_filename(),
+        ) {
+            let metadata = TrackMetadata {
+                title,
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                duration: 180,
+                track_number: Some(1),
+            };
+
+            let source = PathBuf::from(format!("/source/test.{}", ext));
+            let dest_root = PathBuf::from("/music");
+
+            let preview = preview_organize(
+                &source,
+                &metadata,
+                "{Artist}/{Album}/{Title}.{ext}",
+                &dest_root,
+                1,
+            );
+
+            let result_ext = preview.destination.extension().and_then(|e| e.to_str());
+            prop_assert_eq!(Some(ext), result_ext);
+        }
+
+        /// Track number formatting should always be zero-padded to 2 digits
+        #[test]
+        fn track_number_is_zero_padded(track_num in 1u32..100) {
+            let metadata = TrackMetadata {
+                title: "Song".to_string(),
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                duration: 180,
+                track_number: Some(track_num),
+            };
+
+            let preview = preview_organize(
+                Path::new("/test.mp3"),
+                &metadata,
+                "{TrackNum}.{ext}",
+                Path::new("/out"),
+                1,
+            );
+
+            let filename = preview.destination.file_name().unwrap().to_str().unwrap();
+            let expected = format!("{:02}.mp3", track_num);
+            prop_assert_eq!(filename, expected.as_str());
+        }
+    }
+}
