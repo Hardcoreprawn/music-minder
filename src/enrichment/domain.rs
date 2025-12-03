@@ -63,7 +63,7 @@ pub struct AudioFingerprint {
 }
 
 /// Errors that can occur during enrichment
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum EnrichmentError {
     #[error("Failed to generate fingerprint: {0}")]
     FingerprintError(String),

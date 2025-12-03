@@ -38,6 +38,7 @@ rustfft = "6.2"              # For Complex type
 # Crossbeam for lock-free audio communication
 crossbeam-channel = "0.5"    # Fast MPSC channels for audio thread
 parking_lot = "0.12"         # Fast RwLock for shared state
+async-trait = "0.1.89"
 
 [dev-dependencies]
 tempfile = "3.23.0"

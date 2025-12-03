@@ -5,12 +5,59 @@
 //! - Track CRUD operations
 //! - Artist and album management  
 //! - Batch updates for file organization
+//!
+//! # Example
+//!
+//! ```ignore
+//! use music_minder::db::{init_db, get_all_tracks_with_metadata};
+//!
+//! let pool = init_db("sqlite:music.db").await?;
+//! let tracks = get_all_tracks_with_metadata(&pool).await?;
+//! ```
+
+use std::path::PathBuf;
 
 use crate::metadata::TrackMetadata;
 use crate::model::Track;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
+/// Default database filename.
+pub const DEFAULT_DB_NAME: &str = "music_minder.db";
+
+/// Build a SQLite database URL from an optional path.
+///
+/// If no path is provided, uses [`DEFAULT_DB_NAME`] in the current directory.
+///
+/// # Arguments
+///
+/// * `path` - Optional path to the database file
+///
+/// # Returns
+///
+/// A SQLite connection URL string (e.g., "sqlite:music_minder.db")
+pub fn db_url(path: Option<&std::path::Path>) -> String {
+    match path {
+        Some(p) => format!("sqlite:{}", p.display()),
+        None => format!("sqlite:{}", DEFAULT_DB_NAME),
+    }
+}
+
+/// Initialize the database connection pool and run migrations.
+///
+/// Creates the database file if it doesn't exist, establishes a connection
+/// pool with up to 5 connections, and runs all pending migrations.
+///
+/// # Arguments
+///
+/// * `db_url` - SQLite connection URL (e.g., "sqlite:music.db")
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Database creation fails
+/// - Connection cannot be established
+/// - Migration fails
 pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
     if !sqlx::Sqlite::database_exists(db_url).await.unwrap_or(false) {
         sqlx::Sqlite::create_database(db_url).await?;
@@ -26,6 +73,20 @@ pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
     Ok(pool)
 }
 
+/// Get or create an artist by name.
+///
+/// Looks up an artist by exact name match. If not found, creates a new
+/// artist record. This is idempotent - calling with the same name always
+/// returns the same ID.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `name` - Artist name to look up or create
+///
+/// # Returns
+///
+/// The database ID of the (existing or new) artist.
 pub async fn get_or_create_artist(pool: &SqlitePool, name: &str) -> sqlx::Result<i64> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM artists WHERE name = ?")
         .bind(name)
@@ -43,6 +104,20 @@ pub async fn get_or_create_artist(pool: &SqlitePool, name: &str) -> sqlx::Result
     }
 }
 
+/// Get or create an album by title and artist.
+///
+/// Looks up an album by exact title and artist ID match. If not found,
+/// creates a new album record.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `title` - Album title
+/// * `artist_id` - Optional artist ID (albums can exist without artist)
+///
+/// # Returns
+///
+/// The database ID of the (existing or new) album.
 pub async fn get_or_create_album(
     pool: &SqlitePool,
     title: &str,
@@ -67,6 +142,23 @@ pub async fn get_or_create_album(
     }
 }
 
+/// Insert or update a track record.
+///
+/// Uses SQLite's UPSERT to either insert a new track or update an existing
+/// one based on the file path. Track metadata is updated from the provided
+/// [`TrackMetadata`].
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `meta` - Track metadata (title, duration, track number)
+/// * `path` - File path (unique identifier)
+/// * `artist_id` - Optional artist ID
+/// * `album_id` - Optional album ID
+///
+/// # Returns
+///
+/// The database ID of the inserted or updated track.
 pub async fn insert_track(
     pool: &SqlitePool,
     meta: &TrackMetadata,
@@ -102,6 +194,10 @@ pub async fn insert_track(
     Ok(row.0)
 }
 
+/// Get all tracks from the database.
+///
+/// Returns basic track information without joined artist/album names.
+/// For display purposes, prefer [`get_all_tracks_with_metadata`].
 pub async fn get_all_tracks(pool: &SqlitePool) -> sqlx::Result<Vec<Track>> {
     sqlx::query_as::<_, Track>(
         "SELECT id, title, artist_id, album_id, path, duration, track_number FROM tracks",
@@ -110,6 +206,16 @@ pub async fn get_all_tracks(pool: &SqlitePool) -> sqlx::Result<Vec<Track>> {
     .await
 }
 
+/// Update the file path for a single track.
+///
+/// Used after file organization to keep the database in sync with
+/// the filesystem.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `track_id` - ID of the track to update
+/// * `new_path` - New file path
 pub async fn update_track_path(
     pool: &SqlitePool,
     track_id: i64,
@@ -148,6 +254,16 @@ pub async fn batch_update_track_paths(
     Ok(success_count)
 }
 
+/// Get a track by its database ID.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `track_id` - ID of the track to retrieve
+///
+/// # Returns
+///
+/// The track if found, or None.
 pub async fn get_track_by_id(pool: &SqlitePool, track_id: i64) -> sqlx::Result<Option<Track>> {
     sqlx::query_as::<_, Track>(
         "SELECT id, title, artist_id, album_id, path, duration, track_number FROM tracks WHERE id = ?"
@@ -157,18 +273,45 @@ pub async fn get_track_by_id(pool: &SqlitePool, track_id: i64) -> sqlx::Result<O
     .await
 }
 
-/// Gets track with artist and album names for organizing
+/// Track with joined artist and album names.
+///
+/// Used for display and file organization where human-readable names
+/// are needed rather than foreign key IDs.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct TrackWithMetadata {
+    /// Database ID
     pub id: i64,
+    /// Track title
     pub title: String,
+    /// File path
     pub path: String,
+    /// Duration in seconds
     pub duration: Option<i64>,
+    /// Track number on album
     pub track_number: Option<i64>,
+    /// Artist name (or "Unknown Artist")
     pub artist_name: String,
+    /// Album name (or "Unknown Album")
     pub album_name: String,
 }
 
+impl TrackWithMetadata {
+    /// Convert the path string to a PathBuf.
+    ///
+    /// This is a convenience method to avoid repeated `PathBuf::from(&track.path)`
+    /// throughout the codebase.
+    pub fn path_buf(&self) -> PathBuf {
+        PathBuf::from(&self.path)
+    }
+}
+
+/// Get all tracks with artist and album names.
+///
+/// Performs a LEFT JOIN to include tracks even if they have no artist
+/// or album. Missing values are replaced with "Unknown Artist" or
+/// "Unknown Album".
+///
+/// This is the primary method for loading the library for display.
 pub async fn get_all_tracks_with_metadata(
     pool: &SqlitePool,
 ) -> sqlx::Result<Vec<TrackWithMetadata>> {

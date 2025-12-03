@@ -37,9 +37,11 @@ pub mod domain;
 pub mod fingerprint;
 pub mod musicbrainz;
 pub mod service;
+pub mod traits;
 
 pub use coverart::{CoverArt, CoverArtClient, CoverSize};
 pub use domain::{
     AudioFingerprint, EnrichmentError, EnrichmentSource, IdentifiedTrack, TrackIdentification,
 };
 pub use service::{EnrichmentConfig, EnrichmentService, identify_track};
+pub use traits::{AcoustIdApi, CoverArtApi, MusicBrainzApi};

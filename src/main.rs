@@ -15,6 +15,8 @@ pub mod model;
 pub mod organizer;
 pub mod player;
 pub mod scanner;
+#[cfg(test)]
+pub mod test_utils;
 pub mod ui;
 
 use clap::Parser;
