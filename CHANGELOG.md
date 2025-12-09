@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.4](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.3...music-minder-v0.1.4) (2025-12-09)
+
+
+### ✨ Features
+
+* add cargo-audit security scanning to CI ([0ebc610](https://github.com/Hardcoreprawn/music-minder/commit/0ebc610962c7cb0805c105f991d72b1f430d8348))
+
+
+### 🐛 Bug Fixes
+
+* quote WiX version argument for PowerShell ([bb75b94](https://github.com/Hardcoreprawn/music-minder/commit/bb75b94cd74f39b70ce8ec381b12b961765e0cd3))
+
+
+### 📚 Documentation
+
+* add code signing policy for SignPath ([2b0a0ae](https://github.com/Hardcoreprawn/music-minder/commit/2b0a0ae86d9c58294507a785336aed3415cdc126))
+
 ## [0.1.3](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.2...music-minder-v0.1.3) (2025-12-09)
 
 
