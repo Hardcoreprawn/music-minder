@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.1...music-minder-v0.1.2) (2025-12-09)
+
+
+### 🐛 Bug Fixes
+
+* allow unused imports in platform-specific test modules ([cf780f7](https://github.com/Hardcoreprawn/music-minder/commit/cf780f77c0f12d6cd2e2fb07cea977d394aca0d1))
+* platform-specific PlatformConfig for souvlaki ([21e24df](https://github.com/Hardcoreprawn/music-minder/commit/21e24dfcb15ad6af7cddd9bc2178640ba3446d4d))
+
 ## [0.1.1](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.0...music-minder-v0.1.1) (2025-12-09)
 
 
