@@ -267,11 +267,18 @@ fn run_media_controls(
         }
     };
 
+    #[cfg(target_os = "windows")]
     let config = PlatformConfig {
         dbus_name: "music_minder",
         display_name: "Music Minder",
-        #[cfg(target_os = "windows")]
         hwnd,
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let config = PlatformConfig {
+        dbus_name: "music_minder",
+        display_name: "Music Minder",
+        hwnd: None,
     };
 
     let mut controls = MediaControls::new(config)
