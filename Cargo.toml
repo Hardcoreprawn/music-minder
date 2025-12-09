@@ -8,14 +8,14 @@ anyhow = "1.0.100"
 # Only include chrono features we actually use (Utc::now, to_rfc3339)
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 clap = { version = "4.5.53", features = ["derive", "env"] }
-dirs = "5.0"
+dirs = "6.0"
 futures = "0.3.31"
 iced = { version = "0.13.1", features = ["tokio", "canvas", "image"] }
 lofty = "0.22.4"
 rand = "0.9"                 # Random selection for shuffle
 rayon = "1.10"               # Parallel iterators for file checks
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
-rfd = "0.15.0"
+rfd = "0.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 smallvec = { version = "1.13", features = ["serde"] }  # Stack-allocated small vecs
