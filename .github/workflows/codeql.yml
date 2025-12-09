@@ -34,6 +34,11 @@ jobs:
   analyze-rust:
     name: Analyze (Rust)
     runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      # Faster compile for analysis - we don't need optimized code
+      CARGO_PROFILE_RELEASE_LTO: false
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,7 +59,7 @@ jobs:
           queries: security-and-quality
 
       - name: Build for analysis
-        run: cargo build --release
+        run: cargo build --jobs $(nproc)
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
