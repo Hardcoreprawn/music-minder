@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.2...music-minder-v0.1.3) (2025-12-09)
+
+
+### 🐛 Bug Fixes
+
+* pass version to WiX installer from release-please ([68304f9](https://github.com/Hardcoreprawn/music-minder/commit/68304f9f7fde8e811806be8a2e67ad90e7f21f97))
+
 ## [0.1.2](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.1...music-minder-v0.1.2) (2025-12-09)
 
 
