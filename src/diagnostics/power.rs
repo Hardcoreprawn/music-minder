@@ -143,6 +143,7 @@ pub fn list_power_schemes() -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]

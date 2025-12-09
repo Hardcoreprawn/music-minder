@@ -384,6 +384,7 @@ fn get_cpu_usage() -> Option<f32> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]

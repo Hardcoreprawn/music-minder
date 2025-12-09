@@ -225,6 +225,7 @@ pub fn get_default_output_device() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
