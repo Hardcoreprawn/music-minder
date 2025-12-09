@@ -2,14 +2,34 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/release-please-manifest.json
+
   build-windows:
+    name: Build Windows Installer
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,79 +37,78 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        
       - name: Build Release
         run: cargo build --release
         
-      - name: Create artifact
+      - name: Install WiX Toolset
+        run: |
+          choco install wixtoolset -y
+          
+      - name: Add WiX to PATH
+        run: |
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+      - name: Install cargo-wix
+        run: cargo install cargo-wix
+        
+      - name: Build MSI installer
+        run: cargo wix --no-build --nocapture
+          
+      - name: Prepare artifacts
         run: |
           mkdir dist
           copy target\release\music-minder.exe dist\
+          copy target\wix\*.msi dist\
           copy README.md dist\
+          copy LICENSE dist\
           
-      - name: Upload artifact
+      - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
-          name: music-minder-windows-x64
-          path: dist/
+          name: music-minder-windows-x64-installer
+          path: dist/*.msi
+          
+      - name: Upload portable exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-minder-windows-x64-portable
+          path: |
+            dist/music-minder.exe
+            dist/README.md
+            dist/LICENSE
 
-  # build-linux:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     
-  #     - name: Install dependencies
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y libasound2-dev libdbus-1-dev pkg-config
-  #         
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-action@stable
-  #       
-  #     - name: Build Release
-  #       run: cargo build --release
-  #       
-  #     - name: Create artifact
-  #       run: |
-  #         mkdir dist
-  #         cp target/release/music-minder dist/
-  #         cp README.md dist/
-  #         chmod +x dist/music-minder
-  #         
-  #     - name: Upload artifact
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: music-minder-linux-x64
-  #         path: dist/
-
-  release:
-    needs: [build-windows]  # Add build-linux when ready
+  upload-release:
+    name: Upload Release Assets
+    needs: [release-please, build-windows]
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download Windows artifact
+      - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
-          name: music-minder-windows-x64
-          path: windows
+          name: music-minder-windows-x64-installer
+          path: installer
           
-      # - name: Download Linux artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: music-minder-linux-x64
-      #     path: linux
-
-      - name: Create zip archives
-        run: |
-          cd windows && zip -r ../music-minder-windows-x64.zip . && cd ..
-          # cd linux && zip -r ../music-minder-linux-x64.zip . && cd ..
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Download Windows portable
+        uses: actions/download-artifact@v4
         with:
+          name: music-minder-windows-x64-portable
+          path: portable
+
+      - name: Create archives
+        run: |
+          cd portable && zip -r ../music-minder-${{ needs.release-please.outputs.version }}-windows-x64-portable.zip . && cd ..
+          mv installer/*.msi music-minder-${{ needs.release-please.outputs.version }}-windows-x64.msi
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            music-minder-windows-x64.zip
-          # music-minder-linux-x64.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: false
+            music-minder-${{ needs.release-please.outputs.version }}-windows-x64.msi
+            music-minder-${{ needs.release-please.outputs.version }}-windows-x64-portable.zip

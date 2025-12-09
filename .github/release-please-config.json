@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "draft": false,
+      "prerelease": false,
+      "changelog-sections": [
+        { "type": "feat", "section": "✨ Features" },
+        { "type": "fix", "section": "🐛 Bug Fixes" },
+        { "type": "perf", "section": "⚡ Performance" },
+        { "type": "refactor", "section": "♻️ Refactoring" },
+        { "type": "docs", "section": "📚 Documentation" },
+        { "type": "chore", "section": "🔧 Maintenance", "hidden": true },
+        { "type": "test", "section": "🧪 Tests", "hidden": true },
+        { "type": "ci", "section": "👷 CI", "hidden": true }
+      ],
+      "extra-files": [
+        "Cargo.toml"
+      ]
+    }
+  }
+}

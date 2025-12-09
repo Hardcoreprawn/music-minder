@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Music Minder Windows Installer
+  
+  This WiX source file defines the Windows Installer (MSI) package.
+  It will be processed by cargo-wix during the release workflow.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product
+        Id="*"
+        Name="Music Minder"
+        UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+        Manufacturer="Hardcoreprawn"
+        Language="1033"
+        Codepage="1252"
+        Version="!(bind.FileVersion.MusicMinderExe)">
+
+        <Package
+            Id="*"
+            Keywords="Installer"
+            Description="Music Minder - Music Library Manager"
+            Manufacturer="Hardcoreprawn"
+            InstallerVersion="450"
+            Languages="1033"
+            Compressed="yes"
+            InstallScope="perMachine"
+            SummaryCodepage="1252"
+            Platform="x64"/>
+
+        <MajorUpgrade
+            Schedule="afterInstallInitialize"
+            DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit."/>
+
+        <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" DiskPrompt="CD-ROM #1"/>
+        <Property Id="DiskPrompt" Value="Music Minder Installation"/>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFiles64Folder" Name="PFiles">
+                <Directory Id="APPLICATIONFOLDER" Name="Music Minder">
+                    <Component Id="MusicMinderExe" Guid="*" Win64="yes">
+                        <File
+                            Id="MusicMinderExe"
+                            Name="music-minder.exe"
+                            DiskId="1"
+                            Source="$(var.CargoTargetBinDir)\music-minder.exe"
+                            KeyPath="yes"/>
+                    </Component>
+                    <Component Id="License" Guid="*" Win64="yes">
+                        <File
+                            Id="LicenseFile"
+                            Name="LICENSE"
+                            DiskId="1"
+                            Source="LICENSE"
+                            KeyPath="yes"/>
+                    </Component>
+                    <Component Id="Readme" Guid="*" Win64="yes">
+                        <File
+                            Id="ReadmeFile"
+                            Name="README.md"
+                            DiskId="1"
+                            Source="README.md"
+                            KeyPath="yes"/>
+                    </Component>
+                </Directory>
+            </Directory>
+            
+            <!-- Start Menu Shortcut -->
+            <Directory Id="ProgramMenuFolder" Name="Programs">
+                <Directory Id="ApplicationProgramsFolder" Name="Music Minder">
+                    <Component Id="ApplicationShortcut" Guid="*" Win64="yes">
+                        <Shortcut
+                            Id="ApplicationStartMenuShortcut"
+                            Name="Music Minder"
+                            Description="Music Library Manager"
+                            Target="[#MusicMinderExe]"
+                            WorkingDirectory="APPLICATIONFOLDER"/>
+                        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall"/>
+                        <RegistryValue
+                            Root="HKCU"
+                            Key="Software\MusicMinder"
+                            Name="installed"
+                            Type="integer"
+                            Value="1"
+                            KeyPath="yes"/>
+                    </Component>
+                </Directory>
+            </Directory>
+            
+            <!-- Desktop Shortcut -->
+            <Directory Id="DesktopFolder" Name="Desktop">
+                <Component Id="DesktopShortcut" Guid="*" Win64="yes">
+                    <Shortcut
+                        Id="DesktopShortcut"
+                        Name="Music Minder"
+                        Description="Music Library Manager"
+                        Target="[#MusicMinderExe]"
+                        WorkingDirectory="APPLICATIONFOLDER"/>
+                    <RegistryValue
+                        Root="HKCU"
+                        Key="Software\MusicMinder"
+                        Name="desktopshortcut"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes"/>
+                </Component>
+            </Directory>
+        </Directory>
+
+        <Feature
+            Id="MainApplication"
+            Title="Music Minder"
+            Description="The complete Music Minder application."
+            Level="1"
+            ConfigurableDirectory="APPLICATIONFOLDER"
+            AllowAdvertise="no"
+            Display="expand"
+            Absent="disallow">
+            
+            <ComponentRef Id="MusicMinderExe"/>
+            <ComponentRef Id="License"/>
+            <ComponentRef Id="Readme"/>
+            
+            <Feature
+                Id="StartMenuShortcut"
+                Title="Start Menu Shortcut"
+                Description="Add a shortcut to the Start Menu."
+                Level="1"
+                AllowAdvertise="no">
+                <ComponentRef Id="ApplicationShortcut"/>
+            </Feature>
+            
+            <Feature
+                Id="DesktopShortcutFeature"
+                Title="Desktop Shortcut"
+                Description="Add a shortcut to the Desktop."
+                Level="1"
+                AllowAdvertise="no">
+                <ComponentRef Id="DesktopShortcut"/>
+            </Feature>
+        </Feature>
+
+        <SetProperty Id="ARPINSTALLLOCATION" Value="[APPLICATIONFOLDER]" After="CostFinalize"/>
+        
+        <!-- Add/Remove Programs metadata -->
+        <Property Id="ARPHELPLINK" Value="https://github.com/Hardcoreprawn/music-minder"/>
+        <Property Id="ARPURLINFOABOUT" Value="https://hardcoreprawn.github.io/music-minder/"/>
+        <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Hardcoreprawn/music-minder/releases"/>
+        
+        <!-- Nice installer UI -->
+        <UIRef Id="WixUI_FeatureTree"/>
+        <WixVariable Id="WixUILicenseRtf" Value="wix\License.rtf"/>
+        
+    </Product>
+</Wix>
