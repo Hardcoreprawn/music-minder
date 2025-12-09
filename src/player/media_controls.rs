@@ -453,3 +453,139 @@ mod tests {
         assert_eq!(meta.duration, Some(Duration::from_secs(180)));
     }
 }
+
+// ============================================================================
+// Defensive Tests - Verify souvlaki API contracts used by this module
+// ============================================================================
+
+#[cfg(test)]
+mod souvlaki_api_tests {
+    use souvlaki::{
+        MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
+        SeekDirection,
+    };
+    use std::time::Duration;
+
+    /// Verify PlatformConfig can be constructed with our fields
+    #[test]
+    fn test_platform_config_construction() {
+        let config = PlatformConfig {
+            dbus_name: "test_app",
+            display_name: "Test App",
+            hwnd: None,
+        };
+
+        // Verify the fields we set
+        assert_eq!(config.dbus_name, "test_app");
+        assert_eq!(config.display_name, "Test App");
+        assert!(config.hwnd.is_none());
+    }
+
+    /// Verify MediaMetadata can be constructed with our fields
+    #[test]
+    fn test_media_metadata_construction() {
+        let metadata = MediaMetadata {
+            title: Some("Test Title"),
+            artist: Some("Test Artist"),
+            album: Some("Test Album"),
+            duration: Some(Duration::from_secs(180)),
+            cover_url: Some("file:///path/to/cover.jpg"),
+        };
+
+        assert_eq!(metadata.title, Some("Test Title"));
+        assert_eq!(metadata.artist, Some("Test Artist"));
+        assert_eq!(metadata.album, Some("Test Album"));
+        assert_eq!(metadata.duration, Some(Duration::from_secs(180)));
+        assert_eq!(metadata.cover_url, Some("file:///path/to/cover.jpg"));
+    }
+
+    /// Verify MediaPlayback enum variants we use
+    #[test]
+    fn test_media_playback_variants() {
+        // We use these three variants
+        let _playing = MediaPlayback::Playing { progress: None };
+        let _paused = MediaPlayback::Paused { progress: None };
+        let _stopped = MediaPlayback::Stopped;
+
+        // Verify with progress
+        let _playing_with_progress = MediaPlayback::Playing {
+            progress: Some(souvlaki::MediaPosition(Duration::from_secs(30))),
+        };
+    }
+
+    /// Verify MediaControlEvent variants we handle
+    #[test]
+    fn test_media_control_event_variants() {
+        // We match on these event variants in our event handler
+        fn handle_event(event: MediaControlEvent) -> &'static str {
+            match event {
+                MediaControlEvent::Play => "play",
+                MediaControlEvent::Pause => "pause",
+                MediaControlEvent::Toggle => "toggle",
+                MediaControlEvent::Stop => "stop",
+                MediaControlEvent::Next => "next",
+                MediaControlEvent::Previous => "previous",
+                MediaControlEvent::Seek(_) => "seek",
+                MediaControlEvent::SeekBy(_, _) => "seek_by",
+                MediaControlEvent::SetPosition(_) => "set_position",
+                MediaControlEvent::SetVolume(_) => "set_volume",
+                MediaControlEvent::OpenUri(_) => "open_uri",
+                MediaControlEvent::Raise => "raise",
+                MediaControlEvent::Quit => "quit",
+            }
+        }
+
+        // Verify each variant we use
+        assert_eq!(handle_event(MediaControlEvent::Play), "play");
+        assert_eq!(handle_event(MediaControlEvent::Pause), "pause");
+        assert_eq!(handle_event(MediaControlEvent::Toggle), "toggle");
+        assert_eq!(handle_event(MediaControlEvent::Stop), "stop");
+        assert_eq!(handle_event(MediaControlEvent::Next), "next");
+        assert_eq!(handle_event(MediaControlEvent::Previous), "previous");
+    }
+
+    /// Verify SeekDirection enum exists and we can use it
+    #[test]
+    fn test_seek_direction_exists() {
+        // SeekDirection is used in SeekBy and Seek events
+        let _forward = SeekDirection::Forward;
+        let _backward = SeekDirection::Backward;
+
+        // Verify Debug impl (we use {:?} in debug logging)
+        let debug_str = format!("{:?}", SeekDirection::Forward);
+        assert!(!debug_str.is_empty());
+    }
+
+    /// Verify MediaPosition wrapper type exists
+    #[test]
+    fn test_media_position_exists() {
+        use souvlaki::MediaPosition;
+
+        let pos = MediaPosition(Duration::from_secs(60));
+
+        // MediaPosition is a newtype around Duration
+        assert_eq!(pos.0, Duration::from_secs(60));
+    }
+
+    /// Verify MediaControls can be created (compile-time check)
+    /// Note: We can't actually create controls without a real window handle on Windows
+    #[test]
+    fn test_media_controls_new_signature() {
+        // This test verifies the API signature exists
+        // MediaControls::new(config) -> Result<MediaControls, Error>
+        fn check_new_signature<F: Fn(PlatformConfig) -> Result<MediaControls, souvlaki::Error>>(
+            _f: F,
+        ) {
+        }
+        check_new_signature(MediaControls::new);
+    }
+
+    /// Verify the Error type we handle
+    #[test]
+    fn test_error_type_exists() {
+        // We use {:?} formatting on errors
+        // souvlaki::Error should implement Debug
+        fn check_debug<T: std::fmt::Debug>() {}
+        check_debug::<souvlaki::Error>();
+    }
+}

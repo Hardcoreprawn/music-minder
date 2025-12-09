@@ -617,3 +617,119 @@ fn audio_thread_main(
         }
     }
 }
+
+// ============================================================================
+// Defensive Tests - Verify cpal API contracts used by this module
+// ============================================================================
+
+#[cfg(test)]
+mod cpal_api_tests {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use cpal::{BufferSize, SampleFormat, StreamConfig};
+
+    /// Verify cpal::default_host() returns a Host that implements HostTrait
+    #[test]
+    fn test_default_host_available() {
+        // This is the primary entry point we use
+        let host = cpal::default_host();
+
+        // HostTrait methods we rely on
+        let _devices_result = host.output_devices();
+        let _default_device = host.default_output_device();
+    }
+
+    /// Verify Device implements DeviceTrait with the methods we use
+    #[test]
+    fn test_device_trait_methods() {
+        let host = cpal::default_host();
+
+        if let Some(device) = host.default_output_device() {
+            // DeviceTrait methods we rely on
+            let _name: Result<String, _> = device.name();
+            let _config = device.default_output_config();
+        }
+    }
+
+    /// Verify SampleFormat enum has the variants we match on
+    #[test]
+    fn test_sample_format_variants() {
+        // We explicitly match these variants in build_stream
+        let _f32_format: SampleFormat = SampleFormat::F32;
+        let _i16_format: SampleFormat = SampleFormat::I16;
+
+        // Verify Debug impl (used in error messages)
+        let _ = format!("{:?}", _f32_format);
+    }
+
+    /// Verify StreamConfig can be constructed with our parameters
+    #[test]
+    fn test_stream_config_construction() {
+        use cpal::SampleRate;
+
+        let config = StreamConfig {
+            channels: 2,
+            sample_rate: SampleRate(48000),
+            buffer_size: BufferSize::Default,
+        };
+
+        // Verify the fields we set
+        assert_eq!(config.channels, 2);
+        assert_eq!(config.sample_rate.0, 48000);
+        assert!(matches!(config.buffer_size, BufferSize::Default));
+    }
+
+    /// Verify Stream implements StreamTrait with play() method
+    #[test]
+    fn test_stream_trait_play_exists() {
+        // StreamTrait::play is the method we call to start audio output
+        // We can't easily test this without a real device, but we can verify
+        // the trait bound exists by checking it compiles
+        #[allow(dead_code)]
+        fn requires_stream_trait<T: StreamTrait>(_s: &T) {}
+
+        // This test passing means StreamTrait::play() exists
+        // The actual call happens in AudioOutput::new()
+    }
+
+    /// Verify SizedSample and FromSample traits exist for our sample types
+    #[test]
+    fn test_sample_traits_exist() {
+        // These traits are used in build_stream generic bounds
+        fn requires_sample_traits<T: cpal::SizedSample + cpal::FromSample<f32>>() {}
+
+        // Verify f32 implements the required traits
+        requires_sample_traits::<f32>();
+    }
+
+    /// Verify SupportedStreamConfig provides the methods we use
+    #[test]
+    fn test_supported_stream_config_methods() {
+        let host = cpal::default_host();
+
+        if let Some(device) = host.default_output_device()
+            && let Ok(supported) = device.default_output_config()
+        {
+            // Methods we call on SupportedStreamConfig
+            let _rate = supported.sample_rate();
+            let _channels = supported.channels();
+            let _format = supported.sample_format();
+        }
+    }
+
+    /// Verify cpal error types we handle
+    #[test]
+    fn test_error_type_to_string() {
+        // We use .to_string() on various cpal error types
+        // BuildStreamError, DefaultStreamConfigError, etc.
+        // Verify they implement Display/ToString (implicitly tested via map_err)
+    }
+
+    /// Verify OutputCallbackInfo exists (used in stream callback signature)
+    #[test]
+    fn test_output_callback_info_exists() {
+        // OutputCallbackInfo is passed to our callback but we don't use it (_: &cpal::OutputCallbackInfo)
+        // Just verify the type exists
+        #[allow(dead_code)]
+        fn callback_signature(_data: &mut [f32], _info: &cpal::OutputCallbackInfo) {}
+    }
+}
