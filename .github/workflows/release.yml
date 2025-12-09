@@ -57,7 +57,7 @@ jobs:
         run: cargo install cargo-wix
         
       - name: Build MSI installer
-        run: cargo wix --no-build --nocapture
+        run: cargo wix --no-build --nocapture -D Version=${{ needs.release-please.outputs.version }}
           
       - name: Prepare artifacts
         run: |

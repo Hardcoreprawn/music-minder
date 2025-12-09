@@ -13,7 +13,7 @@
         Manufacturer="Hardcoreprawn"
         Language="1033"
         Codepage="1252"
-        Version="!(bind.FileVersion.MusicMinderExe)">
+        Version="$(var.Version)">
 
         <Package
             Id="*"
