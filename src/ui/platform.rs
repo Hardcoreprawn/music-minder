@@ -62,7 +62,11 @@ mod tests {
     fn get_music_folder_returns_directory() {
         let path = get_user_music_folder();
         // Should be a directory, not a file
-        assert!(path.is_dir(), "Returned path should be a directory: {:?}", path);
+        assert!(
+            path.is_dir(),
+            "Returned path should be a directory: {:?}",
+            path
+        );
     }
 
     // Tests for dirs crate API contract
@@ -83,7 +87,10 @@ mod tests {
             // dirs::home_dir() should return Option<PathBuf>
             let result: Option<std::path::PathBuf> = dirs::home_dir();
             // home_dir should almost always succeed
-            assert!(result.is_some(), "home_dir should return Some on most systems");
+            assert!(
+                result.is_some(),
+                "home_dir should return Some on most systems"
+            );
             if let Some(path) = result {
                 assert!(path.is_absolute(), "home_dir should return absolute path");
                 assert!(path.exists(), "home_dir should return existing path");

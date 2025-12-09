@@ -106,10 +106,10 @@ mod tests {
     async fn verify_rfd_api_contract() {
         // We use: AsyncFileDialog::new().pick_folder().await
         let dialog = rfd::AsyncFileDialog::new();
-        
+
         // pick_folder() should return impl Future<Output = Option<FileHandle>>
         let result = dialog.pick_folder().await;
-        
+
         // FileHandle should have .path() -> &Path
         if let Some(handle) = result {
             let _path: &std::path::Path = handle.path();
