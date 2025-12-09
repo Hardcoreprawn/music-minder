@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Restrict permissions to minimum required (principle of least privilege)
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
