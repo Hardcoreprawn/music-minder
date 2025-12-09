@@ -293,6 +293,8 @@ pub struct TrackWithMetadata {
     pub artist_name: String,
     /// Album name (or "Unknown Album")
     pub album_name: String,
+    /// Release year (from album)
+    pub year: Option<i64>,
 }
 
 impl TrackWithMetadata {
@@ -320,7 +322,8 @@ pub async fn get_all_tracks_with_metadata(
         SELECT 
             t.id, t.title, t.path, t.duration, t.track_number,
             COALESCE(a.name, 'Unknown Artist') as artist_name,
-            COALESCE(al.title, 'Unknown Album') as album_name
+            COALESCE(al.title, 'Unknown Album') as album_name,
+            al.year
         FROM tracks t
         LEFT JOIN artists a ON t.artist_id = a.id
         LEFT JOIN albums al ON t.album_id = al.id

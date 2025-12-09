@@ -57,13 +57,12 @@ pub fn find_sidecar_cover(audio_path: &Path) -> Option<CoverArt> {
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_lowercase());
             
-            if let (Some(stem), Some(ext)) = (file_stem, extension) {
-                if COVER_FILENAMES.contains(&stem.as_str()) 
+            if let (Some(stem), Some(ext)) = (file_stem, extension)
+                && COVER_FILENAMES.contains(&stem.as_str()) 
                     && IMAGE_EXTENSIONS.contains(&ext.as_str()) 
                 {
                     return load_sidecar_cover(&path);
                 }
-            }
         }
     }
     

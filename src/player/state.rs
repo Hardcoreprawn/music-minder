@@ -1,7 +1,166 @@
 //! Player state and command types.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
+
+/// Lock-free shared state for the audio callback.
+///
+/// This struct uses atomics to avoid priority inversion in the real-time audio thread.
+/// The cpal callback runs on a high-priority system thread and must never block on locks.
+#[derive(Debug)]
+pub struct AudioSharedState {
+    /// Volume as f32 bits (use `f32::to_bits()` / `f32::from_bits()`)
+    volume_bits: AtomicU32,
+    /// Whether playback is active
+    is_playing: AtomicBool,
+    /// Current position in nanoseconds
+    position_nanos: AtomicU64,
+    /// Buffer underrun count
+    underruns: AtomicU32,
+    /// Callback invocation count (for latency calculation)
+    callback_count: AtomicU64,
+    /// Total samples processed
+    samples_processed: AtomicU64,
+    /// Peak callback duration in microseconds
+    peak_callback_us: AtomicU32,
+    /// Ring buffer fill level (0-100)
+    buffer_fill_percent: AtomicU32,
+}
+
+impl Default for AudioSharedState {
+    fn default() -> Self {
+        Self {
+            volume_bits: AtomicU32::new(1.0_f32.to_bits()),
+            is_playing: AtomicBool::new(false),
+            position_nanos: AtomicU64::new(0),
+            underruns: AtomicU32::new(0),
+            callback_count: AtomicU64::new(0),
+            samples_processed: AtomicU64::new(0),
+            peak_callback_us: AtomicU32::new(0),
+            buffer_fill_percent: AtomicU32::new(0),
+        }
+    }
+}
+
+impl AudioSharedState {
+    /// Create a new audio shared state wrapped in Arc.
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    /// Get the current volume (0.0 - 1.0).
+    #[inline]
+    pub fn volume(&self) -> f32 {
+        f32::from_bits(self.volume_bits.load(Ordering::Relaxed))
+    }
+
+    /// Set the volume (0.0 - 1.0).
+    #[inline]
+    pub fn set_volume(&self, volume: f32) {
+        self.volume_bits
+            .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
+    /// Check if playback is active.
+    #[inline]
+    pub fn is_playing(&self) -> bool {
+        self.is_playing.load(Ordering::Relaxed)
+    }
+
+    /// Set the playing state.
+    #[inline]
+    pub fn set_playing(&self, playing: bool) {
+        self.is_playing.store(playing, Ordering::Relaxed);
+    }
+
+    /// Get the current position as Duration.
+    #[inline]
+    pub fn position(&self) -> Duration {
+        Duration::from_nanos(self.position_nanos.load(Ordering::Relaxed))
+    }
+
+    /// Set the current position.
+    #[inline]
+    pub fn set_position(&self, position: Duration) {
+        self.position_nanos
+            .store(position.as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    /// Get the underrun count.
+    #[inline]
+    pub fn underruns(&self) -> u32 {
+        self.underruns.load(Ordering::Relaxed)
+    }
+
+    /// Increment the underrun count (returns new value).
+    #[inline]
+    pub fn increment_underruns(&self) -> u32 {
+        self.underruns.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Record a callback completion with timing.
+    #[inline]
+    pub fn record_callback(&self, samples: u32, duration_us: u32) {
+        self.callback_count.fetch_add(1, Ordering::Relaxed);
+        self.samples_processed
+            .fetch_add(samples as u64, Ordering::Relaxed);
+
+        // Update peak if this callback was slower
+        let mut current_peak = self.peak_callback_us.load(Ordering::Relaxed);
+        while duration_us > current_peak {
+            match self.peak_callback_us.compare_exchange_weak(
+                current_peak,
+                duration_us,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(c) => current_peak = c,
+            }
+        }
+    }
+
+    /// Set the buffer fill percentage (0-100).
+    #[inline]
+    pub fn set_buffer_fill(&self, percent: u32) {
+        self.buffer_fill_percent
+            .store(percent.min(100), Ordering::Relaxed);
+    }
+
+    /// Get the buffer fill percentage.
+    #[inline]
+    pub fn buffer_fill(&self) -> u32 {
+        self.buffer_fill_percent.load(Ordering::Relaxed)
+    }
+
+    /// Get the callback count.
+    #[inline]
+    pub fn callback_count(&self) -> u64 {
+        self.callback_count.load(Ordering::Relaxed)
+    }
+
+    /// Get total samples processed.
+    #[inline]
+    pub fn samples_processed(&self) -> u64 {
+        self.samples_processed.load(Ordering::Relaxed)
+    }
+
+    /// Get peak callback duration in microseconds.
+    #[inline]
+    pub fn peak_callback_us(&self) -> u32 {
+        self.peak_callback_us.load(Ordering::Relaxed)
+    }
+
+    /// Reset performance counters.
+    pub fn reset_stats(&self) {
+        self.underruns.store(0, Ordering::Relaxed);
+        self.callback_count.store(0, Ordering::Relaxed);
+        self.samples_processed.store(0, Ordering::Relaxed);
+        self.peak_callback_us.store(0, Ordering::Relaxed);
+    }
+}
 
 /// Current playback status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -11,6 +170,55 @@ pub enum PlaybackStatus {
     Loading,
     Playing,
     Paused,
+}
+
+/// Audio format quality information.
+#[derive(Debug, Clone, Default)]
+pub struct AudioQuality {
+    /// Source format (e.g., "FLAC", "MP3 320kbps")
+    pub format: String,
+    /// Whether the source is lossless
+    pub is_lossless: bool,
+    /// Source bit depth (16, 24, 32)
+    pub bit_depth: u16,
+    /// Source sample rate
+    pub source_sample_rate: u32,
+    /// Output sample rate (may differ if resampling)
+    pub output_sample_rate: u32,
+    /// Whether bit-perfect playback is achieved
+    pub is_bit_perfect: bool,
+    /// Estimated end-to-end latency in milliseconds
+    pub latency_ms: f32,
+    /// Ring buffer size in samples
+    pub buffer_size: usize,
+    /// Current buffer fill level (0.0-1.0)
+    pub buffer_fill: f32,
+}
+
+impl AudioQuality {
+    /// Get a human-readable quality description.
+    pub fn quality_label(&self) -> &'static str {
+        if self.is_lossless && self.bit_depth >= 24 && self.source_sample_rate >= 96000 {
+            "Hi-Res Lossless"
+        } else if self.is_lossless && self.bit_depth >= 24 {
+            "Lossless 24-bit"
+        } else if self.is_lossless {
+            "Lossless"
+        } else {
+            "Lossy"
+        }
+    }
+
+    /// Get the quality tier emoji.
+    pub fn quality_emoji(&self) -> &'static str {
+        if self.is_lossless && self.bit_depth >= 24 {
+            "🎵" // Hi-res
+        } else if self.is_lossless {
+            "💿" // CD quality
+        } else {
+            "🎧" // Lossy
+        }
+    }
 }
 
 /// Shared player state.
@@ -34,6 +242,8 @@ pub struct PlayerState {
     pub bits_per_sample: u16,
     /// Buffer underrun count (for diagnostics)
     pub underruns: u32,
+    /// Audio quality information
+    pub quality: AudioQuality,
 }
 
 impl Default for PlayerState {
@@ -48,6 +258,7 @@ impl Default for PlayerState {
             channels: 2,
             bits_per_sample: 16,
             underruns: 0,
+            quality: AudioQuality::default(),
         }
     }
 }
@@ -74,9 +285,19 @@ impl PlayerState {
 
     /// Get a display string for the current format.
     pub fn format_info(&self) -> String {
+        let quality_indicator = if self.quality.is_lossless {
+            "Lossless"
+        } else {
+            "Lossy"
+        };
+        
         format!(
-            "{}Hz / {}ch / {}bit",
-            self.sample_rate, self.channels, self.bits_per_sample
+            "{} • {}Hz / {}ch / {}bit • {}",
+            self.quality.format,
+            self.sample_rate,
+            self.channels,
+            self.bits_per_sample,
+            quality_indicator
         )
     }
 }

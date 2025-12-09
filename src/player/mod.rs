@@ -5,13 +5,13 @@
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
 //! │                      Player (Main Thread)                       │
-//! │  Controls state, receives UI commands, updates visualization   │
+//! │  Controls state, receives UI commands, updates visualization    │
 //! └────────────────────────────┬────────────────────────────────────┘
 //!                              │ crossbeam channels
 //!                              ▼
 //! ┌─────────────────────────────────────────────────────────────────┐
 //! │                    Audio Thread (Real-time)                     │
-//! │     Decodes audio, fills output buffer, sends FFT data         │
+//! │     Decodes audio, fills output buffer, sends FFT data          │
 //! └────────────────────────────┬────────────────────────────────────┘
 //!                              │ cpal callback
 //!                              ▼
@@ -23,14 +23,18 @@
 
 mod audio;
 mod decoder;
+pub mod media_controls;
 mod queue;
+mod resampler;
 mod state;
 mod visualization;
 
 pub use audio::{AudioConfig, AudioOutput};
 pub use decoder::AudioDecoder;
+pub use media_controls::{MediaControlCommand, MediaControlsHandle, MediaControlsMetadata, MediaPlaybackState};
 pub use queue::{PlayQueue, QueueItem};
-pub use state::{PlaybackStatus, PlayerCommand, PlayerState};
+pub use resampler::Resampler;
+pub use state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerState};
 pub use visualization::{SpectrumData, VisualizationMode, Visualizer};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -49,6 +53,8 @@ use std::time::Duration;
 pub struct Player {
     /// Current player state (shared with audio thread)
     state: Arc<RwLock<PlayerState>>,
+    /// Lock-free shared state for the audio callback
+    audio_shared: Option<Arc<AudioSharedState>>,
     /// Command sender to audio thread
     command_tx: Sender<PlayerCommand>,
     /// Visualization data receiver from audio thread
@@ -70,9 +76,11 @@ impl Player {
 
         // Try to initialize audio output
         let audio = AudioOutput::new(Arc::clone(&state), command_rx, viz_tx).ok()?;
+        let audio_shared = Some(Arc::clone(&audio.audio_shared));
 
         Some(Self {
             state,
+            audio_shared,
             command_tx,
             viz_rx,
             queue: PlayQueue::new(),
@@ -80,17 +88,28 @@ impl Player {
         })
     }
 
+    /// Load and play the current queue item.
+    ///
+    /// This is the SINGLE place that sends Load+Play commands to the audio thread.
+    /// All playback initiation (play_file, skip_forward, previous) should use this.
+    fn load_and_play_current(&mut self) -> Result<(), PlayerError> {
+        if let Some(item) = self.queue.current() {
+            self.command_tx
+                .send(PlayerCommand::Load(item.path.clone()))
+                .map_err(|_| PlayerError::ChannelClosed)?;
+            self.command_tx
+                .send(PlayerCommand::Play)
+                .map_err(|_| PlayerError::ChannelClosed)?;
+        }
+        Ok(())
+    }
+
     /// Play a file immediately (clears queue and starts playback).
     pub fn play_file(&mut self, path: PathBuf) -> Result<(), PlayerError> {
         self.queue.clear();
-        self.queue.add(QueueItem::from_path(path.clone()));
-        self.command_tx
-            .send(PlayerCommand::Load(path))
-            .map_err(|_| PlayerError::ChannelClosed)?;
-        self.command_tx
-            .send(PlayerCommand::Play)
-            .map_err(|_| PlayerError::ChannelClosed)?;
-        Ok(())
+        self.queue.add(QueueItem::from_path(path));
+        self.queue.jump_to(0);
+        self.load_and_play_current()
     }
 
     /// Add a file to the queue.
@@ -138,7 +157,13 @@ impl Player {
 
     /// Set volume (0.0 - 1.0).
     pub fn set_volume(&self, volume: f32) {
-        self.state.write().volume = volume.clamp(0.0, 1.0);
+        let clamped = volume.clamp(0.0, 1.0);
+        // Update UI state
+        self.state.write().volume = clamped;
+        // Update atomic state for real-time audio callback (lock-free)
+        if let Some(ref audio_shared) = self.audio_shared {
+            audio_shared.set_volume(clamped);
+        }
     }
 
     /// Get current volume.
@@ -148,13 +173,8 @@ impl Player {
 
     /// Skip to next track in queue.
     pub fn skip_forward(&mut self) -> Result<(), PlayerError> {
-        if let Some(item) = self.queue.skip_forward() {
-            self.command_tx
-                .send(PlayerCommand::Load(item.path.clone()))
-                .map_err(|_| PlayerError::ChannelClosed)?;
-            self.command_tx
-                .send(PlayerCommand::Play)
-                .map_err(|_| PlayerError::ChannelClosed)?;
+        if self.queue.skip_forward().is_some() {
+            self.load_and_play_current()?;
         }
         Ok(())
     }
@@ -165,22 +185,55 @@ impl Player {
         if position > Duration::from_secs(3) {
             // Restart current track
             self.seek(0.0)
-        } else if let Some(item) = self.queue.previous() {
-            self.command_tx
-                .send(PlayerCommand::Load(item.path.clone()))
-                .map_err(|_| PlayerError::ChannelClosed)?;
-            self.command_tx
-                .send(PlayerCommand::Play)
-                .map_err(|_| PlayerError::ChannelClosed)?;
-            Ok(())
+        } else if self.queue.previous().is_some() {
+            self.load_and_play_current()
         } else {
+            // At start of queue, just restart current track
             self.seek(0.0)
         }
     }
 
     /// Get current playback state snapshot.
+    /// 
+    /// This syncs the position and underrun count from the atomic audio state.
     pub fn state(&self) -> PlayerState {
-        self.state.read().clone()
+        let mut state = self.state.read().clone();
+        // Sync position and underruns from atomic state (updated by audio callback)
+        if let Some(ref audio_shared) = self.audio_shared {
+            state.position = audio_shared.position();
+            state.underruns = audio_shared.underruns();
+            
+            // Update quality metrics from real-time stats
+            state.quality.buffer_fill = audio_shared.buffer_fill() as f32 / 100.0;
+            
+            // Estimate latency: ring buffer fill + typical WASAPI buffer (~10ms)
+            // Ring buffer: 48000 samples at 48kHz stereo = ~500ms max
+            // Current fill represents how much audio is buffered
+            let buffer_latency_ms = state.quality.buffer_fill * 500.0;
+            let wasapi_latency_ms = 10.0; // Typical WASAPI shared mode latency
+            state.quality.latency_ms = buffer_latency_ms + wasapi_latency_ms;
+        }
+        state
+    }
+
+    /// Get audio performance statistics.
+    pub fn performance_stats(&self) -> Option<AudioPerformanceStats> {
+        self.audio_shared.as_ref().map(|shared| {
+            AudioPerformanceStats {
+                callback_count: shared.callback_count(),
+                samples_processed: shared.samples_processed(),
+                peak_callback_us: shared.peak_callback_us(),
+                underruns: shared.underruns(),
+                buffer_fill_percent: shared.buffer_fill(),
+            }
+        })
+    }
+
+    /// Reset performance statistics.
+    pub fn reset_stats(&self) {
+        if let Some(ref audio_shared) = self.audio_shared {
+            audio_shared.reset_stats();
+        }
     }
 
     /// Get the latest visualization data (non-blocking).
@@ -245,6 +298,50 @@ pub enum PlayerError {
 
     #[error("File not found: {0}")]
     FileNotFound(String),
+}
+
+/// Audio performance statistics for monitoring.
+#[derive(Debug, Clone, Default)]
+pub struct AudioPerformanceStats {
+    /// Number of audio callbacks processed
+    pub callback_count: u64,
+    /// Total samples processed
+    pub samples_processed: u64,
+    /// Peak callback duration in microseconds
+    pub peak_callback_us: u32,
+    /// Number of buffer underruns
+    pub underruns: u32,
+    /// Current buffer fill percentage (0-100)
+    pub buffer_fill_percent: u32,
+}
+
+impl AudioPerformanceStats {
+    /// Check if audio is performing well (no underruns, fast callbacks).
+    pub fn is_healthy(&self) -> bool {
+        self.underruns == 0 && self.peak_callback_us < 5000 // < 5ms
+    }
+
+    /// Get a health rating.
+    pub fn health_rating(&self) -> &'static str {
+        if self.underruns == 0 && self.peak_callback_us < 1000 {
+            "Excellent"
+        } else if self.underruns == 0 && self.peak_callback_us < 5000 {
+            "Good"
+        } else if self.underruns < 5 {
+            "Fair"
+        } else {
+            "Poor"
+        }
+    }
+
+    /// Get callback timing as a human-readable string.
+    pub fn callback_timing(&self) -> String {
+        if self.peak_callback_us < 1000 {
+            format!("{}µs peak", self.peak_callback_us)
+        } else {
+            format!("{:.1}ms peak", self.peak_callback_us as f32 / 1000.0)
+        }
+    }
 }
 
 #[cfg(test)]

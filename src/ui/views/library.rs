@@ -5,11 +5,15 @@ use std::path::Path;
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Element, Length};
 
+use crate::db::TrackWithMetadata;
 use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::{LoadedState, OrganizeView, virtualization as virt};
 
 use super::helpers::{action_button, calc_visible_range};
+
+/// Muted text color for secondary metadata columns
+const MUTED_COLOR: [f32; 3] = [0.5, 0.5, 0.55];
 
 /// Library pane with scanning, organizing, and track list
 pub fn library_pane(s: &LoadedState) -> Element<'_, Message> {
@@ -27,6 +31,7 @@ pub fn library_pane(s: &LoadedState) -> Element<'_, Message> {
         scan_controls(s, scan_path),
         track_count_text,
         Space::with_height(10),
+        track_table_header(),
         track_list(s),
     ]
     .spacing(10)
@@ -235,45 +240,7 @@ fn track_list(state: &LoadedState) -> Element<'_, Message> {
     let items = state.tracks[start..end].iter().enumerate().map(|(i, t)| {
         let idx = start + i;
         let is_selected = selected == Some(idx);
-        let bg_color = if is_selected {
-            [0.25, 0.35, 0.45]
-        } else {
-            [0.18, 0.18, 0.22]
-        };
-        let text_color = if is_selected {
-            [0.9, 0.95, 1.0]
-        } else {
-            [0.85, 0.85, 0.85]
-        };
-
-        row![
-            // Play button - ASCII
-            button(text(">").size(12))
-                .padding([4, 8])
-                .on_press(Message::PlayerPlayTrack(idx)),
-            // Queue button
-            button(text("+").size(14))
-                .padding([4, 8])
-                .on_press(Message::PlayerQueueTrack(idx)),
-            // Track info (clickable for enrichment)
-            button(
-                container(text(format!("{} - {}", t.title, t.artist_name)).color(text_color))
-                    .height(Length::Fixed(virt::TRACK_ROW_HEIGHT))
-                    .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT))
-                    .width(Length::Fill)
-            )
-            .style(move |_theme, _status| button::Style {
-                background: Some(iced::Background::Color(bg_color.into())),
-                text_color: iced::Color::from_rgb(text_color[0], text_color[1], text_color[2]),
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
-            })
-            .padding(0)
-            .width(Length::Fill)
-            .on_press(Message::EnrichmentTrackSelected(idx)),
-        ]
-        .spacing(5)
-        .into()
+        track_row(t, idx, is_selected)
     });
     scrollable(
         column![
@@ -286,6 +253,166 @@ fn track_list(state: &LoadedState) -> Element<'_, Message> {
     .height(Length::Fill)
     .width(Length::Fill)
     .on_scroll(Message::ScrollChanged)
+    .into()
+}
+
+/// Renders the table header row
+fn track_table_header() -> Element<'static, Message> {
+    row![
+        // Spacer for play/queue buttons
+        Space::with_width(Length::Fixed(70.0)),
+        // Title column
+        container(text("Title").size(12).color(MUTED_COLOR))
+            .width(Length::FillPortion(3)),
+        // Artist column
+        container(text("Artist").size(12).color(MUTED_COLOR))
+            .width(Length::FillPortion(2)),
+        // Album column
+        container(text("Album").size(12).color(MUTED_COLOR))
+            .width(Length::FillPortion(2)),
+        // Year column
+        container(text("Year").size(12).color(MUTED_COLOR))
+            .width(Length::Fixed(50.0)),
+        // Duration column
+        container(text("Duration").size(12).color(MUTED_COLOR))
+            .width(Length::Fixed(60.0)),
+        // Format column
+        container(text("Format").size(12).color(MUTED_COLOR))
+            .width(Length::Fixed(50.0)),
+    ]
+    .spacing(8)
+    .padding([4, 0])
+    .into()
+}
+
+/// Format duration as mm:ss
+fn format_duration(seconds: Option<i64>) -> String {
+    match seconds {
+        Some(s) => {
+            let mins = s / 60;
+            let secs = s % 60;
+            format!("{}:{:02}", mins, secs)
+        }
+        None => "-:--".to_string(),
+    }
+}
+
+/// Extract format from file extension
+fn format_from_path(path: &str) -> &'static str {
+    if let Some(ext) = Path::new(path).extension() {
+        match ext.to_string_lossy().to_lowercase().as_str() {
+            "flac" => "FLAC",
+            "wav" => "WAV",
+            "mp3" => "MP3",
+            "m4a" | "aac" => "AAC",
+            "ogg" | "oga" => "OGG",
+            "opus" => "OPUS",
+            "wv" => "WV",
+            "ape" => "APE",
+            "aiff" | "aif" => "AIFF",
+            _ => "?",
+        }
+    } else {
+        "?"
+    }
+}
+
+/// Renders a single track row in table format
+fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_, Message> {
+    let bg_color = if is_selected {
+        [0.25, 0.35, 0.45]
+    } else {
+        [0.18, 0.18, 0.22]
+    };
+    let text_color = if is_selected {
+        [0.9, 0.95, 1.0]
+    } else {
+        [0.85, 0.85, 0.85]
+    };
+    let muted = if is_selected {
+        [0.7, 0.75, 0.8]
+    } else {
+        MUTED_COLOR
+    };
+
+    let year_str = t.year.map(|y| y.to_string()).unwrap_or_default();
+    let duration_str = format_duration(t.duration);
+    let format_str = format_from_path(&t.path);
+
+    let row_content = row![
+        // Play button
+        button(text(">").size(12))
+            .padding([4, 8])
+            .on_press(Message::PlayerPlayTrack(idx)),
+        // Queue button
+        button(text("+").size(14))
+            .padding([4, 8])
+            .on_press(Message::PlayerQueueTrack(idx)),
+        // Title - primary emphasis
+        container(
+            text(&t.title)
+                .size(14)
+                .color(text_color)
+        )
+        .width(Length::FillPortion(3))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        // Artist - primary emphasis
+        container(
+            text(&t.artist_name)
+                .size(14)
+                .color(text_color)
+        )
+        .width(Length::FillPortion(2))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        // Album - muted
+        container(
+            text(&t.album_name)
+                .size(12)
+                .color(muted)
+        )
+        .width(Length::FillPortion(2))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        // Year - muted
+        container(
+            text(year_str)
+                .size(12)
+                .color(muted)
+        )
+        .width(Length::Fixed(50.0))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        // Duration - muted
+        container(
+            text(duration_str)
+                .size(12)
+                .color(muted)
+        )
+        .width(Length::Fixed(60.0))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        // Format - muted
+        container(
+            text(format_str)
+                .size(11)
+                .color(muted)
+        )
+        .width(Length::Fixed(50.0))
+        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+    ]
+    .spacing(8);
+
+    button(
+        container(row_content)
+            .height(Length::Fixed(virt::TRACK_ROW_HEIGHT))
+            .width(Length::Fill)
+    )
+    .style(move |_theme, _status| button::Style {
+        background: Some(iced::Background::Color(bg_color.into())),
+        text_color: iced::Color::from_rgb(text_color[0], text_color[1], text_color[2]),
+        border: iced::Border::default(),
+        shadow: iced::Shadow::default(),
+    })
+    .padding(0)
+    .width(Length::Fill)
+    .on_press(Message::EnrichmentTrackSelected(idx))
     .into()
 }
 

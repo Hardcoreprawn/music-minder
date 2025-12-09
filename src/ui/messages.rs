@@ -1,7 +1,7 @@
 //! Message types for the Music Minder UI.
 
 use super::state::{ActivePane, LoadedCoverArt, VisualizationMode};
-use crate::{db, diagnostics, enrichment, library, organizer};
+use crate::{db, diagnostics, enrichment, library, organizer, player};
 use iced::widget::scrollable::Viewport;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
@@ -72,6 +72,10 @@ pub enum Message {
     PlayerTick,                 // Timer tick for updating UI
     PlayerVisualizationTick,    // Fast tick for visualization
     PlayerVisualizationModeChanged(VisualizationMode),
+    
+    // OS Media control messages (from SMTC/MPRIS)
+    MediaControlCommand(player::MediaControlCommand),
+    MediaControlPoll, // Timer tick to poll for media control events
 
     // Diagnostics messages
     DiagnosticsRunPressed,

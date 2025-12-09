@@ -23,9 +23,16 @@ pub mod ui;
 
 use clap::Parser;
 use iced::application;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use ui::MusicMinder;
 
 fn main() -> anyhow::Result<()> {
+    // Initialize logging
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_target(true))
+        .with(EnvFilter::from_default_env().add_directive("music_minder=info".parse().unwrap()))
+        .init();
+
     let args = cli::Cli::parse();
 
     // Try to run a CLI command

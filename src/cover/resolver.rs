@@ -110,18 +110,17 @@ impl CoverResolver {
         }
         
         // Try cache
-        if let Some(id) = release_id {
-            if let Some(cover) = self.cache.get(id) {
+        if let Some(id) = release_id
+            && let Some(cover) = self.cache.get(id) {
                 return CoverArtResult {
                     cover: Some(cover),
                     fetch_pending: false,
                 };
             }
-        }
         
         // Try remote fetch
-        if let Some(id) = release_id {
-            if let Ok(remote_cover) = self.fetch_remote(id).await {
+        if let Some(id) = release_id
+            && let Ok(remote_cover) = self.fetch_remote(id).await {
                 // Cache it
                 let _ = self.cache.put(id, &remote_cover);
                 return CoverArtResult {
@@ -129,7 +128,6 @@ impl CoverResolver {
                     fetch_pending: false,
                 };
             }
-        }
         
         CoverArtResult {
             cover: None,

@@ -116,6 +116,27 @@ pub struct DiagnosticReport {
     pub audio_devices: Vec<AudioDeviceInfo>,
 }
 
+impl Default for DiagnosticReport {
+    fn default() -> Self {
+        Self {
+            timestamp: chrono::Utc::now(),
+            overall_rating: AudioReadiness::Fair,
+            checks: vec![DiagnosticCheck {
+                name: "Diagnostics".to_string(),
+                category: "System".to_string(),
+                status: CheckStatus::Warning,
+                value: "Failed to generate report".to_string(),
+                recommendation: Some("Try running diagnostics again".to_string()),
+            }],
+            timer_info: None,
+            cpu_info: None,
+            memory_info: None,
+            power_info: None,
+            audio_devices: vec![],
+        }
+    }
+}
+
 impl DiagnosticReport {
     /// Run all diagnostics and generate a report
     pub fn generate() -> Self {

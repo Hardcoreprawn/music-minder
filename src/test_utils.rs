@@ -94,6 +94,7 @@ pub fn mock_track_with_metadata() -> TrackWithMetadata {
         track_number: Some(1),
         artist_name: "Test Artist".to_string(),
         album_name: "Test Album".to_string(),
+        year: Some(2023),
     }
 }
 
@@ -109,6 +110,7 @@ pub fn mock_track_at_path(id: i64, path: &str) -> TrackWithMetadata {
         track_number: Some(id as i64),
         artist_name: "Test Artist".to_string(),
         album_name: "Test Album".to_string(),
+        year: Some(2023),
     }
 }
 

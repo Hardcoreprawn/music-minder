@@ -1,18 +1,26 @@
 //! Audio decoder using symphonia for multi-format support.
 //!
-//! Supported formats:
-//! - MP3
-//! - FLAC
-//! - OGG Vorbis
-//! - WAV/PCM
-//! - AAC (in MP4 container)
+//! Supported formats (all fully lossless where applicable):
+//! - FLAC (lossless, up to 32-bit/384kHz)
+//! - WAV/PCM (lossless, up to 32-bit)
+//! - OGG Vorbis (lossy)
+//! - MP3 (lossy)
+//! - AAC (lossy, in MP4 container)
 
 use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
 
 use symphonia::core::audio::{AudioBufferRef, Signal};
-use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
+use symphonia::core::codecs::{
+    Decoder, DecoderOptions, CODEC_TYPE_AAC, CODEC_TYPE_ALAC, CODEC_TYPE_FLAC,
+    CODEC_TYPE_MP3, CODEC_TYPE_NULL, CODEC_TYPE_OPUS, CODEC_TYPE_PCM_ALAW, CODEC_TYPE_PCM_F32BE,
+    CODEC_TYPE_PCM_F32LE, CODEC_TYPE_PCM_F64BE, CODEC_TYPE_PCM_F64LE, CODEC_TYPE_PCM_MULAW,
+    CODEC_TYPE_PCM_S16BE, CODEC_TYPE_PCM_S16LE, CODEC_TYPE_PCM_S24BE, CODEC_TYPE_PCM_S24LE,
+    CODEC_TYPE_PCM_S32BE, CODEC_TYPE_PCM_S32LE, CODEC_TYPE_PCM_U16BE, CODEC_TYPE_PCM_U16LE,
+    CODEC_TYPE_PCM_U24BE, CODEC_TYPE_PCM_U24LE, CODEC_TYPE_PCM_U32BE, CODEC_TYPE_PCM_U32LE,
+    CODEC_TYPE_PCM_U8, CODEC_TYPE_VORBIS, CODEC_TYPE_WAVPACK,
+};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
 use symphonia::core::io::MediaSourceStream;
@@ -23,6 +31,30 @@ use symphonia::core::units::Time;
 use super::PlayerError;
 use super::state::TrackInfo;
 
+/// Audio format information for quality tracking.
+#[derive(Debug, Clone)]
+pub struct AudioFormatInfo {
+    /// Codec name (e.g., "FLAC", "MP3")
+    pub codec: String,
+    /// Whether the codec is lossless
+    pub is_lossless: bool,
+    /// Bit depth (8, 16, 24, 32)
+    pub bit_depth: u16,
+    /// Bitrate in kbps (for lossy formats)
+    pub bitrate_kbps: Option<u32>,
+}
+
+impl Default for AudioFormatInfo {
+    fn default() -> Self {
+        Self {
+            codec: "Unknown".to_string(),
+            is_lossless: false,
+            bit_depth: 16,
+            bitrate_kbps: None,
+        }
+    }
+}
+
 /// Audio decoder wrapper for symphonia.
 pub struct AudioDecoder {
     reader: Box<dyn FormatReader>,
@@ -32,6 +64,8 @@ pub struct AudioDecoder {
     channels: u16,
     duration: Duration,
     time_base: Option<symphonia::core::units::TimeBase>,
+    /// Format information for quality tracking
+    pub format_info: AudioFormatInfo,
 }
 
 impl AudioDecoder {
@@ -77,6 +111,9 @@ impl AudioDecoder {
             .ok_or_else(|| PlayerError::Decode("Unknown sample rate".to_string()))?;
         let channels = codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
 
+        // Extract format information for quality tracking
+        let format_info = Self::extract_format_info(&codec_params, path);
+
         // Calculate duration
         let time_base = codec_params.time_base;
         let duration = if let Some(n_frames) = codec_params.n_frames {
@@ -105,7 +142,91 @@ impl AudioDecoder {
             channels,
             duration,
             time_base,
+            format_info,
         })
+    }
+
+    /// Extract format information from codec parameters.
+    fn extract_format_info(
+        params: &symphonia::core::codecs::CodecParameters,
+        path: &Path,
+    ) -> AudioFormatInfo {
+        let codec = params.codec;
+        let ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+
+        // Determine codec name and lossless status
+        let (codec_name, is_lossless) = match codec {
+            CODEC_TYPE_FLAC => ("FLAC", true),
+            CODEC_TYPE_PCM_S16LE
+            | CODEC_TYPE_PCM_S16BE
+            | CODEC_TYPE_PCM_S24LE
+            | CODEC_TYPE_PCM_S24BE
+            | CODEC_TYPE_PCM_S32LE
+            | CODEC_TYPE_PCM_S32BE
+            | CODEC_TYPE_PCM_F32LE
+            | CODEC_TYPE_PCM_F32BE
+            | CODEC_TYPE_PCM_F64LE
+            | CODEC_TYPE_PCM_F64BE
+            | CODEC_TYPE_PCM_U8
+            | CODEC_TYPE_PCM_U16LE
+            | CODEC_TYPE_PCM_U16BE
+            | CODEC_TYPE_PCM_U24LE
+            | CODEC_TYPE_PCM_U24BE
+            | CODEC_TYPE_PCM_U32LE
+            | CODEC_TYPE_PCM_U32BE
+            | CODEC_TYPE_PCM_ALAW
+            | CODEC_TYPE_PCM_MULAW => ("PCM/WAV", true),
+            CODEC_TYPE_ALAC => ("ALAC", true),
+            CODEC_TYPE_WAVPACK => ("WavPack", true),
+            CODEC_TYPE_MP3 => ("MP3", false),
+            CODEC_TYPE_AAC => ("AAC", false),
+            CODEC_TYPE_VORBIS => ("Vorbis", false),
+            CODEC_TYPE_OPUS => ("Opus", false),
+            _ => {
+                // Fallback to extension
+                match ext.as_str() {
+                    "flac" => ("FLAC", true),
+                    "wav" => ("WAV", true),
+                    "aiff" | "aif" => ("AIFF", true),
+                    "mp3" => ("MP3", false),
+                    "ogg" | "oga" => ("Vorbis", false),
+                    "m4a" | "aac" => ("AAC", false),
+                    "opus" => ("Opus", false),
+                    _ => ("Unknown", false),
+                }
+            }
+        };
+
+        // Determine bit depth
+        let bit_depth = params
+            .bits_per_sample
+            .map(|b| b as u16)
+            .unwrap_or_else(|| {
+                // Infer from codec type
+                match codec {
+                    CODEC_TYPE_PCM_U8 => 8,
+                    CODEC_TYPE_PCM_S16LE | CODEC_TYPE_PCM_S16BE 
+                    | CODEC_TYPE_PCM_U16LE | CODEC_TYPE_PCM_U16BE => 16,
+                    CODEC_TYPE_PCM_S24LE | CODEC_TYPE_PCM_S24BE
+                    | CODEC_TYPE_PCM_U24LE | CODEC_TYPE_PCM_U24BE => 24,
+                    CODEC_TYPE_PCM_S32LE | CODEC_TYPE_PCM_S32BE
+                    | CODEC_TYPE_PCM_U32LE | CODEC_TYPE_PCM_U32BE
+                    | CODEC_TYPE_PCM_F32LE | CODEC_TYPE_PCM_F32BE => 32,
+                    CODEC_TYPE_PCM_F64LE | CODEC_TYPE_PCM_F64BE => 64,
+                    CODEC_TYPE_FLAC => 16, // FLAC can be 16-24, default to 16
+                    _ => 16,
+                }
+            });
+
+        AudioFormatInfo {
+            codec: codec_name.to_string(),
+            is_lossless,
+            bit_depth,
+            bitrate_kbps: None, // Could be extracted from metadata
+        }
     }
 
     /// Get the sample rate.

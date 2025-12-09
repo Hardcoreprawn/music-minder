@@ -78,6 +78,13 @@ impl MusicMinder {
                 time::every(Duration::from_millis(33)).map(|_| Message::PlayerVisualizationTick),
             );
         }
+        
+        // OS media controls polling (every 50ms) - always active when media controls available
+        if s.media_controls.is_some() {
+            subscriptions.push(
+                time::every(Duration::from_millis(50)).map(|_| Message::MediaControlPoll),
+            );
+        }
 
         Subscription::batch(subscriptions)
     }
@@ -201,12 +208,36 @@ impl MusicMinder {
             | Message::PlayerQueueTrack(_)
             | Message::PlayerTick
             | Message::PlayerVisualizationTick
-            | Message::PlayerVisualizationModeChanged(_) => {
+            | Message::PlayerVisualizationModeChanged(_)
+            | Message::MediaControlCommand(_) => {
                 return update::handle_player(s, message);
+            }
+            
+            // OS media controls polling - process all queued commands
+            Message::MediaControlPoll => {
+                // Collect commands first to avoid borrow conflicts
+                let commands: Vec<_> = s.media_controls
+                    .as_ref()
+                    .map(|mc| {
+                        let mut cmds = Vec::new();
+                        while let Some(cmd) = mc.try_recv_command() {
+                            tracing::debug!("Media control command: {:?}", cmd);
+                            cmds.push(cmd);
+                        }
+                        cmds
+                    })
+                    .unwrap_or_default();
+                
+                // Process each command through the standard handler
+                for cmd in commands {
+                    let _ = update::handle_player(s, Message::MediaControlCommand(cmd));
+                }
             }
 
             // Diagnostics messages
-            Message::DiagnosticsRunPressed | Message::DiagnosticsComplete(_) => {
+            Message::DiagnosticsRunPressed 
+            | Message::DiagnosticsComplete(_)
+            | Message::CoverArtResolved(_, _) => {
                 return update::handle_diagnostics(s, message);
             }
 
