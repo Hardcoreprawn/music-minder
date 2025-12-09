@@ -94,3 +94,34 @@ pub(crate) fn resolve_cover_art_task(
         move |result| Message::CoverArtResolved(path_for_message.clone(), result),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tests to verify external crate API contracts.
+    //! These tests ensure our code will continue to work after dependency updates.
+
+    /// Verify rfd::AsyncFileDialog API contract.
+    /// This is a compile-time check - if this compiles, the API we use exists.
+    #[allow(dead_code)]
+    async fn verify_rfd_api_contract() {
+        // We use: AsyncFileDialog::new().pick_folder().await
+        let dialog = rfd::AsyncFileDialog::new();
+
+        // pick_folder() should return impl Future<Output = Option<FileHandle>>
+        let result = dialog.pick_folder().await;
+
+        // FileHandle should have .path() -> &Path
+        if let Some(handle) = result {
+            let _path: &std::path::Path = handle.path();
+            let _pathbuf: std::path::PathBuf = handle.path().to_path_buf();
+        }
+    }
+
+    #[test]
+    fn rfd_api_types_exist() {
+        // Verify types we depend on exist
+        fn _check_types() {
+            let _: fn() -> rfd::AsyncFileDialog = rfd::AsyncFileDialog::new;
+        }
+    }
+}
