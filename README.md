@@ -114,7 +114,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## � Code Signing Policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)
+
+- **Committers / Reviewers / Approvers:** [@Hardcoreprawn](https://github.com/Hardcoreprawn)
+
+**Privacy:** This program will not transfer any information to other networked systems unless specifically requested by the user (metadata enrichment via MusicBrainz/AcoustID APIs).
+
+## �🙏 Acknowledgments
 
 - [Symphonia](https://github.com/pdeljanov/Symphonia) for excellent audio decoding
 - [Iced](https://iced.rs/) for the beautiful GUI framework
