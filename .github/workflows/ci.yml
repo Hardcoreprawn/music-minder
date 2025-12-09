@@ -8,9 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 0
-  SCCACHE_GHA_ENABLED: true
-  RUSTC_WRAPPER: sccache
 
 jobs:
   fmt:
@@ -37,9 +34,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
           
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -62,9 +56,6 @@ jobs:
       
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
         
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -87,9 +78,6 @@ jobs:
       
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
         
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -99,32 +87,11 @@ jobs:
       - name: Run tests
         run: cargo test --all-targets
 
-  build-windows:
-    name: Build (Windows)
-    runs-on: windows-latest
-    needs: [fmt, clippy, test-windows]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.6
-        
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-        
-      - name: Build
-        run: cargo build --release
-
   # All CI checks must pass - this job is used for branch protection
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, test-linux, test-windows, build-windows]
+    needs: [fmt, clippy, test-linux, test-windows]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -132,8 +99,7 @@ jobs:
           if [[ "${{ needs.fmt.result }}" != "success" ]] || \
              [[ "${{ needs.clippy.result }}" != "success" ]] || \
              [[ "${{ needs.test-linux.result }}" != "success" ]] || \
-             [[ "${{ needs.test-windows.result }}" != "success" ]] || \
-             [[ "${{ needs.build-windows.result }}" != "success" ]]; then
+             [[ "${{ needs.test-windows.result }}" != "success" ]]; then
             echo "One or more jobs failed"
             exit 1
           fi

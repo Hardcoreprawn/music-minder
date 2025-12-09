@@ -12,7 +12,6 @@ if (-not $SkipHooks) {
     Write-Host "📎 Installing git hooks..." -ForegroundColor Yellow
     
     $hooksDir = Join-Path $PSScriptRoot "..\..\.git\hooks"
-    $preCommitSource = Join-Path $PSScriptRoot "pre-commit.ps1"
     $preCommitDest = Join-Path $hooksDir "pre-commit"
     
     # Create hooks directory if it doesn't exist
