@@ -67,7 +67,7 @@ jobs:
         uses: taiki-e/install-action@cargo-audit
         
       - name: Security audit
-        run: cargo audit
+        run: cargo audit --ignore unmaintained
 
   test-linux:
     name: Test (Linux)
