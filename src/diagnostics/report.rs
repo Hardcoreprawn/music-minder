@@ -178,6 +178,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore] // Requires hardware diagnostics - run with `cargo test -- --ignored`
     fn test_report_generation() {
         let report = DiagnosticReport::generate();
 

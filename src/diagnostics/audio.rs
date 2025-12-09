@@ -252,6 +252,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires audio hardware - run with `cargo test -- --ignored`
     #[cfg(windows)]
     fn test_get_default_output() {
         let default = get_default_output_device();
