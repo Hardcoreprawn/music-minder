@@ -131,6 +131,7 @@ fn load_and_play_current(&mut self) -> Result<(), PlayerError> {
 ```
 
 All three entry points now use this single method:
+
 - `play_file()` → clear, add, `jump_to(0)`, `load_and_play_current()`
 - `skip_forward()` → `queue.skip_forward()`, `load_and_play_current()`
 - `previous()` → `queue.previous()` (or seek if >3s), `load_and_play_current()`
