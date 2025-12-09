@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit hook for music-minder
+# Runs formatting and lint checks before allowing commits
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check formatting
+echo "📝 Checking formatting..."
+if ! cargo fmt --all -- --check; then
+    echo ""
+    echo "❌ Formatting check failed!"
+    echo "   Run 'cargo fmt' to fix formatting issues."
+    exit 1
+fi
+
+# Run clippy
+echo "📎 Running clippy..."
+if ! cargo clippy --all-targets -- -D warnings 2>/dev/null; then
+    echo ""
+    echo "❌ Clippy found warnings!"
+    echo "   Fix the issues above before committing."
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"

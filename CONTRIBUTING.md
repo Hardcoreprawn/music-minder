@@ -6,9 +6,9 @@ Thank you for your interest in contributing! This document explains our developm
 
 We use a **PR-based workflow** with automated versioning:
 
-1. **Create a feature branch** from `master`
+1. **Create a feature branch** from `main`
 2. **Make your changes** with conventional commits
-3. **Open a Pull Request** against `master`
+3. **Open a Pull Request** against `main`
 4. **CI checks run automatically** (tests, formatting, clippy)
 5. **Get review and merge**
 6. **Release Please** automatically creates release PRs
@@ -73,6 +73,13 @@ git commit -m "docs: update installation instructions"
 git clone https://github.com/Hardcoreprawn/music-minder.git
 cd music-minder
 
+# Run setup script (installs git hooks)
+# Windows PowerShell:
+.\scripts\setup.ps1
+
+# Or manually install hooks:
+# The pre-commit hook runs cargo fmt and clippy before each commit
+
 # Build in debug mode
 cargo build
 
@@ -84,6 +91,22 @@ RUST_LOG=debug cargo run
 
 # Build release
 cargo build --release
+```
+
+## Pre-commit Hooks
+
+We use pre-commit hooks to catch issues before they reach CI:
+
+- **Formatting**: `cargo fmt --check`
+- **Linting**: `cargo clippy -- -D warnings`
+
+The hooks are installed automatically by `scripts/setup.ps1`. If a check fails,
+the commit is blocked until you fix the issue.
+
+To bypass hooks temporarily (not recommended):
+
+```bash
+git commit --no-verify
 ```
 
 ## Code Style

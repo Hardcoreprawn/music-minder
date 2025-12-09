@@ -1,0 +1,16 @@
+#!/bin/sh
+# Git hook installer for music-minder
+# This hook calls the pre-commit script from the scripts folder
+
+# Determine the repo root
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Run the pre-commit script
+if [ -f "$REPO_ROOT/scripts/pre-commit" ]; then
+    exec "$REPO_ROOT/scripts/pre-commit"
+elif command -v powershell &> /dev/null; then
+    exec powershell -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/pre-commit.ps1"
+else
+    echo "Warning: pre-commit script not found"
+    exit 0
+fi
