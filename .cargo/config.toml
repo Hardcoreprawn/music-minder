@@ -4,9 +4,17 @@
 # Use all available CPU cores for parallel compilation
 jobs = -1
 
-[target.x86_64-pc-windows-msvc]
-# Use faster linker on Windows (if available)
-# Uncomment if you have lld installed: rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# NOTE: Linker settings commented out - uncomment if you have lld/mold installed locally
+# These provide ~2-3x faster linking but require manual setup
+
+# [target.x86_64-unknown-linux-gnu]
+# # Use lld linker on Linux (install: sudo apt install lld)
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# [target.x86_64-pc-windows-msvc]
+# # Use lld linker on Windows (comes with Rust)
+# rustflags = ["-C", "link-arg=/DEBUG:NONE"]
 
 [profile.dev]
 # Faster debug builds - less optimization but faster compile

@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   fmt:
@@ -41,9 +42,7 @@ jobs:
           cache-on-failure: true
           
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev
           
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
@@ -63,12 +62,13 @@ jobs:
           cache-on-failure: true
         
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
           
       - name: Run tests
-        run: cargo test --all-targets
+        run: cargo nextest run --all-targets
 
   test-windows:
     name: Test (Windows)
@@ -83,9 +83,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
         
       - name: Run tests
-        run: cargo test --all-targets
+        run: cargo nextest run --all-targets
 
   # All CI checks must pass - this job is used for branch protection
   ci-success:
