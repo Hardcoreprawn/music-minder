@@ -72,7 +72,7 @@ pub enum Message {
     PlayerTick,                 // Timer tick for updating UI
     PlayerVisualizationTick,    // Fast tick for visualization
     PlayerVisualizationModeChanged(VisualizationMode),
-    
+
     // OS Media control messages (from SMTC/MPRIS)
     MediaControlCommand(player::MediaControlCommand),
     MediaControlPoll, // Timer tick to poll for media control events

@@ -11,8 +11,7 @@
 //! - Bluetooth/headphone button controls
 
 use souvlaki::{
-    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback,
-    PlatformConfig, SeekDirection,
+    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig, SeekDirection,
 };
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -62,25 +61,25 @@ impl MediaControlsMetadata {
             ..Default::default()
         }
     }
-    
+
     /// Set the artist.
     pub fn artist(mut self, artist: impl Into<String>) -> Self {
         self.artist = Some(artist.into());
         self
     }
-    
+
     /// Set the album.
     pub fn album(mut self, album: impl Into<String>) -> Self {
         self.album = Some(album.into());
         self
     }
-    
+
     /// Set the duration.
     pub fn duration(mut self, duration: Duration) -> Self {
         self.duration = Some(duration);
         self
     }
-    
+
     /// Set the cover art path.
     pub fn cover(mut self, path: PathBuf) -> Self {
         self.cover_path = Some(path);
@@ -89,7 +88,7 @@ impl MediaControlsMetadata {
 }
 
 /// Handle to the OS media controls.
-/// 
+///
 /// This runs on a separate thread and communicates via channels.
 pub struct MediaControlsHandle {
     /// Sender for updating the controls
@@ -121,12 +120,12 @@ pub enum MediaPlaybackState {
 
 impl MediaControlsHandle {
     /// Initialize OS media controls.
-    /// 
+    ///
     /// Returns `None` if media controls are not available on this platform.
     pub fn new() -> Option<Self> {
         let (update_tx, update_rx) = channel::<MediaControlsUpdate>();
         let (command_tx, command_rx) = channel::<MediaControlCommand>();
-        
+
         // Spawn the media controls thread
         match std::thread::Builder::new()
             .name("media-controls".into())
@@ -150,27 +149,29 @@ impl MediaControlsHandle {
             }
         }
     }
-    
+
     /// Update the displayed metadata.
     pub fn set_metadata(&self, metadata: MediaControlsMetadata) {
         let _ = self.update_tx.send(MediaControlsUpdate::Metadata(metadata));
     }
-    
+
     /// Update the playback state.
     pub fn set_playback_state(&self, state: MediaPlaybackState) {
-        let _ = self.update_tx.send(MediaControlsUpdate::PlaybackState(state));
+        let _ = self
+            .update_tx
+            .send(MediaControlsUpdate::PlaybackState(state));
     }
-    
+
     /// Update the current playback position.
     pub fn set_position(&self, position: Duration) {
         let _ = self.update_tx.send(MediaControlsUpdate::Position(position));
     }
-    
+
     /// Try to receive a command from the OS (non-blocking).
     pub fn try_recv_command(&self) -> Option<MediaControlCommand> {
         self.command_rx.try_recv().ok()
     }
-    
+
     /// Shutdown the media controls.
     pub fn shutdown(&self) {
         let _ = self.update_tx.send(MediaControlsUpdate::Shutdown);
@@ -189,7 +190,7 @@ fn run_media_controls(
     command_tx: Sender<MediaControlCommand>,
 ) -> Result<(), String> {
     tracing::debug!("Setting up platform-specific media controls config");
-    
+
     // Platform-specific configuration
     #[cfg(target_os = "windows")]
     let hwnd = {
@@ -201,7 +202,8 @@ fn run_media_controls(
 
         unsafe {
             // Get module handle
-            let h_instance = windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(ptr::null());
+            let h_instance =
+                windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(ptr::null());
             tracing::debug!("Got module handle: {:?}", h_instance);
 
             // Create a unique class name to avoid conflicts
@@ -212,7 +214,8 @@ fn run_media_controls(
 
             // Register window class with proper window procedure
             let wc = windows_sys::Win32::UI::WindowsAndMessaging::WNDCLASSEXW {
-                cbSize: std::mem::size_of::<windows_sys::Win32::UI::WindowsAndMessaging::WNDCLASSEXW>() as u32,
+                cbSize: std::mem::size_of::<windows_sys::Win32::UI::WindowsAndMessaging::WNDCLASSEXW>(
+                ) as u32,
                 style: 0,
                 lpfnWndProc: Some(windows_sys::Win32::UI::WindowsAndMessaging::DefWindowProcW),
                 cbClsExtra: 0,
@@ -237,20 +240,26 @@ fn run_media_controls(
             // Create a hidden window (not message-only, but with size 0,0 and not visible)
             // This is required for SMTC to work properly
             let hwnd = windows_sys::Win32::UI::WindowsAndMessaging::CreateWindowExW(
-                0,  // Extended style
+                0, // Extended style
                 class_name.as_ptr(),
                 class_name.as_ptr(),
-                0,  // Style: no visible style flags
-                0, 0, 0, 0,  // Position and size (0,0 to make it effectively invisible)
-                0,  // No parent (top-level window, but hidden)
-                0,  // No menu
+                0, // Style: no visible style flags
+                0,
+                0,
+                0,
+                0, // Position and size (0,0 to make it effectively invisible)
+                0, // No parent (top-level window, but hidden)
+                0, // No menu
                 h_instance,
                 ptr::null(),
             );
 
             if hwnd == 0 {
                 let error = windows_sys::Win32::Foundation::GetLastError();
-                return Err(format!("Failed to create window for media controls (error code: {})", error));
+                return Err(format!(
+                    "Failed to create window for media controls (error code: {})",
+                    error
+                ));
             }
 
             tracing::info!("Created hidden HWND for SMTC: {:?}", hwnd);
@@ -264,10 +273,10 @@ fn run_media_controls(
         #[cfg(target_os = "windows")]
         hwnd,
     };
-    
+
     let mut controls = MediaControls::new(config)
         .map_err(|e| format!("Failed to create media controls: {:?}", e))?;
-    
+
     // Set up event handler
     let tx = command_tx.clone();
     controls
@@ -297,7 +306,7 @@ fn run_media_controls(
             }
         })
         .map_err(|e| format!("Failed to attach event handler: {:?}", e))?;
-    
+
     // Set initial metadata so SMTC knows we're a media app
     controls
         .set_metadata(MediaMetadata {
@@ -308,24 +317,24 @@ fn run_media_controls(
             cover_url: None,
         })
         .map_err(|e| format!("Failed to set initial metadata: {:?}", e))?;
-    
+
     // Windows SMTC quirk: We need to cycle through states to fully activate the session.
     // The first button press often just "wakes up" the session without triggering an event.
     // By setting Playing then Paused, we ensure the session is fully active.
     controls
         .set_playback(MediaPlayback::Playing { progress: None })
         .map_err(|e| format!("Failed to set initial playing state: {:?}", e))?;
-    
+
     // Small delay to let Windows process the state change
     std::thread::sleep(std::time::Duration::from_millis(50));
-    
+
     // Now set to Paused - this ensures buttons are responsive from the first press
     controls
         .set_playback(MediaPlayback::Paused { progress: None })
         .map_err(|e| format!("Failed to set playback state: {:?}", e))?;
-    
+
     tracing::info!("Media controls initialized");
-    
+
     // Event loop - pump Windows messages frequently for responsive media keys
     loop {
         // Pump Windows message queue FIRST to process media key events
@@ -335,13 +344,20 @@ fn run_media_controls(
             pump_windows_messages();
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
-        
+
         // Check for updates with a short timeout
         match update_rx.recv_timeout(std::time::Duration::from_millis(10)) {
             Ok(MediaControlsUpdate::Metadata(meta)) => {
-                tracing::debug!("SMTC thread received metadata: {:?} - {:?}", meta.artist, meta.title);
-                let cover_url = meta.cover_path.as_ref().map(|p| format!("file://{}", p.to_string_lossy().replace('\\', "/")));
-                
+                tracing::debug!(
+                    "SMTC thread received metadata: {:?} - {:?}",
+                    meta.artist,
+                    meta.title
+                );
+                let cover_url = meta
+                    .cover_path
+                    .as_ref()
+                    .map(|p| format!("file://{}", p.to_string_lossy().replace('\\', "/")));
+
                 let metadata = MediaMetadata {
                     title: meta.title.as_deref(),
                     artist: meta.artist.as_deref(),
@@ -349,7 +365,7 @@ fn run_media_controls(
                     duration: meta.duration,
                     cover_url: cover_url.as_deref(),
                 };
-                
+
                 if let Err(e) = controls.set_metadata(metadata) {
                     tracing::warn!("Failed to set SMTC metadata: {:?}", e);
                 } else {
@@ -363,7 +379,7 @@ fn run_media_controls(
                     MediaPlaybackState::Paused => MediaPlayback::Paused { progress: None },
                     MediaPlaybackState::Stopped => MediaPlayback::Stopped,
                 };
-                
+
                 if let Err(e) = controls.set_playback(playback) {
                     tracing::debug!("Failed to set playback state: {:?}", e);
                 }
@@ -386,7 +402,7 @@ fn run_media_controls(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -394,7 +410,7 @@ fn run_media_controls(
 #[cfg(target_os = "windows")]
 fn pump_windows_messages() {
     use std::mem::MaybeUninit;
-    
+
     unsafe {
         let mut msg = MaybeUninit::uninit();
         // Process all pending messages without blocking
@@ -404,7 +420,8 @@ fn pump_windows_messages() {
             0,
             0,
             windows_sys::Win32::UI::WindowsAndMessaging::PM_REMOVE,
-        ) != 0 {
+        ) != 0
+        {
             let msg = msg.assume_init_ref();
             windows_sys::Win32::UI::WindowsAndMessaging::TranslateMessage(msg);
             windows_sys::Win32::UI::WindowsAndMessaging::DispatchMessageW(msg);
@@ -415,14 +432,14 @@ fn pump_windows_messages() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_metadata_builder() {
         let meta = MediaControlsMetadata::with_title("Test Song")
             .artist("Test Artist")
             .album("Test Album")
             .duration(Duration::from_secs(180));
-        
+
         assert_eq!(meta.title.as_deref(), Some("Test Song"));
         assert_eq!(meta.artist.as_deref(), Some("Test Artist"));
         assert_eq!(meta.album.as_deref(), Some("Test Album"));

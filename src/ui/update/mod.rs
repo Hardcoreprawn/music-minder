@@ -60,7 +60,10 @@ pub(crate) fn pick_folder_task(on_pick: fn(Option<PathBuf>) -> Message) -> Task<
 /// This is non-blocking and will never interfere with audio playback.
 /// It first tries local sources (embedded, sidecar) which are fast,
 /// then falls back to cache or remote fetch if a release ID is available.
-pub(crate) fn resolve_cover_art_task(audio_path: PathBuf, release_id: Option<String>) -> Task<Message> {
+pub(crate) fn resolve_cover_art_task(
+    audio_path: PathBuf,
+    release_id: Option<String>,
+) -> Task<Message> {
     let path_for_message = audio_path.clone();
     Task::perform(
         async move {
@@ -73,9 +76,10 @@ pub(crate) fn resolve_cover_art_task(audio_path: PathBuf, release_id: Option<Str
 
             // Try cached cover if we have a release ID
             if let Some(ref id) = release_id
-                && let Some(cover) = resolver.resolve_cached(id) {
-                    return Ok(cover.into());
-                }
+                && let Some(cover) = resolver.resolve_cached(id)
+            {
+                return Ok(cover.into());
+            }
 
             // Try remote fetch (slow, async)
             if let Some(ref id) = release_id {

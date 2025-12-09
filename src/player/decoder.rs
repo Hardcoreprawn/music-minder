@@ -13,13 +13,13 @@ use std::time::Duration;
 
 use symphonia::core::audio::{AudioBufferRef, Signal};
 use symphonia::core::codecs::{
-    Decoder, DecoderOptions, CODEC_TYPE_AAC, CODEC_TYPE_ALAC, CODEC_TYPE_FLAC,
-    CODEC_TYPE_MP3, CODEC_TYPE_NULL, CODEC_TYPE_OPUS, CODEC_TYPE_PCM_ALAW, CODEC_TYPE_PCM_F32BE,
-    CODEC_TYPE_PCM_F32LE, CODEC_TYPE_PCM_F64BE, CODEC_TYPE_PCM_F64LE, CODEC_TYPE_PCM_MULAW,
-    CODEC_TYPE_PCM_S16BE, CODEC_TYPE_PCM_S16LE, CODEC_TYPE_PCM_S24BE, CODEC_TYPE_PCM_S24LE,
-    CODEC_TYPE_PCM_S32BE, CODEC_TYPE_PCM_S32LE, CODEC_TYPE_PCM_U16BE, CODEC_TYPE_PCM_U16LE,
+    CODEC_TYPE_AAC, CODEC_TYPE_ALAC, CODEC_TYPE_FLAC, CODEC_TYPE_MP3, CODEC_TYPE_NULL,
+    CODEC_TYPE_OPUS, CODEC_TYPE_PCM_ALAW, CODEC_TYPE_PCM_F32BE, CODEC_TYPE_PCM_F32LE,
+    CODEC_TYPE_PCM_F64BE, CODEC_TYPE_PCM_F64LE, CODEC_TYPE_PCM_MULAW, CODEC_TYPE_PCM_S16BE,
+    CODEC_TYPE_PCM_S16LE, CODEC_TYPE_PCM_S24BE, CODEC_TYPE_PCM_S24LE, CODEC_TYPE_PCM_S32BE,
+    CODEC_TYPE_PCM_S32LE, CODEC_TYPE_PCM_U8, CODEC_TYPE_PCM_U16BE, CODEC_TYPE_PCM_U16LE,
     CODEC_TYPE_PCM_U24BE, CODEC_TYPE_PCM_U24LE, CODEC_TYPE_PCM_U32BE, CODEC_TYPE_PCM_U32LE,
-    CODEC_TYPE_PCM_U8, CODEC_TYPE_VORBIS, CODEC_TYPE_WAVPACK,
+    CODEC_TYPE_VORBIS, CODEC_TYPE_WAVPACK, Decoder, DecoderOptions,
 };
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
@@ -160,24 +160,12 @@ impl AudioDecoder {
         // Determine codec name and lossless status
         let (codec_name, is_lossless) = match codec {
             CODEC_TYPE_FLAC => ("FLAC", true),
-            CODEC_TYPE_PCM_S16LE
-            | CODEC_TYPE_PCM_S16BE
-            | CODEC_TYPE_PCM_S24LE
-            | CODEC_TYPE_PCM_S24BE
-            | CODEC_TYPE_PCM_S32LE
-            | CODEC_TYPE_PCM_S32BE
-            | CODEC_TYPE_PCM_F32LE
-            | CODEC_TYPE_PCM_F32BE
-            | CODEC_TYPE_PCM_F64LE
-            | CODEC_TYPE_PCM_F64BE
-            | CODEC_TYPE_PCM_U8
-            | CODEC_TYPE_PCM_U16LE
-            | CODEC_TYPE_PCM_U16BE
-            | CODEC_TYPE_PCM_U24LE
-            | CODEC_TYPE_PCM_U24BE
-            | CODEC_TYPE_PCM_U32LE
-            | CODEC_TYPE_PCM_U32BE
-            | CODEC_TYPE_PCM_ALAW
+            CODEC_TYPE_PCM_S16LE | CODEC_TYPE_PCM_S16BE | CODEC_TYPE_PCM_S24LE
+            | CODEC_TYPE_PCM_S24BE | CODEC_TYPE_PCM_S32LE | CODEC_TYPE_PCM_S32BE
+            | CODEC_TYPE_PCM_F32LE | CODEC_TYPE_PCM_F32BE | CODEC_TYPE_PCM_F64LE
+            | CODEC_TYPE_PCM_F64BE | CODEC_TYPE_PCM_U8 | CODEC_TYPE_PCM_U16LE
+            | CODEC_TYPE_PCM_U16BE | CODEC_TYPE_PCM_U24LE | CODEC_TYPE_PCM_U24BE
+            | CODEC_TYPE_PCM_U32LE | CODEC_TYPE_PCM_U32BE | CODEC_TYPE_PCM_ALAW
             | CODEC_TYPE_PCM_MULAW => ("PCM/WAV", true),
             CODEC_TYPE_ALAC => ("ALAC", true),
             CODEC_TYPE_WAVPACK => ("WavPack", true),
@@ -201,25 +189,21 @@ impl AudioDecoder {
         };
 
         // Determine bit depth
-        let bit_depth = params
-            .bits_per_sample
-            .map(|b| b as u16)
-            .unwrap_or_else(|| {
-                // Infer from codec type
-                match codec {
-                    CODEC_TYPE_PCM_U8 => 8,
-                    CODEC_TYPE_PCM_S16LE | CODEC_TYPE_PCM_S16BE 
-                    | CODEC_TYPE_PCM_U16LE | CODEC_TYPE_PCM_U16BE => 16,
-                    CODEC_TYPE_PCM_S24LE | CODEC_TYPE_PCM_S24BE
-                    | CODEC_TYPE_PCM_U24LE | CODEC_TYPE_PCM_U24BE => 24,
-                    CODEC_TYPE_PCM_S32LE | CODEC_TYPE_PCM_S32BE
-                    | CODEC_TYPE_PCM_U32LE | CODEC_TYPE_PCM_U32BE
-                    | CODEC_TYPE_PCM_F32LE | CODEC_TYPE_PCM_F32BE => 32,
-                    CODEC_TYPE_PCM_F64LE | CODEC_TYPE_PCM_F64BE => 64,
-                    CODEC_TYPE_FLAC => 16, // FLAC can be 16-24, default to 16
-                    _ => 16,
-                }
-            });
+        let bit_depth = params.bits_per_sample.map(|b| b as u16).unwrap_or_else(|| {
+            // Infer from codec type
+            match codec {
+                CODEC_TYPE_PCM_U8 => 8,
+                CODEC_TYPE_PCM_S16LE | CODEC_TYPE_PCM_S16BE | CODEC_TYPE_PCM_U16LE
+                | CODEC_TYPE_PCM_U16BE => 16,
+                CODEC_TYPE_PCM_S24LE | CODEC_TYPE_PCM_S24BE | CODEC_TYPE_PCM_U24LE
+                | CODEC_TYPE_PCM_U24BE => 24,
+                CODEC_TYPE_PCM_S32LE | CODEC_TYPE_PCM_S32BE | CODEC_TYPE_PCM_U32LE
+                | CODEC_TYPE_PCM_U32BE | CODEC_TYPE_PCM_F32LE | CODEC_TYPE_PCM_F32BE => 32,
+                CODEC_TYPE_PCM_F64LE | CODEC_TYPE_PCM_F64BE => 64,
+                CODEC_TYPE_FLAC => 16, // FLAC can be 16-24, default to 16
+                _ => 16,
+            }
+        });
 
         AudioFormatInfo {
             codec: codec_name.to_string(),

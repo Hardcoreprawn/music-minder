@@ -97,7 +97,7 @@ impl AudioOutput {
 
         // Create lock-free shared state for the audio callback
         let audio_shared = AudioSharedState::new();
-        
+
         // Initialize from UI state
         {
             let ui_state = state.read();
@@ -200,7 +200,7 @@ impl AudioOutput {
 }
 
 /// Build output stream for f32 format.
-/// 
+///
 /// # Real-time Safety
 /// This callback uses only:
 /// - Atomic operations for state (no locks)
@@ -215,12 +215,12 @@ where
     T: cpal::SizedSample + cpal::FromSample<f32>,
 {
     let buffer_capacity = consumer.buffer().capacity();
-    
+
     device.build_output_stream(
         config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
             let start = std::time::Instant::now();
-            
+
             // ✅ SAFE: Atomic reads - no locks in the audio callback
             let volume = audio_shared.volume();
             let is_playing = audio_shared.is_playing();
@@ -253,7 +253,7 @@ where
             // Update performance metrics (still lock-free)
             let elapsed_us = start.elapsed().as_micros() as u32;
             audio_shared.record_callback(samples_read, elapsed_us);
-            
+
             // Update buffer fill level
             let slots_available = consumer.slots();
             let fill_percent = ((buffer_capacity - slots_available) * 100 / buffer_capacity) as u32;
@@ -267,7 +267,7 @@ where
 }
 
 /// Build output stream for i16 format.
-/// 
+///
 /// # Real-time Safety
 /// This callback uses only:
 /// - Atomic operations for state (no locks)
@@ -279,12 +279,12 @@ fn build_stream_i16(
     audio_shared: Arc<AudioSharedState>,
 ) -> Result<Stream, cpal::BuildStreamError> {
     let buffer_capacity = consumer.buffer().capacity();
-    
+
     device.build_output_stream(
         config,
         move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
             let start = std::time::Instant::now();
-            
+
             // ✅ SAFE: Atomic reads - no locks in the audio callback
             let volume = audio_shared.volume();
             let is_playing = audio_shared.is_playing();
@@ -316,7 +316,7 @@ fn build_stream_i16(
             // Update performance metrics
             let elapsed_us = start.elapsed().as_micros() as u32;
             audio_shared.record_callback(samples_read, elapsed_us);
-            
+
             // Update buffer fill level
             let slots_available = consumer.slots();
             let fill_percent = ((buffer_capacity - slots_available) * 100 / buffer_capacity) as u32;
@@ -348,7 +348,8 @@ struct AudioThreadContext {
 impl AudioThreadContext {
     fn new(output_sample_rate: u32, output_channels: u16) -> Self {
         // Update position every ~50ms based on OUTPUT sample rate
-        let samples_per_position_update = (output_sample_rate as usize * output_channels as usize) / 20;
+        let samples_per_position_update =
+            (output_sample_rate as usize * output_channels as usize) / 20;
         Self {
             decoder: None,
             resampler: None,
@@ -394,12 +395,12 @@ impl AudioThreadContext {
                     let _slots = producer.slots();
                     audio_shared.set_position(Duration::ZERO);
                     self.sample_counter = 0;
-                    
+
                     // Reset resampler state to avoid artifacts
                     if let Some(ref mut resampler) = self.resampler {
                         resampler.reset();
                     }
-                    
+
                     if let Err(e) = dec.seek(pos) {
                         tracing::warn!("Seek failed: {}", e);
                     }
@@ -430,14 +431,11 @@ impl AudioThreadContext {
             Ok(dec) => {
                 let source_rate = dec.sample_rate();
                 let source_channels = dec.channels();
-                
+
                 // Create resampler if sample rates differ
-                let resampler = Resampler::new(
-                    source_rate,
-                    self.output_sample_rate,
-                    source_channels,
-                );
-                
+                let resampler =
+                    Resampler::new(source_rate, self.output_sample_rate, source_channels);
+
                 if resampler.needs_resampling() {
                     tracing::info!(
                         "Resampling: {}Hz → {}Hz",
@@ -445,7 +443,7 @@ impl AudioThreadContext {
                         self.output_sample_rate
                     );
                 }
-                
+
                 let mut s = state.write();
                 s.status = PlaybackStatus::Playing;
                 s.current_track = Some(path);
@@ -454,21 +452,24 @@ impl AudioThreadContext {
                 s.sample_rate = source_rate;
                 s.channels = source_channels;
                 s.bits_per_sample = dec.format_info.bit_depth;
-                
+
                 tracing::info!(
                     "Track loaded: {}Hz / {}ch / {}bit ({})",
-                    source_rate, source_channels, dec.format_info.bit_depth, dec.format_info.codec
+                    source_rate,
+                    source_channels,
+                    dec.format_info.bit_depth,
+                    dec.format_info.codec
                 );
-                
+
                 // Populate quality information
                 s.quality.format = dec.format_info.codec.clone();
                 s.quality.is_lossless = dec.format_info.is_lossless;
                 s.quality.bit_depth = dec.format_info.bit_depth;
                 s.quality.source_sample_rate = source_rate;
                 s.quality.output_sample_rate = self.output_sample_rate;
-                s.quality.is_bit_perfect = dec.format_info.is_lossless 
-                    && source_rate == self.output_sample_rate;
-                
+                s.quality.is_bit_perfect =
+                    dec.format_info.is_lossless && source_rate == self.output_sample_rate;
+
                 // Sync atomic state
                 audio_shared.set_playing(true);
                 audio_shared.set_position(Duration::ZERO);
@@ -517,7 +518,11 @@ impl AudioThreadContext {
 
                 // Extract left channel for visualization (from resampled output)
                 let output_channels = self.output_channels as usize;
-                let left: Vec<f32> = output_samples.iter().step_by(output_channels).copied().collect();
+                let left: Vec<f32> = output_samples
+                    .iter()
+                    .step_by(output_channels)
+                    .copied()
+                    .collect();
                 if let Some(spectrum) = self.visualizer.process(&left) {
                     let _ = viz_tx.try_send(spectrum);
                 }
@@ -550,7 +555,7 @@ impl AudioThreadContext {
                         }
                     }
                 }
-                
+
                 tracing::info!("Playback finished");
                 state.write().status = PlaybackStatus::Stopped;
                 audio_shared.set_playing(false);

@@ -107,7 +107,7 @@ pub fn mock_track_at_path(id: i64, path: &str) -> TrackWithMetadata {
         title: format!("Track {}", id),
         path: path.to_string(),
         duration: Some(180),
-        track_number: Some(id as i64),
+        track_number: Some(id),
         artist_name: "Test Artist".to_string(),
         album_name: "Test Album".to_string(),
         year: Some(2023),

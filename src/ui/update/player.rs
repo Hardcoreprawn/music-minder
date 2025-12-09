@@ -48,18 +48,16 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
 fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -> Task<Message> {
     match msg {
         // OS media control commands - dispatch to same handlers as UI
-        Message::MediaControlCommand(cmd) => {
-            match cmd {
-                player::MediaControlCommand::Play => do_play(player, s),
-                player::MediaControlCommand::Pause => do_pause(player, s),
-                player::MediaControlCommand::Toggle => do_toggle(player, s),
-                player::MediaControlCommand::Stop => do_stop(player, s),
-                player::MediaControlCommand::Next => do_next(player, s),
-                player::MediaControlCommand::Previous => do_previous(player, s),
-                player::MediaControlCommand::Seek(duration) => do_seek_absolute(player, s, duration),
-                player::MediaControlCommand::SeekRelative(dir) => do_seek_relative(player, s, dir),
-            }
-        }
+        Message::MediaControlCommand(cmd) => match cmd {
+            player::MediaControlCommand::Play => do_play(player, s),
+            player::MediaControlCommand::Pause => do_pause(player, s),
+            player::MediaControlCommand::Toggle => do_toggle(player, s),
+            player::MediaControlCommand::Stop => do_stop(player, s),
+            player::MediaControlCommand::Next => do_next(player, s),
+            player::MediaControlCommand::Previous => do_previous(player, s),
+            player::MediaControlCommand::Seek(duration) => do_seek_absolute(player, s, duration),
+            player::MediaControlCommand::SeekRelative(dir) => do_seek_relative(player, s, dir),
+        },
 
         // UI messages - use same helpers
         Message::PlayerPlay => {
@@ -358,7 +356,7 @@ fn play_track_at_index(player: &mut Player, s: &mut LoadedState, idx: usize) -> 
 
     s.status_message = format!("Playing: {} (+{} queued)", title, queued_count);
     s.auto_queue_enabled = true;
-    
+
     // Use the same track-changed flow as everything else
     on_track_changed(player, s);
 

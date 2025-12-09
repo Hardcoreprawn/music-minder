@@ -23,7 +23,7 @@ impl Resampler {
     /// If input and output rates match, no resampling is performed.
     pub fn new(input_rate: u32, output_rate: u32, channels: u16) -> Self {
         let channels = channels as usize;
-        
+
         if input_rate == output_rate {
             // No resampling needed
             return Self {
@@ -39,7 +39,7 @@ impl Resampler {
         // Use a reasonable chunk size for resampling
         // Larger = more efficient but more latency
         let chunk_size = 1024;
-        
+
         let resampler = FftFixedIn::<f32>::new(
             input_rate as usize,
             output_rate as usize,

@@ -171,11 +171,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
             .unwrap_or_else(|| "Unknown".to_string());
         (name, String::new(), String::new())
     } else {
-        (
-            "No Track Playing".to_string(),
-            String::new(),
-            String::new(),
-        )
+        ("No Track Playing".to_string(), String::new(), String::new())
     };
 
     // Cover art display (200x200 or placeholder)

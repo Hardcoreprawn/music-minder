@@ -168,6 +168,11 @@ mod tests {
     fn test_result_ext() {
         let result: Result<()> = Err(Error::playback("test"));
         let with_ctx = result.with_context("additional context");
-        assert!(with_ctx.unwrap_err().to_string().contains("additional context"));
+        assert!(
+            with_ctx
+                .unwrap_err()
+                .to_string()
+                .contains("additional context")
+        );
     }
 }

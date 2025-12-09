@@ -262,23 +262,17 @@ fn track_table_header() -> Element<'static, Message> {
         // Spacer for play/queue buttons
         Space::with_width(Length::Fixed(70.0)),
         // Title column
-        container(text("Title").size(12).color(MUTED_COLOR))
-            .width(Length::FillPortion(3)),
+        container(text("Title").size(12).color(MUTED_COLOR)).width(Length::FillPortion(3)),
         // Artist column
-        container(text("Artist").size(12).color(MUTED_COLOR))
-            .width(Length::FillPortion(2)),
+        container(text("Artist").size(12).color(MUTED_COLOR)).width(Length::FillPortion(2)),
         // Album column
-        container(text("Album").size(12).color(MUTED_COLOR))
-            .width(Length::FillPortion(2)),
+        container(text("Album").size(12).color(MUTED_COLOR)).width(Length::FillPortion(2)),
         // Year column
-        container(text("Year").size(12).color(MUTED_COLOR))
-            .width(Length::Fixed(50.0)),
+        container(text("Year").size(12).color(MUTED_COLOR)).width(Length::Fixed(50.0)),
         // Duration column
-        container(text("Duration").size(12).color(MUTED_COLOR))
-            .width(Length::Fixed(60.0)),
+        container(text("Duration").size(12).color(MUTED_COLOR)).width(Length::Fixed(60.0)),
         // Format column
-        container(text("Format").size(12).color(MUTED_COLOR))
-            .width(Length::Fixed(50.0)),
+        container(text("Format").size(12).color(MUTED_COLOR)).width(Length::Fixed(50.0)),
     ]
     .spacing(8)
     .padding([4, 0])
@@ -349,60 +343,36 @@ fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_
             .padding([4, 8])
             .on_press(Message::PlayerQueueTrack(idx)),
         // Title - primary emphasis
-        container(
-            text(&t.title)
-                .size(14)
-                .color(text_color)
-        )
-        .width(Length::FillPortion(3))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(&t.title).size(14).color(text_color))
+            .width(Length::FillPortion(3))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
         // Artist - primary emphasis
-        container(
-            text(&t.artist_name)
-                .size(14)
-                .color(text_color)
-        )
-        .width(Length::FillPortion(2))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(&t.artist_name).size(14).color(text_color))
+            .width(Length::FillPortion(2))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
         // Album - muted
-        container(
-            text(&t.album_name)
-                .size(12)
-                .color(muted)
-        )
-        .width(Length::FillPortion(2))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(&t.album_name).size(12).color(muted))
+            .width(Length::FillPortion(2))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
         // Year - muted
-        container(
-            text(year_str)
-                .size(12)
-                .color(muted)
-        )
-        .width(Length::Fixed(50.0))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(year_str).size(12).color(muted))
+            .width(Length::Fixed(50.0))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
         // Duration - muted
-        container(
-            text(duration_str)
-                .size(12)
-                .color(muted)
-        )
-        .width(Length::Fixed(60.0))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(duration_str).size(12).color(muted))
+            .width(Length::Fixed(60.0))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
         // Format - muted
-        container(
-            text(format_str)
-                .size(11)
-                .color(muted)
-        )
-        .width(Length::Fixed(50.0))
-        .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
+        container(text(format_str).size(11).color(muted))
+            .width(Length::Fixed(50.0))
+            .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT)),
     ]
     .spacing(8);
 
     button(
         container(row_content)
             .height(Length::Fixed(virt::TRACK_ROW_HEIGHT))
-            .width(Length::Fill)
+            .width(Length::Fill),
     )
     .style(move |_theme, _status| button::Style {
         background: Some(iced::Background::Color(bg_color.into())),

@@ -31,7 +31,9 @@ mod visualization;
 
 pub use audio::{AudioConfig, AudioOutput};
 pub use decoder::AudioDecoder;
-pub use media_controls::{MediaControlCommand, MediaControlsHandle, MediaControlsMetadata, MediaPlaybackState};
+pub use media_controls::{
+    MediaControlCommand, MediaControlsHandle, MediaControlsMetadata, MediaPlaybackState,
+};
 pub use queue::{PlayQueue, QueueItem};
 pub use resampler::Resampler;
 pub use state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerState};
@@ -194,7 +196,7 @@ impl Player {
     }
 
     /// Get current playback state snapshot.
-    /// 
+    ///
     /// This syncs the position and underrun count from the atomic audio state.
     pub fn state(&self) -> PlayerState {
         let mut state = self.state.read().clone();
@@ -202,10 +204,10 @@ impl Player {
         if let Some(ref audio_shared) = self.audio_shared {
             state.position = audio_shared.position();
             state.underruns = audio_shared.underruns();
-            
+
             // Update quality metrics from real-time stats
             state.quality.buffer_fill = audio_shared.buffer_fill() as f32 / 100.0;
-            
+
             // Estimate latency: ring buffer fill + typical WASAPI buffer (~10ms)
             // Ring buffer: 48000 samples at 48kHz stereo = ~500ms max
             // Current fill represents how much audio is buffered
@@ -218,15 +220,15 @@ impl Player {
 
     /// Get audio performance statistics.
     pub fn performance_stats(&self) -> Option<AudioPerformanceStats> {
-        self.audio_shared.as_ref().map(|shared| {
-            AudioPerformanceStats {
+        self.audio_shared
+            .as_ref()
+            .map(|shared| AudioPerformanceStats {
                 callback_count: shared.callback_count(),
                 samples_processed: shared.samples_processed(),
                 peak_callback_us: shared.peak_callback_us(),
                 underruns: shared.underruns(),
                 buffer_fill_percent: shared.buffer_fill(),
-            }
-        })
+            })
     }
 
     /// Reset performance statistics.

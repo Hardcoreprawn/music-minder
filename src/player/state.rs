@@ -1,8 +1,8 @@
 //! Player state and command types.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Lock-free shared state for the audio callback.
@@ -290,7 +290,7 @@ impl PlayerState {
         } else {
             "Lossy"
         };
-        
+
         format!(
             "{} • {}Hz / {}ch / {}bit • {}",
             self.quality.format,

@@ -14,13 +14,13 @@
 //! - **Consistency**: Cover art must match the album in tags
 //! - **Caching**: Fetched art is cached to disk to avoid repeated network calls
 
-mod embedded;
-mod sidecar;
 mod cache;
+mod embedded;
 mod resolver;
+mod sidecar;
 
 pub use cache::CoverCache;
-pub use resolver::{CoverResolver, CoverArtResult, CoverSource};
+pub use resolver::{CoverArtResult, CoverResolver, CoverSource};
 
 /// Cover art data ready for display
 #[derive(Debug, Clone)]
@@ -42,19 +42,15 @@ impl CoverArt {
     pub fn matches(&self, album: Option<&str>, artist: Option<&str>) -> bool {
         // If we don't have metadata to compare, assume it matches
         let album_matches = match (&self.album, album) {
-            (Some(cover_album), Some(expected)) => {
-                cover_album.eq_ignore_ascii_case(expected)
-            }
+            (Some(cover_album), Some(expected)) => cover_album.eq_ignore_ascii_case(expected),
             _ => true, // No metadata to compare
         };
-        
+
         let artist_matches = match (&self.artist, artist) {
-            (Some(cover_artist), Some(expected)) => {
-                cover_artist.eq_ignore_ascii_case(expected)
-            }
+            (Some(cover_artist), Some(expected)) => cover_artist.eq_ignore_ascii_case(expected),
             _ => true,
         };
-        
+
         album_matches && artist_matches
     }
 }

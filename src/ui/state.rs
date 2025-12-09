@@ -101,7 +101,7 @@ pub struct LoadedState {
     pub auto_queue_enabled: bool,
     pub audio_devices: Vec<String>,
     pub current_audio_device: String,
-    
+
     // OS media controls (SMTC/MPRIS)
     pub media_controls: Option<player::MediaControlsHandle>,
 
@@ -128,15 +128,21 @@ impl LoadedState {
     pub fn current_track_info(&self) -> Option<&db::TrackWithMetadata> {
         let current_path = self.player_state.current_track.as_ref()?;
         let current_path_str = current_path.to_string_lossy();
-        
+
         // Try exact match first
-        if let Some(track) = self.tracks.iter().find(|t| t.path == current_path_str.as_ref()) {
+        if let Some(track) = self
+            .tracks
+            .iter()
+            .find(|t| t.path == current_path_str.as_ref())
+        {
             return Some(track);
         }
-        
+
         // Try case-insensitive match (Windows paths)
         let current_lower = current_path_str.to_lowercase();
-        self.tracks.iter().find(|t| t.path.to_lowercase() == current_lower)
+        self.tracks
+            .iter()
+            .find(|t| t.path.to_lowercase() == current_lower)
     }
 
     /// Find track metadata by path string
