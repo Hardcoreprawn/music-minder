@@ -18,6 +18,8 @@ jobs:
   fmt:
     name: Format
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -32,6 +34,8 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -54,6 +58,8 @@ jobs:
   test-linux:
     name: Test (Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -77,6 +83,8 @@ jobs:
   test-windows:
     name: Test (Windows)
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -98,6 +106,8 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [fmt, clippy, test-linux, test-windows]
     if: always()
     steps:
