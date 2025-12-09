@@ -8,14 +8,17 @@ anyhow = "1.0.100"
 # Only include chrono features we actually use (Utc::now, to_rfc3339)
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 clap = { version = "4.5.53", features = ["derive", "env"] }
-dirs = "5.0"
+dirs = "6.0"
 futures = "0.3.31"
+# Note: iced 0.14.0 (released Dec 7, 2025) has Windows build issues due to 
+# windows crate version conflicts in wgpu-hal's dependency tree. Keeping 0.13.1 
+# until upstream fixes are released. Track: https://github.com/iced-rs/iced/issues
 iced = { version = "0.13.1", features = ["tokio", "canvas", "image"] }
 lofty = "0.22.4"
 rand = "0.9"                 # Random selection for shuffle
 rayon = "1.10"               # Parallel iterators for file checks
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
-rfd = "0.15.0"
+reqwest = { version = "0.12.25", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+rfd = "0.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 smallvec = { version = "1.13", features = ["serde"] }  # Stack-allocated small vecs
@@ -30,10 +33,10 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 walkdir = "2.5.0"
 
 # Audio playback and decoding
-cpal = "0.15"                # Cross-platform audio output (WASAPI on Windows)
+cpal = "0.16"                # Cross-platform audio output (WASAPI on Windows)
 symphonia = { version = "0.5", features = ["mp3", "flac", "ogg", "wav", "aac", "pcm"] }
 rubato = "0.16"              # High-quality audio resampling
-souvlaki = "0.7"             # OS media controls (SMTC/MPRIS/MediaCenter)
+souvlaki = "0.8"             # OS media controls (SMTC/MPRIS/MediaCenter)
 # FFT for spectrum visualization
 realfft = "3.3"              # Fast real-to-complex FFT
 rustfft = "6.2"              # For Complex type
@@ -44,7 +47,9 @@ parking_lot = "0.12"         # Fast RwLock for UI state
 async-trait = "0.1.89"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Foundation"] }
+# Note: windows-sys 0.61+ uses raw-dylib linking via windows-link crate.
+# Updating from 0.52 for security/bug fixes. WNDCLASSEXW now requires Win32_Graphics_Gdi.
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Foundation", "Win32_Graphics_Gdi"] }
 
 [dev-dependencies]
 proptest = "1.9.0"

@@ -221,12 +221,12 @@ fn run_media_controls(
                 cbClsExtra: 0,
                 cbWndExtra: 0,
                 hInstance: h_instance,
-                hIcon: 0,
-                hCursor: 0,
-                hbrBackground: 0,
+                hIcon: ptr::null_mut(),
+                hCursor: ptr::null_mut(),
+                hbrBackground: ptr::null_mut(),
                 lpszMenuName: ptr::null(),
                 lpszClassName: class_name.as_ptr(),
-                hIconSm: 0,
+                hIconSm: ptr::null_mut(),
             };
 
             let class_atom = windows_sys::Win32::UI::WindowsAndMessaging::RegisterClassExW(&wc);
@@ -247,14 +247,14 @@ fn run_media_controls(
                 0,
                 0,
                 0,
-                0, // Position and size (0,0 to make it effectively invisible)
-                0, // No parent (top-level window, but hidden)
-                0, // No menu
+                0,                  // Position and size (0,0 to make it effectively invisible)
+                ptr::null_mut(),    // No parent (top-level window, but hidden)
+                ptr::null_mut(),    // No menu
                 h_instance,
                 ptr::null(),
             );
 
-            if hwnd == 0 {
+            if hwnd.is_null() {
                 let error = windows_sys::Win32::Foundation::GetLastError();
                 return Err(format!(
                     "Failed to create window for media controls (error code: {})",
@@ -263,7 +263,7 @@ fn run_media_controls(
             }
 
             tracing::info!("Created hidden HWND for SMTC: {:?}", hwnd);
-            Some(hwnd as *mut std::ffi::c_void)
+            Some(hwnd)
         }
     };
 
@@ -417,13 +417,14 @@ fn run_media_controls(
 #[cfg(target_os = "windows")]
 fn pump_windows_messages() {
     use std::mem::MaybeUninit;
+    use std::ptr;
 
     unsafe {
         let mut msg = MaybeUninit::uninit();
         // Process all pending messages without blocking
         while windows_sys::Win32::UI::WindowsAndMessaging::PeekMessageW(
             msg.as_mut_ptr(),
-            0, // All windows
+            ptr::null_mut(), // All windows
             0,
             0,
             windows_sys::Win32::UI::WindowsAndMessaging::PM_REMOVE,
@@ -451,5 +452,270 @@ mod tests {
         assert_eq!(meta.artist.as_deref(), Some("Test Artist"));
         assert_eq!(meta.album.as_deref(), Some("Test Album"));
         assert_eq!(meta.duration, Some(Duration::from_secs(180)));
+    }
+}
+
+// ============================================================================
+// Defensive Tests - Verify souvlaki API contracts used by this module
+// ============================================================================
+
+#[cfg(test)]
+mod souvlaki_api_tests {
+    use souvlaki::{
+        MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
+        SeekDirection,
+    };
+    use std::time::Duration;
+
+    /// Verify PlatformConfig can be constructed with our fields
+    #[test]
+    fn test_platform_config_construction() {
+        let config = PlatformConfig {
+            dbus_name: "test_app",
+            display_name: "Test App",
+            hwnd: None,
+        };
+
+        // Verify the fields we set
+        assert_eq!(config.dbus_name, "test_app");
+        assert_eq!(config.display_name, "Test App");
+        assert!(config.hwnd.is_none());
+    }
+
+    /// Verify MediaMetadata can be constructed with our fields
+    #[test]
+    fn test_media_metadata_construction() {
+        let metadata = MediaMetadata {
+            title: Some("Test Title"),
+            artist: Some("Test Artist"),
+            album: Some("Test Album"),
+            duration: Some(Duration::from_secs(180)),
+            cover_url: Some("file:///path/to/cover.jpg"),
+        };
+
+        assert_eq!(metadata.title, Some("Test Title"));
+        assert_eq!(metadata.artist, Some("Test Artist"));
+        assert_eq!(metadata.album, Some("Test Album"));
+        assert_eq!(metadata.duration, Some(Duration::from_secs(180)));
+        assert_eq!(metadata.cover_url, Some("file:///path/to/cover.jpg"));
+    }
+
+    /// Verify MediaPlayback enum variants we use
+    #[test]
+    fn test_media_playback_variants() {
+        // We use these three variants
+        let _playing = MediaPlayback::Playing { progress: None };
+        let _paused = MediaPlayback::Paused { progress: None };
+        let _stopped = MediaPlayback::Stopped;
+
+        // Verify with progress
+        let _playing_with_progress = MediaPlayback::Playing {
+            progress: Some(souvlaki::MediaPosition(Duration::from_secs(30))),
+        };
+    }
+
+    /// Verify MediaControlEvent variants we handle
+    #[test]
+    fn test_media_control_event_variants() {
+        // We match on these event variants in our event handler
+        fn handle_event(event: MediaControlEvent) -> &'static str {
+            match event {
+                MediaControlEvent::Play => "play",
+                MediaControlEvent::Pause => "pause",
+                MediaControlEvent::Toggle => "toggle",
+                MediaControlEvent::Stop => "stop",
+                MediaControlEvent::Next => "next",
+                MediaControlEvent::Previous => "previous",
+                MediaControlEvent::Seek(_) => "seek",
+                MediaControlEvent::SeekBy(_, _) => "seek_by",
+                MediaControlEvent::SetPosition(_) => "set_position",
+                MediaControlEvent::SetVolume(_) => "set_volume",
+                MediaControlEvent::OpenUri(_) => "open_uri",
+                MediaControlEvent::Raise => "raise",
+                MediaControlEvent::Quit => "quit",
+            }
+        }
+
+        // Verify each variant we use
+        assert_eq!(handle_event(MediaControlEvent::Play), "play");
+        assert_eq!(handle_event(MediaControlEvent::Pause), "pause");
+        assert_eq!(handle_event(MediaControlEvent::Toggle), "toggle");
+        assert_eq!(handle_event(MediaControlEvent::Stop), "stop");
+        assert_eq!(handle_event(MediaControlEvent::Next), "next");
+        assert_eq!(handle_event(MediaControlEvent::Previous), "previous");
+    }
+
+    /// Verify SeekDirection enum exists and we can use it
+    #[test]
+    fn test_seek_direction_exists() {
+        // SeekDirection is used in SeekBy and Seek events
+        let _forward = SeekDirection::Forward;
+        let _backward = SeekDirection::Backward;
+
+        // Verify Debug impl (we use {:?} in debug logging)
+        let debug_str = format!("{:?}", SeekDirection::Forward);
+        assert!(!debug_str.is_empty());
+    }
+
+    /// Verify MediaPosition wrapper type exists
+    #[test]
+    fn test_media_position_exists() {
+        use souvlaki::MediaPosition;
+
+        let pos = MediaPosition(Duration::from_secs(60));
+
+        // MediaPosition is a newtype around Duration
+        assert_eq!(pos.0, Duration::from_secs(60));
+    }
+
+    /// Verify MediaControls can be created (compile-time check)
+    /// Note: We can't actually create controls without a real window handle on Windows
+    #[test]
+    fn test_media_controls_new_signature() {
+        // This test verifies the API signature exists
+        // MediaControls::new(config) -> Result<MediaControls, Error>
+        fn check_new_signature<F: Fn(PlatformConfig) -> Result<MediaControls, souvlaki::Error>>(
+            _f: F,
+        ) {
+        }
+        check_new_signature(MediaControls::new);
+    }
+
+    /// Verify the Error type we handle
+    #[test]
+    fn test_error_type_exists() {
+        // We use {:?} formatting on errors
+        // souvlaki::Error should implement Debug
+        fn check_debug<T: std::fmt::Debug>() {}
+        check_debug::<souvlaki::Error>();
+    }
+}
+
+// ============================================================================
+// Defensive Tests - Verify windows-sys API contracts used by this module
+// ============================================================================
+
+#[cfg(all(test, target_os = "windows"))]
+mod windows_sys_api_tests {
+    use std::ptr;
+
+    /// Verify WNDCLASSEXW struct fields we use exist and have expected types
+    #[test]
+    fn test_wndclassexw_struct_fields() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::WNDCLASSEXW;
+
+        // Construct a WNDCLASSEXW with all fields we use
+        let wc = WNDCLASSEXW {
+            cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+            style: 0,
+            lpfnWndProc: None, // Some(DefWindowProcW) in real code
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: ptr::null_mut(),
+            hIcon: ptr::null_mut(),
+            hCursor: ptr::null_mut(),
+            hbrBackground: ptr::null_mut(),
+            lpszMenuName: ptr::null(),
+            lpszClassName: ptr::null(),
+            hIconSm: ptr::null_mut(),
+        };
+
+        // Verify field access compiles
+        assert_eq!(wc.cbSize, std::mem::size_of::<WNDCLASSEXW>() as u32);
+        assert_eq!(wc.style, 0);
+    }
+
+    /// Verify RegisterClassExW function signature
+    #[test]
+    fn test_register_class_ex_w_signature() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{RegisterClassExW, WNDCLASSEXW};
+
+        // Verify the function accepts a pointer to WNDCLASSEXW and returns u16
+        fn check_signature(
+            _f: unsafe extern "system" fn(*const WNDCLASSEXW) -> u16,
+        ) {
+        }
+        check_signature(RegisterClassExW);
+    }
+
+    /// Verify CreateWindowExW parameters we use exist
+    #[test]
+    fn test_create_window_ex_w_exists() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::CreateWindowExW;
+
+        // Verify the function exists by taking its address
+        // All HANDLE types are now *mut c_void in windows-sys 0.59+
+        let _fn_ptr: unsafe extern "system" fn(
+            u32,                        // dwExStyle
+            *const u16,                 // lpClassName
+            *const u16,                 // lpWindowName
+            u32,                        // dwStyle
+            i32,                        // x
+            i32,                        // y
+            i32,                        // nWidth
+            i32,                        // nHeight
+            *mut core::ffi::c_void,     // hWndParent (HWND)
+            *mut core::ffi::c_void,     // hMenu (HMENU)
+            *mut core::ffi::c_void,     // hInstance (HMODULE)
+            *const core::ffi::c_void,   // lpParam
+        ) -> *mut core::ffi::c_void = CreateWindowExW;
+    }
+
+    /// Verify message pump functions exist
+    #[test]
+    fn test_message_pump_functions_exist() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
+        };
+
+        // Verify constants
+        let _pm_remove: u32 = PM_REMOVE;
+
+        // Verify MSG struct can be created
+        let _msg: MSG = unsafe { std::mem::zeroed() };
+
+        // Verify function signatures with extern "system"
+        let _peek: unsafe extern "system" fn(
+            *mut MSG,
+            *mut core::ffi::c_void,
+            u32,
+            u32,
+            u32,
+        ) -> i32 = PeekMessageW;
+        let _translate: unsafe extern "system" fn(*const MSG) -> i32 = TranslateMessage;
+        let _dispatch: unsafe extern "system" fn(*const MSG) -> isize = DispatchMessageW;
+    }
+
+    /// Verify GetModuleHandleW exists
+    #[test]
+    fn test_get_module_handle_w_exists() {
+        use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+
+        // Verify the function exists with extern "system" calling convention
+        let _fn_ptr: unsafe extern "system" fn(*const u16) -> *mut core::ffi::c_void =
+            GetModuleHandleW;
+    }
+
+    /// Verify GetLastError exists
+    #[test]
+    fn test_get_last_error_exists() {
+        use windows_sys::Win32::Foundation::GetLastError;
+
+        // Verify the function exists and returns u32
+        let _fn_ptr: unsafe extern "system" fn() -> u32 = GetLastError;
+    }
+
+    /// Verify DefWindowProcW exists for window procedure
+    #[test]
+    fn test_def_window_proc_w_exists() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DefWindowProcW;
+
+        // Verify the function exists with expected signature
+        let _fn_ptr: unsafe extern "system" fn(
+            *mut core::ffi::c_void, // hwnd (HWND)
+            u32,                    // msg
+            usize,                  // wparam (WPARAM)
+            isize,                  // lparam (LPARAM)
+        ) -> isize = DefWindowProcW;
     }
 }
