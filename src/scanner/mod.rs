@@ -3,6 +3,10 @@
 //! Provides async streaming of discovered audio file paths within a directory tree.
 //! Filters for common audio formats: MP3, FLAC, OGG, M4A, WAV.
 
+mod watcher;
+
+pub use watcher::{FileWatcher, WatchError, WatchEvent};
+
 use futures::stream::Stream;
 use std::path::PathBuf;
 use tokio::sync::mpsc;

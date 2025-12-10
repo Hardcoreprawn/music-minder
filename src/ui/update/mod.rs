@@ -7,6 +7,7 @@
 //! - `enrichment`: Track identification and metadata writing
 //! - `player`: Audio playback and media controls
 //! - `diagnostics`: System diagnostics and cover art
+//! - `watcher`: Background file system watching
 
 mod db;
 mod diagnostics;
@@ -14,6 +15,7 @@ mod enrichment;
 mod organize;
 mod player;
 mod scan;
+mod watcher;
 
 use iced::Task;
 use std::path::PathBuf;
@@ -29,6 +31,7 @@ pub use enrichment::handle_enrichment;
 pub use organize::{handle_organize, handle_undo};
 pub use player::handle_player;
 pub use scan::handle_scan;
+pub use watcher::handle_watcher;
 
 /// Helper to load tracks from database
 pub(crate) fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {

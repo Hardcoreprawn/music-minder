@@ -1,7 +1,7 @@
 //! Async streams for background operations (scanning, preview generation).
 
 use super::messages::Message;
-use crate::{db, library, metadata, organizer};
+use crate::{db, library, metadata, organizer, scanner};
 use futures::StreamExt;
 use rayon::prelude::*;
 use sqlx::SqlitePool;
@@ -142,6 +142,78 @@ enum PreviewStreamState {
         pattern: String,
         destination: PathBuf,
         batch_size: usize,
+    },
+    Done,
+}
+
+/// Create a stream that watches a directory for file changes.
+///
+/// Emits `WatcherEvent` messages whenever audio files are created,
+/// modified, or removed in the watched directories.
+pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
+    futures::stream::unfold(WatcherStreamState::Init { watch_paths }, |state| async move {
+        match state {
+            WatcherStreamState::Init { watch_paths } => {
+                // Create the file watcher
+                match scanner::FileWatcher::new(watch_paths.clone()) {
+                    Ok((watcher, rx)) => {
+                        tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started");
+                        Some((
+                            Message::WatcherStarted,
+                            WatcherStreamState::Running {
+                                _watcher: watcher,
+                                rx,
+                            },
+                        ))
+                    }
+                    Err(e) => {
+                        tracing::error!(target: "ui::watcher", error = %e, "Failed to start file watcher");
+                        Some((
+                            Message::WatcherEvent(scanner::WatchEvent::Error(e.to_string())),
+                            WatcherStreamState::Done,
+                        ))
+                    }
+                }
+            }
+            WatcherStreamState::Running { _watcher, rx } => {
+                // Block on receiving the next event
+                // Use recv_timeout to yield back to async runtime periodically
+                match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                    Ok(event) => Some((
+                        Message::WatcherEvent(event),
+                        WatcherStreamState::Running { _watcher, rx },
+                    )),
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                        // No event, just continue polling
+                        Some((
+                            Message::WatcherEvent(scanner::WatchEvent::Error(String::new())), // Dummy, filtered out
+                            WatcherStreamState::Running { _watcher, rx },
+                        ))
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                        tracing::warn!(target: "ui::watcher", "File watcher disconnected");
+                        Some((Message::WatcherStopped, WatcherStreamState::Done))
+                    }
+                }
+            }
+            WatcherStreamState::Done => None,
+        }
+    })
+    // Filter out empty error messages (timeout placeholders)
+    .filter(|msg| {
+        futures::future::ready(!matches!(
+            msg,
+            Message::WatcherEvent(scanner::WatchEvent::Error(s)) if s.is_empty()
+        ))
+    })
+}
+
+/// Internal state machine for watcher streaming
+enum WatcherStreamState {
+    Init { watch_paths: Vec<PathBuf> },
+    Running {
+        _watcher: scanner::FileWatcher,
+        rx: crossbeam_channel::Receiver<scanner::WatchEvent>,
     },
     Done,
 }

@@ -111,6 +111,9 @@ pub struct LoadedState {
     // Diagnostics state
     pub diagnostics: Option<diagnostics::DiagnosticReport>,
     pub diagnostics_loading: bool,
+
+    // Background file watcher state
+    pub watcher_state: WatcherState,
 }
 
 impl LoadedState {
@@ -205,4 +208,21 @@ impl From<cover::CoverArt> for LoadedCoverArt {
             source: cover.source,
         }
     }
+}
+
+/// State for background file watching.
+///
+/// The watcher monitors the library directories and emits events when
+/// files are added, modified, or removed. The UI can then trigger
+/// incremental rescans without interrupting playback.
+#[derive(Default)]
+pub struct WatcherState {
+    /// Whether the watcher is currently active
+    pub active: bool,
+    /// Directories being watched
+    pub watch_paths: Vec<PathBuf>,
+    /// Number of pending file changes (not yet processed)
+    pub pending_changes: usize,
+    /// Last error (if any)
+    pub last_error: Option<String>,
 }

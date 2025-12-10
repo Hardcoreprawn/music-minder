@@ -40,6 +40,31 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
     .into()
 }
 
+/// Watcher status indicator - shows if background scanning is active
+fn watcher_status_indicator(s: &LoadedState) -> Element<'_, Message> {
+    if s.watcher_state.active {
+        if s.watcher_state.pending_changes > 0 {
+            row![
+                text("⟳").size(10).color([0.4, 0.7, 0.4]),
+                text(format!(" Syncing {}...", s.watcher_state.pending_changes))
+                    .size(10)
+                    .color([0.4, 0.7, 0.4]),
+            ]
+            .spacing(2)
+            .into()
+        } else {
+            row![
+                text("●").size(8).color([0.3, 0.5, 0.3]),
+                text(" Watching").size(10).color([0.4, 0.4, 0.4]),
+            ]
+            .spacing(2)
+            .into()
+        }
+    } else {
+        Space::with_height(0).into()
+    }
+}
+
 /// Sidebar with navigation and status
 fn sidebar_view(s: &LoadedState) -> Element<'_, Message> {
     let is_library = s.active_pane == ActivePane::Library;
@@ -136,6 +161,8 @@ fn sidebar_view(s: &LoadedState) -> Element<'_, Message> {
             text("System Status").size(12).color([0.6, 0.6, 0.6]),
             system_status,
             Space::with_height(10),
+            // Watcher status indicator
+            watcher_status_indicator(s),
             text(&s.status_message).size(10).color([0.5, 0.5, 0.5]),
         ]
         .spacing(5)

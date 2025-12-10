@@ -297,6 +297,17 @@ pub struct TrackWithMetadata {
     pub year: Option<i64>,
 }
 
+/// Lightweight track info for incremental scanning.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct TrackFileInfo {
+    /// Database ID
+    pub id: i64,
+    /// File path
+    pub path: String,
+    /// Last modified time (Unix timestamp)
+    pub mtime: Option<i64>,
+}
+
 impl TrackWithMetadata {
     /// Convert the path string to a PathBuf.
     ///
@@ -331,6 +342,89 @@ pub async fn get_all_tracks_with_metadata(
     )
     .fetch_all(pool)
     .await
+}
+
+// ============================================================================
+// Incremental Scanning Support
+// ============================================================================
+
+/// Get all track paths and mtimes for incremental scanning.
+///
+/// Returns lightweight records for efficient comparison with filesystem.
+pub async fn get_all_track_file_info(pool: &SqlitePool) -> sqlx::Result<Vec<TrackFileInfo>> {
+    sqlx::query_as::<_, TrackFileInfo>("SELECT id, path, mtime FROM tracks")
+        .fetch_all(pool)
+        .await
+}
+
+/// Update the mtime for a track.
+pub async fn update_track_mtime(pool: &SqlitePool, track_id: i64, mtime: i64) -> sqlx::Result<()> {
+    sqlx::query("UPDATE tracks SET mtime = ? WHERE id = ?")
+        .bind(mtime)
+        .bind(track_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Insert or update a track with mtime.
+///
+/// Like [`insert_track`] but also stores the file modification time.
+pub async fn insert_track_with_mtime(
+    pool: &SqlitePool,
+    meta: &TrackMetadata,
+    path: &str,
+    artist_id: Option<i64>,
+    album_id: Option<i64>,
+    mtime: i64,
+) -> sqlx::Result<i64> {
+    let duration = meta.duration as i64;
+    let track_number = meta.track_number.map(|n| n as i64);
+
+    let row: (i64,) = sqlx::query_as(
+        r#"
+        INSERT INTO tracks (title, artist_id, album_id, path, duration, track_number, mtime)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(path) DO UPDATE SET
+            title = excluded.title,
+            artist_id = excluded.artist_id,
+            album_id = excluded.album_id,
+            duration = excluded.duration,
+            track_number = excluded.track_number,
+            mtime = excluded.mtime
+        RETURNING id
+        "#,
+    )
+    .bind(&meta.title)
+    .bind(artist_id)
+    .bind(album_id)
+    .bind(path)
+    .bind(duration)
+    .bind(track_number)
+    .bind(mtime)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row.0)
+}
+
+/// Delete a track by path.
+///
+/// Used when a file is detected as removed from the filesystem.
+pub async fn delete_track_by_path(pool: &SqlitePool, path: &str) -> sqlx::Result<bool> {
+    let result = sqlx::query("DELETE FROM tracks WHERE path = ?")
+        .bind(path)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+/// Get a track by path.
+pub async fn get_track_by_path(pool: &SqlitePool, path: &str) -> sqlx::Result<Option<TrackFileInfo>> {
+    sqlx::query_as::<_, TrackFileInfo>("SELECT id, path, mtime FROM tracks WHERE path = ?")
+        .bind(path)
+        .fetch_optional(pool)
+        .await
 }
 
 #[cfg(test)]

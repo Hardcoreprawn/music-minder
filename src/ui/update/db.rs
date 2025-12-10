@@ -9,6 +9,7 @@ use super::super::messages::Message;
 use super::super::platform::get_user_music_folder;
 use super::super::state::{
     ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, VisualizationMode,
+    WatcherState,
 };
 use super::load_tracks_task;
 
@@ -68,7 +69,7 @@ pub fn handle_db_init(
                 viewport_height: 0.0,
                 preview_scroll_offset: 0.0,
                 preview_viewport_height: 0.0,
-                organize_destination: music_folder,
+                organize_destination: music_folder.clone(),
                 organize_pattern: "{Artist}/{Album}/{TrackNum} - {Title}.{ext}".to_string(),
                 organize_view: OrganizeView::default(),
                 organize_preview: vec![],
@@ -93,6 +94,11 @@ pub fn handle_db_init(
                 cover_art: Default::default(),
                 diagnostics: None,
                 diagnostics_loading: true,
+                watcher_state: WatcherState {
+                    active: true, // Start watching by default
+                    watch_paths: vec![music_folder],
+                    ..Default::default()
+                },
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])
