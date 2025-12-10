@@ -16,28 +16,52 @@ Music Minder is a cross-platform desktop music player written in Rust. It manage
 4. **Format support**: Native decoding of MP3, FLAC, OGG, WAV, M4A/AAC
 5. **Device flexibility**: WASAPI (Windows), CoreAudio (macOS), ALSA/PulseAudio (Linux)
 
+### 🔧 CLI-First Development
+
+**Every feature is built CLI-first, then wrapped with GUI.** This enables:
+
+- **AI-assisted development**: Commands can be run and outputs parsed programmatically
+- **Testability**: Isolate and test features without GUI complexity
+- **Debuggability**: Add `--verbose` to see exactly what's happening
+- **Composability**: Script workflows, chain commands
+
+**Pattern for new features:**
+1. Implement core logic as a library function
+2. Expose via `clap` CLI with `--verbose`, `--json`, `--dry-run` flags
+3. Add `tracing` instrumentation at key decision points
+4. Wire GUI as thin layer calling the same logic
+
 ### Audio Pipeline Architecture
 
 ```text
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+┌─────────────┐      ┌─────────────┐     ┌─────────────┐      ┌─────────────┐
 │   Decoder   │────▶│  Resampler  │────▶│ Ring Buffer │────▶│ CPAL Output │
-│  (Symphonia)│     │  (Rubato)   │     │   (rtrb)    │     │  (WASAPI)   │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+│  (Symphonia)│      │  (Rubato)   │     │   (rtrb)    │      │  (WASAPI)   │
+└─────────────┘      └─────────────┘     └─────────────┘      └─────────────┘
       │                                        │                   │
       │ Decode Thread                          │ Lock-Free         │ RT Thread
       │ (normal priority)                      │ (no alloc)        │ (high priority)
       ▼                                        ▼                   ▼
 ┌─────────────┐                          ┌─────────────┐     ┌─────────────┐
-│     FFT     │                          │   Atomics   │◀────│   Volume    │
-│ Visualizer  │                          │ (position)  │     │  Control    │
-└─────────────┘                          └─────────────┘     └─────────────┘
+│     FFT     │                          │AudioShared  │◀────│   Volume   │
+│ Visualizer  │                          │   State     │     │  Control    │
+└─────────────┘                          │ (atomics)   │     └─────────────┘
+                                         └─────────────┘
+                                               │
+                                         ┌─────┴─────┐
+                                         │ is_playing│
+                                         │is_flushing│
+                                         │ position  │
+                                         │  volume   │
+                                         └───────────┘
 ```
 
 **Key guarantees:**
 
-- No `Mutex`/`RwLock` in the audio callback — atomics only
+- No `Mutex`/`RwLock` in the audio callback — atomics only via `AudioSharedState`
 - No heap allocation in the audio callback — ring buffer pre-allocated
 - No blocking I/O in the audio callback — decoder runs in separate thread
+- **Atomic flush mechanism** — when loading new track, `is_flushing` flag tells callback to drain buffer and output silence, preventing stale audio blips
 
 ## Tech Stack
 
@@ -48,15 +72,18 @@ Music Minder is a cross-platform desktop music player written in Rust. It manage
 - **Audio Metadata**: `lofty` for reading/writing tags
 - **Async Runtime**: `tokio`
 
-## Core Modules
+### Core Modules
 
 ### Audio Pipeline (Critical Path)
 
-1. **Player**: Orchestrates playback, queue management, state
-2. **Decoder**: Symphonia-based format decoding (runs in dedicated thread)
-3. **Resampler**: Rubato-based sample rate conversion (when device rate ≠ file rate)
-4. **Audio Output**: cpal stream management, ring buffer consumer, volume control
-5. **Visualization**: FFT-based spectrum analyzer (decoupled from audio path)
+1. **Player** (`player/mod.rs`): Orchestrates playback, queue management, command dispatch
+2. **Audio Thread** (`player/audio.rs`): Decoding, resampling, ring buffer production, event emission
+3. **Decoder** (`player/decoder.rs`): Symphonia-based format decoding
+4. **Resampler** (`player/resampler.rs`): Rubato-based sample rate conversion (when device rate ≠ file rate)
+5. **State** (`player/state.rs`): `AudioSharedState` (lock-free atomics), `PlayerState`, `PlayerEvent`, `PlayerCommand`
+6. **Queue** (`player/queue.rs`): Playback queue with repeat modes, history tracking
+7. **Visualization** (`player/visualization.rs`): FFT-based spectrum analyzer (decoupled from audio path)
+8. **SIMD** (`player/simd.rs`): AVX2/SSE optimized volume scaling and format conversion
 
 ### Library Management
 
@@ -105,11 +132,14 @@ music-minder/
 │   │   └── coverart/        # Cover art fetching
 │   ├── cover/               # Cover art resolution & caching
 │   ├── player/              # 🔊 Audio pipeline (critical path)
-│   │   ├── audio.rs         # cpal output, ring buffer
-│   │   ├── decoder.rs       # Symphonia decoding thread
+│   │   ├── mod.rs           # Player orchestration, command dispatch
+│   │   ├── audio.rs         # Audio thread: decode, resample, ring buffer, events
+│   │   ├── decoder.rs       # Symphonia format decoding
 │   │   ├── resampler.rs     # Rubato sample rate conversion
-│   │   ├── queue.rs         # Playback queue management
-│   │   ├── state.rs         # Atomics for lock-free control
+│   │   ├── queue.rs         # Playback queue with repeat/shuffle
+│   │   ├── state.rs         # AudioSharedState (atomics), PlayerState, events
+│   │   ├── simd.rs          # AVX2/SSE optimized audio processing
+│   │   ├── media_controls.rs# OS media key integration (SMTC/MPRIS)
 │   │   └── visualization.rs # FFT spectrum analyzer
 │   ├── diagnostics/         # System audio readiness checks
 │   └── ui/                  # Iced GUI
@@ -125,50 +155,138 @@ music-minder/
 
 ## Player Control Flow
 
-The player has multiple entry points for the same actions (UI buttons, keyboard, OS media keys). To avoid duplicate logic and inconsistent behavior, we use a **single canonical handler** pattern.
+The player uses an **event-driven architecture** where the UI sends commands to the audio thread, and the audio thread emits events back to confirm state changes. This eliminates race conditions between the UI and audio threads.
 
-### Control Flow Diagram
+### Command → Event Flow
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Entry Points                             │
 ├─────────────────────────────────────────────────────────────────┤
-│ UI Button        → Message::PlayerPlay/Pause/Next/etc           │
-│ OS Media Keys    → MediaControlPoll → MediaControlCommand       │
-│ Keyboard Shortcut→ Message::PlayerToggle/etc                    │
+│ UI Button         → Message::PlayerPlay/Pause/Next/etc          │
+│ OS Media Keys     → MediaControlPoll → MediaControlCommand      │
+│ Keyboard Shortcut → Message::PlayerToggle/etc                   │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   mod.rs - Message Router                       │
+│                   ui/mod.rs - Message Router                    │
 │  • MediaControlPoll: polls OS, emits MediaControlCommand        │
+│  • PlayerTick: polls PlayerEvents from audio thread             │
 │  • Routes all player messages to handle_player()                │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              handle_player() - Single Handler                   │
-│  • MediaControlCommand converts to equivalent Player* action    │
+│         ui/update/player.rs - handle_player()                   │
+│  • MediaControlCommand converts to equivalent action            │
 │  • Each action implemented ONCE via helper functions            │
+│  • NO optimistic state updates - wait for events                │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              Internal Helpers (private functions)               │
-│  do_play()   - player.play() + state sync + SMTC update         │
-│  do_pause()  - player.pause() + state sync + SMTC update        │
-│  do_next()   - player.skip_forward() + state + metadata         │
-│  do_seek()   - player.seek() + state sync                       │
-│  etc.                                                           │
+│              Internal Helpers (send commands only)              │
+│  do_play()   → PlayerCommand::Play                              │
+│  do_pause()  → PlayerCommand::Pause                             │
+│  do_next()   → player.skip_forward() → Load + Play commands     │
+│  do_seek()   → PlayerCommand::Seek                              │
+│                                                                 │
+│  NOTE: Helpers do NOT update UI state - they only send commands │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ crossbeam channel (lock-free)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Audio Thread (player/audio.rs)                     │
+│  • Receives PlayerCommand via channel                           │
+│  • Processes command (load file, play, pause, seek)             │
+│  • Emits PlayerEvent to confirm state change                    │
+│  • Updates AudioSharedState atomics                             │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ crossbeam channel (lock-free)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              PlayerTick Subscription (100ms)                    │
+│  • Calls player.poll_events() to drain event channel            │
+│  • For each PlayerEvent:                                        │
+│    - StatusChanged → update play/pause button state             │
+│    - TrackLoaded → update track info, duration, cover art       │
+│    - PlaybackFinished → auto-advance to next track              │
+│    - Error → show error message                                 │
+│  • Updates OS media controls (SMTC) with confirmed state        │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Event-Driven State Synchronization
+
+The audio thread runs asynchronously. The UI **never reads shared state directly** — it only updates based on confirmed events from the audio thread.
+
+**Why events, not polling `player.state()`?**
+
+- **Race condition**: UI sends Play, immediately reads state → still shows "Stopped"
+- **Stale data**: Audio thread hasn't processed command yet
+- **Button flicker**: UI updates optimistically, then corrects when it reads real state
+
+**Event-driven solution:**
+
+1. UI sends `PlayerCommand::Play` to audio thread
+2. UI does NOT update state (no optimistic updates)
+3. Audio thread processes command, starts playback
+4. Audio thread emits `PlayerEvent::StatusChanged(Playing)`
+5. UI receives event via `PlayerTick` subscription
+6. UI updates button to show "Pause" — state is now confirmed
+
+**PlayerEvent types:**
+
+| Event | When Emitted | UI Action |
+|-------|--------------|-----------|
+| `StatusChanged(status)` | Play/pause/stop processed | Update transport buttons |
+| `TrackLoaded { path, duration, ... }` | New file decoded | Show track info, fetch cover |
+| `PositionChanged(duration)` | Seek processed | Update progress bar |
+| `PlaybackFinished` | Track ended naturally | Auto-advance queue |
+| `Error(message)` | Decode/playback failure | Show error toast |
+
+**Performance:** Events use `crossbeam_channel::try_send()` which is lock-free. The channel has 64 slots; if UI can't keep up, old events are dropped (acceptable since PlayerTick runs every 100ms).
+
+### Track Transition: Atomic Flush
+
+When skipping to a new track while paused, stale audio samples may remain in the ring buffer. Without handling, you'd hear a brief blip of the old track.
+
+**Solution: Atomic flush flag in `AudioSharedState`**
+
+```text
+1. UI calls skip_forward() → sends Load + Play commands
+2. Audio thread sets is_flushing = true
+3. Audio callback sees is_flushing:
+   - Drains all samples from ring buffer (consumer.pop() loop)
+   - Outputs silence
+4. Audio thread loads new decoder, resampler
+5. Audio thread sets is_flushing = false
+6. Audio callback resumes normal operation with new track's samples
+```
+
+This is lock-free (atomic bool) and handles the consumer side where stale samples actually live.
 
 ### Key Principles
 
 1. **One implementation per action**: Play/pause/next/etc have a single code path
-2. **Consistent error handling**: All paths report errors to `status_message`
-3. **Consistent state sync**: All paths update `player_state` and OS media controls
-4. **Metadata updates on track change**: Next/Previous/PlayTrack update SMTC metadata
+2. **No optimistic updates**: UI state only changes when audio thread confirms via event
+3. **Lock-free communication**: Commands and events use crossbeam channels
+4. **Atomic shared state**: `AudioSharedState` uses atomics for volume, position, flushing
+
+### "Just Press Play" Behavior
+
+When the user presses Play with an empty queue and no track loaded, the app automatically starts a random shuffle:
+
+```text
+PlayerPlay message received:
+├── queue empty AND no track loaded → start_random_shuffle()
+│   └── Pick 25 random tracks, queue them, skip_forward()
+├── queue has tracks BUT no track loaded → skip_forward()
+│   └── Start playing from existing queue
+└── track already loaded → do_play()
+    └── Resume playback
+```
 
 ### Message Types
 
@@ -176,17 +294,88 @@ The player has multiple entry points for the same actions (UI buttons, keyboard,
 |---------|--------|---------|
 | `PlayerPlay/Pause/etc` | UI buttons | Direct user interaction |
 | `MediaControlCommand` | OS media keys (via poll) | External control |
-| `PlayerTick` | Timer subscription | Periodic state sync |
-| `PlayerVisualizationTick` | Fast timer | FFT data for visualizer |
+| `PlayerEvent` | Audio thread | Confirmed state changes |
+| `PlayerTick` | Timer subscription (100ms) | Poll events + update position |
+| `PlayerVisualizationTick` | Fast timer (16ms) | FFT data for visualizer |
+
+### Debugging
+
+To trace the command → event flow, enable debug logging:
+
+```powershell
+$env:RUST_LOG="ui::commands=debug,player::events=debug,ui::events=debug"
+cargo run
+```
+
+**All log targets:**
+
+| Target | Description | When to use |
+|--------|-------------|-------------|
+| `ui::commands` | UI command dispatch (`do_play()`, etc.) | Debug button clicks not working |
+| `ui::events` | UI processing received events | Debug state not updating |
+| `player::events` | Audio thread emitting events | Debug playback state changes |
+| `scanner::progress` | File scanning progress | Debug slow/stuck scans |
+| `enrichment::api` | MusicBrainz/AcoustID API calls | Debug metadata lookup failures |
+| `cover::resolver` | Cover art resolution | Debug missing album art |
+
+**Common debug scenarios:**
+
+```powershell
+# Play/pause not working
+$env:RUST_LOG="ui::commands=debug,player::events=debug"
+
+# Track not loading
+$env:RUST_LOG="player::events=debug,player::decoder=debug"
+
+# Metadata enrichment failing
+$env:RUST_LOG="enrichment::api=debug"
+
+# Full debug (verbose!)
+$env:RUST_LOG="debug"
+
+# With release build
+$env:RUST_LOG="ui::commands=debug"; cargo run --release
+```
+
+**CLI debugging:**
+
+Most features can be tested via CLI to isolate issues:
+
+```powershell
+# Test scanning
+music-minder scan ./test_music --verbose
+
+# Test identification
+music-minder identify "track.mp3" --verbose
+
+# Test enrichment (dry run)
+music-minder enrich ./test_music --dry-run --verbose
+```
 
 ### OS Media Controls (SMTC/MPRIS)
 
 The OS media controls run on a dedicated thread (`media_controls.rs`) and communicate via channels:
 
-- **Outbound** (to OS): metadata, playback state, position
+- **Outbound** (to OS): metadata, playback state, position — sent when `TrackLoaded` event received
 - **Inbound** (from OS): play/pause/next/prev/seek commands
 
-Polling happens in `mod.rs` via `MediaControlPoll` subscription (50ms interval). Commands are converted to `MediaControlCommand` messages and routed through the normal handler.
+Polling happens in `ui/mod.rs` via `MediaControlPoll` subscription (50ms interval). Commands are converted to `MediaControlCommand` messages and routed through `handle_player()`.
+
+## Mutation Philosophy
+
+Rust requires explicit `&mut` for mutation. In this codebase:
+
+**Justified mutation (required for performance or framework):**
+
+- **Audio buffers** (resampler, FFT): Preallocated, reused every frame — allocating new buffers would cause glitches
+- **Ring buffer**: Lock-free producer/consumer pattern requires mutable state
+- **Play queue cursor**: Inherently stateful (current position in list)
+- **UI state**: Iced's Elm architecture requires `&mut self` in `update()`
+
+**Avoided mutation:**
+
+- Read-only checks use immutable references (e.g., `queue().is_empty()` not `queue_mut().is_empty()`)
+- Event-driven updates instead of polling mutable shared state
 
 ## Design Decisions
 

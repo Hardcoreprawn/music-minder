@@ -1,23 +1,27 @@
 # 🎵 Music Minder
 
-A fast, native music library manager built with Rust. Scan, organize, enrich metadata, and play your entire collection with a beautiful, responsive interface.
+**A love letter to Winamp** — the legendary audio player that defined a generation.
+
+Music Minder is a fast, native music library manager built with Rust. Scan, organize, enrich metadata, and play your entire collection with a beautiful, responsive interface. No Electron. No cloud. Just music.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
 
+> *"It really whips the llama's ass"* — Winamp, 1997
+
 ## ✨ Features
 
-- **📂 Smart Library Scanning** - Recursively scan directories for MP3, FLAC, OGG, WAV, and M4A files. Handles 10,000+ tracks with virtualized scrolling.
+- **🎧 Audio Playback** - Low-latency playback with real-time visualization (spectrum analyzer, waveform, VU meters). Queue management with shuffle and repeat.
+
+- **📂 Smart Library Scanning** - Recursively scan directories for MP3, FLAC, OGG, WAV, and M4A files. Background scanning keeps your library fresh without interrupting playback.
 
 - **🏷️ Metadata Enrichment** - Audio fingerprinting via AcoustID, MusicBrainz lookups, and automatic cover art from Cover Art Archive.
 
 - **📁 File Organization** - Pattern-based organization (Artist/Album/Track) with preview, undo support, and batch operations.
 
-- **🎧 Audio Playback** - Low-latency playback with queue management, volume control, and real-time visualization (spectrum, waveform, VU meter).
-
 - **🎛️ OS Integration** - Media key support (play/pause/next/prev), system overlay with track info, and Bluetooth/headphone button controls via Windows SMTC / Linux MPRIS / macOS MediaPlayer.
 
-- **⚡ Native Performance** - Built with Rust for minimal memory usage and maximum speed. No Electron, no web views.
+- **⚡ Native Performance** - Built with Rust for minimal memory usage and maximum speed. No Electron, no web views. Instant startup.
 
 ## 📸 Screenshots
 
@@ -86,19 +90,26 @@ music-minder organize /path/to/music --preview
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
 
-### Current Phase: System Integration & Polish
+### Vision: Winamp for the Modern Era
 
-- [x] OS media controls (SMTC/MPRIS)
-- [x] Unified playback architecture
-- [ ] Keyboard shortcuts
-- [ ] Search/filter library
+Music Minder captures that early-2000s magic — instant startup, tiny footprint, mesmerizing visualizations — while leveraging modern Rust for rock-solid performance.
+
+### Current Phase: Library UX & Queue Management
+
+- [ ] Smart background scanning (auto-refresh, never interrupt playback)
+- [ ] Library search/filter (instant as-you-type filtering)
+- [ ] Column sorting (click headers)
+- [ ] Queue management UI (view, reorder, remove, drag-drop)
+- [ ] Repeat/shuffle mode toggles
+- [ ] Keyboard shortcuts (Space, arrows, etc.)
 
 **Upcoming:**
 
-- Equalizer with presets
+- Winamp-inspired UI polish (dark theme, LED displays, beveled panels)
+- Equalizer with classic presets
 - Gapless playback
 - Playlist management
-- Scrobbling (Last.fm / ListenBrainz)
+- Fullscreen visualizations
 
 ## 🤝 Contributing
 

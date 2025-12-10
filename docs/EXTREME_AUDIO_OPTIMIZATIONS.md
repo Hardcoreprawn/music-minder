@@ -60,7 +60,7 @@ for sample in data.iter_mut() {
 }
 ```
 
-### How to Implement SIMD
+### How to Implement SIMD Intrinsics
 
 Rust provides `std::arch` for portable SIMD intrinsics:
 
@@ -107,11 +107,9 @@ Real-world gains are typically 4-6x due to:
 4. **Portability requirements**: Not all CPUs support AVX2/AVX-512
 5. **Maintenance burden**: SIMD code is harder to read and debug
 
-### SIMD Verdict
+### SIMD Use Case for Music-Minder
 
 Excellent fit for our volume multiplication and f32→i16 conversion hot paths.
-
-### SIMD Use Cases
 
 | Operation | SIMD Benefit | Priority |
 |-----------|-------------|----------|
@@ -143,7 +141,7 @@ The compiler is good, but it can't always:
 - Choose optimal instruction sequences
 - Use specialized instructions (like prefetch)
 
-### How to Implement
+### How to Implement Inline Assembly
 
 ```rust
 use std::arch::asm;
@@ -209,7 +207,7 @@ vaddps ymm2, ymm2, ymm3  ; Uses add unit (can run simultaneously)
 5. **Undefined behavior risk**: Easy to corrupt state
 6. **Benchmarking required**: Must prove it's actually faster!
 
-### Our Verdict
+### Inline Assembly Verdict
 
 **Probably not worth it** for this project. The Rust compiler with `#[target_feature]` and intrinsics gets us 95% of the benefit with much better maintainability.
 
@@ -364,7 +362,7 @@ mod mirrored_buffer {
 4. **Complexity**: Setup is complex, hard to debug
 5. **Small buffers**: Overhead not worth it for <64KB buffers
 
-### Our Use Case
+### Ring Buffer Use Case
 
 Our ring buffer is 48,000 samples × 4 bytes = **192KB**. This is a good candidate!
 
@@ -618,7 +616,7 @@ pub fn audio_alloc<T>(val: T) -> &'static mut T {
 4. **Shared data**: Thread-local arenas can't share allocations
 5. **Complexity**: Managing arena lifetime adds code
 
-### Our Use Case
+### Arena Allocator Use Case
 
 Our current code is already **nearly allocation-free** in the hot path:
 
@@ -636,7 +634,7 @@ Our current code is already **nearly allocation-free** in the hot path:
 
 Modern CPUs have hierarchical caches:
 
-```
+```text
 CPU Core
 ├── L1 Cache (32KB, ~4 cycles latency)
 ├── L2 Cache (256KB, ~12 cycles latency)  
@@ -707,7 +705,7 @@ let buffer: AVec<f32, Align32> = AVec::new(32);
 4. **Read-mostly data**: False sharing is a write problem
 5. **Already cache-line sized**: No need to over-align
 
-### Our Use Case
+### Cache-Line Alignment Use Case
 
 Our `AudioSharedState` has atomics accessed from multiple threads. We should:
 
@@ -754,7 +752,7 @@ Branch 1 is predictable (usually playing). Branch 2 could mispredict on underrun
 
 ### Branch-Free Techniques
 
-**1. Conditional Select (cmov)**
+#### 1. Conditional Select (cmov)
 
 ```rust
 // Instead of:
@@ -769,7 +767,7 @@ use std::arch::x86_64::*;
 let result = _mm256_blendv_ps(b_vec, a_vec, mask_vec);
 ```
 
-**2. Multiply by 0 or 1**
+#### 2. Multiply by 0 or 1
 
 ```rust
 // Instead of:
@@ -780,7 +778,7 @@ let playing_f32 = is_playing as u32 as f32;  // 0.0 or 1.0
 sample * volume * playing_f32
 ```
 
-**3. Lookup Tables**
+#### 3. Lookup Tables
 
 ```rust
 // Instead of:
@@ -799,7 +797,7 @@ const HANDLERS: [fn(&mut Self); 3] = [
 HANDLERS[state as usize](self);
 ```
 
-**4. SIMD Masking**
+#### 4. SIMD Masking
 
 ```rust
 // Process all samples, then mask out paused ones
@@ -818,7 +816,7 @@ _mm256_storeu_ps(ptr, result);
 4. **Readability**: `if` is clearer than bit manipulation
 5. **No measured benefit**: Profile first!
 
-### Our Use Case
+### Branch-Free Use Case
 
 The main branch in our callback (`is_playing`) is highly predictable. The underrun branch is rare and acceptable.
 
