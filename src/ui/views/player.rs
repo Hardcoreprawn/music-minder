@@ -27,13 +27,15 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
         text("No track playing").size(14).color([0.5, 0.5, 0.5])
     };
 
-    // Play/pause button - using simple ASCII
+    // Play/pause button - fixed width to prevent layout shift
     let play_btn = match state.status {
         PlaybackStatus::Playing => button(text("||").size(14))
             .padding([8, 10])
+            .width(Length::Fixed(40.0))
             .on_press(Message::PlayerPause),
         _ => button(text("|>").size(14))
             .padding([8, 10])
+            .width(Length::Fixed(40.0))
             .on_press(Message::PlayerPlay),
     };
 
@@ -67,10 +69,12 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
         row![
             button(text("|<").size(14))
                 .padding([8, 10])
+                .width(Length::Fixed(40.0))
                 .on_press(Message::PlayerPrevious),
             play_btn,
             button(text(">|").size(14))
                 .padding([8, 10])
+                .width(Length::Fixed(40.0))
                 .on_press(Message::PlayerNext),
             button(text("Shuffle").size(11))
                 .padding([6, 8])
