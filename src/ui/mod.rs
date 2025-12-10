@@ -68,12 +68,24 @@ impl MusicMinder {
             ));
         }
 
-        // Player state update (every 100ms when playing)
-        if s.player_state.status == PlaybackStatus::Playing {
+        // Background file watcher - always active when enabled
+        if s.watcher_state.active && !s.watcher_state.watch_paths.is_empty() {
+            subscriptions.push(Subscription::run_with_id(
+                "file-watcher",
+                streams::watcher_stream(s.watcher_state.watch_paths.clone()),
+            ));
+        }
+
+        // Player event polling (every 100ms) - ALWAYS runs when player exists
+        // This is critical for event-driven state updates. Without this, the UI
+        // never receives StatusChanged events and can't update the play/pause button.
+        if s.player.is_some() {
             subscriptions
                 .push(time::every(Duration::from_millis(100)).map(|_| Message::PlayerTick));
+        }
 
-            // Visualization update (every 33ms = ~30fps) - always run when playing
+        // Visualization update (every 33ms = ~30fps) - only when playing
+        if s.player_state.status == PlaybackStatus::Playing {
             subscriptions.push(
                 time::every(Duration::from_millis(33)).map(|_| Message::PlayerVisualizationTick),
             );
@@ -208,6 +220,7 @@ impl MusicMinder {
             | Message::PlayerTick
             | Message::PlayerVisualizationTick
             | Message::PlayerVisualizationModeChanged(_)
+            | Message::PlayerEvent(_)
             | Message::MediaControlCommand(_) => {
                 return update::handle_player(s, message);
             }
@@ -239,6 +252,14 @@ impl MusicMinder {
             | Message::DiagnosticsComplete(_)
             | Message::CoverArtResolved(_, _) => {
                 return update::handle_diagnostics(s, message);
+            }
+
+            // File watcher messages
+            Message::WatcherStarted
+            | Message::WatcherStopped
+            | Message::WatcherEvent(_)
+            | Message::LibraryFileChanged(_) => {
+                return update::handle_watcher(s, message);
             }
 
             _ => {}

@@ -1,7 +1,7 @@
 //! Message types for the Music Minder UI.
 
 use super::state::{ActivePane, LoadedCoverArt, VisualizationMode};
-use crate::{db, diagnostics, enrichment, library, organizer, player};
+use crate::{db, diagnostics, enrichment, library, organizer, player, scanner};
 use iced::widget::scrollable::Viewport;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
@@ -72,6 +72,7 @@ pub enum Message {
     PlayerTick,                 // Timer tick for updating UI
     PlayerVisualizationTick,    // Fast tick for visualization
     PlayerVisualizationModeChanged(VisualizationMode),
+    PlayerEvent(player::PlayerEvent), // Event from audio thread (state changed, track loaded, etc.)
 
     // OS Media control messages (from SMTC/MPRIS)
     MediaControlCommand(player::MediaControlCommand),
@@ -83,4 +84,10 @@ pub enum Message {
 
     // Cover art messages (background, non-blocking)
     CoverArtResolved(PathBuf, Result<LoadedCoverArt, String>),
+
+    // Background scanner messages
+    WatcherEvent(scanner::WatchEvent),
+    WatcherStarted,
+    WatcherStopped,
+    LibraryFileChanged(PathBuf), // A file in the library changed, may need refresh
 }

@@ -28,7 +28,7 @@ use super::PlayerError;
 use super::decoder::AudioDecoder;
 use super::resampler::Resampler;
 use super::simd;
-use super::state::{AudioSharedState, PlaybackStatus, PlayerCommand, PlayerState};
+use super::state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState};
 use super::visualization::SpectrumData;
 
 /// Audio output configuration.
@@ -65,6 +65,7 @@ impl AudioOutput {
     pub fn new(
         state: Arc<RwLock<PlayerState>>,
         command_rx: Receiver<PlayerCommand>,
+        event_tx: Sender<PlayerEvent>,
         viz_tx: Sender<SpectrumData>,
     ) -> Result<Self, PlayerError> {
         let host = cpal::default_host();
@@ -121,6 +122,7 @@ impl AudioOutput {
                     state_for_thread,
                     audio_shared_for_thread,
                     command_rx,
+                    event_tx,
                     producer,
                     viz_tx,
                     sample_rate,
@@ -228,6 +230,19 @@ where
             // ✅ SAFE: Atomic reads - no locks in the audio callback
             let volume = audio_shared.volume();
             let is_playing = audio_shared.is_playing();
+            let is_flushing = audio_shared.is_flushing();
+
+            // When flushing, drain the buffer but output silence
+            // This clears stale audio when loading a new track
+            if is_flushing {
+                // Drain all available samples from the buffer
+                while consumer.pop().is_ok() {}
+                // Output silence
+                for sample in data.iter_mut() {
+                    *sample = T::from_sample(0.0f32);
+                }
+                return;
+            }
 
             if !is_playing {
                 // Output silence when paused
@@ -334,6 +349,17 @@ fn build_stream_i16(
             // ✅ SAFE: Atomic reads - no locks in the audio callback
             let volume = audio_shared.volume();
             let is_playing = audio_shared.is_playing();
+            let is_flushing = audio_shared.is_flushing();
+
+            // When flushing, drain the buffer but output silence
+            // This clears stale audio when loading a new track
+            if is_flushing {
+                while consumer.pop().is_ok() {}
+                for sample in data.iter_mut() {
+                    *sample = 0;
+                }
+                return;
+            }
 
             if !is_playing {
                 for sample in data.iter_mut() {
@@ -414,6 +440,8 @@ struct AudioThreadContext {
     resampler: Option<Resampler>,
     visualizer: super::visualization::Visualizer,
     pending_path: Option<PathBuf>,
+    /// Event sender to notify UI of state changes
+    event_tx: Sender<PlayerEvent>,
     /// Output device sample rate
     output_sample_rate: u32,
     /// Output device channels
@@ -425,7 +453,7 @@ struct AudioThreadContext {
 }
 
 impl AudioThreadContext {
-    fn new(output_sample_rate: u32, output_channels: u16) -> Self {
+    fn new(output_sample_rate: u32, output_channels: u16, event_tx: Sender<PlayerEvent>) -> Self {
         // Update position every ~50ms based on OUTPUT sample rate
         let samples_per_position_update =
             (output_sample_rate as usize * output_channels as usize) / 20;
@@ -434,11 +462,23 @@ impl AudioThreadContext {
             resampler: None,
             visualizer: super::visualization::Visualizer::new(2048),
             pending_path: None,
+            event_tx,
             output_sample_rate,
             output_channels,
             samples_per_position_update,
             sample_counter: 0,
         }
+    }
+
+    /// Clear the ring buffer by writing silence.
+    ///
+    /// This prevents stale audio from playing when loading a new track.
+    /// We write silence rather than just discarding because the consumer
+    /// (audio callback) may still be reading.
+    /// Send an event to the UI. Ignores send failures (UI may have disconnected).
+    fn emit(&self, event: PlayerEvent) {
+        tracing::debug!(target: "player::events", "Emit: {:?}", event);
+        let _ = self.event_tx.try_send(event);
     }
 
     /// Handle a player command, returning whether to continue running
@@ -454,17 +494,19 @@ impl AudioThreadContext {
                 self.pending_path = Some(path);
             }
             PlayerCommand::Play => {
-                self.start_or_resume(state, audio_shared);
+                self.start_or_resume(state, audio_shared, producer);
             }
             PlayerCommand::Pause => {
                 state.write().status = PlaybackStatus::Paused;
                 audio_shared.set_playing(false);
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Paused));
             }
             PlayerCommand::Stop => {
                 state.write().status = PlaybackStatus::Stopped;
                 audio_shared.set_playing(false);
                 self.decoder = None;
                 self.resampler = None;
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
             }
             PlayerCommand::Seek(pos) => {
                 if let Some(ref mut dec) = self.decoder {
@@ -482,6 +524,7 @@ impl AudioThreadContext {
 
                     if let Err(e) = dec.seek(pos) {
                         tracing::warn!("Seek failed: {}", e);
+                        self.emit(PlayerEvent::Error(format!("Seek failed: {}", e)));
                     }
                 }
             }
@@ -490,12 +533,19 @@ impl AudioThreadContext {
         true
     }
 
-    fn start_or_resume(&mut self, state: &RwLock<PlayerState>, audio_shared: &AudioSharedState) {
+    fn start_or_resume(
+        &mut self,
+        state: &RwLock<PlayerState>,
+        audio_shared: &AudioSharedState,
+        producer: &mut Producer<f32>,
+    ) {
         match self.pending_path.take() {
-            Some(path) => self.load_and_play(path, state, audio_shared),
+            Some(path) => self.load_and_play(path, state, audio_shared, producer),
             None => {
+                // Resume playback
                 state.write().status = PlaybackStatus::Playing;
                 audio_shared.set_playing(true);
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Playing));
             }
         }
     }
@@ -505,11 +555,18 @@ impl AudioThreadContext {
         path: PathBuf,
         state: &RwLock<PlayerState>,
         audio_shared: &AudioSharedState,
+        _producer: &mut Producer<f32>,
     ) {
+        // Start flushing - audio callback will drain buffer and output silence
+        // This prevents hearing stale audio from the previous track
+        audio_shared.start_flush();
+
         match AudioDecoder::open(&path) {
             Ok(dec) => {
                 let source_rate = dec.sample_rate();
                 let source_channels = dec.channels();
+                let duration = dec.duration();
+                let bits_per_sample = dec.format_info.bit_depth;
 
                 // Create resampler if sample rates differ
                 let resampler =
@@ -523,43 +580,66 @@ impl AudioThreadContext {
                     );
                 }
 
-                let mut s = state.write();
-                s.status = PlaybackStatus::Playing;
-                s.current_track = Some(path);
-                s.duration = dec.duration();
-                s.position = Duration::ZERO;
-                s.sample_rate = source_rate;
-                s.channels = source_channels;
-                s.bits_per_sample = dec.format_info.bit_depth;
+                // Build quality info before we move decoder parts
+                let quality = AudioQuality {
+                    format: dec.format_info.codec.clone(),
+                    is_lossless: dec.format_info.is_lossless,
+                    bit_depth: bits_per_sample,
+                    source_sample_rate: source_rate,
+                    output_sample_rate: self.output_sample_rate,
+                    is_bit_perfect: dec.format_info.is_lossless && source_rate == self.output_sample_rate,
+                    latency_ms: 0.0,      // Updated dynamically
+                    buffer_size: 48000,   // Ring buffer size
+                    buffer_fill: 0.0,     // Updated dynamically
+                };
+
+                // Update shared state
+                {
+                    let mut s = state.write();
+                    s.status = PlaybackStatus::Playing;
+                    s.current_track = Some(path.clone());
+                    s.duration = duration;
+                    s.position = Duration::ZERO;
+                    s.sample_rate = source_rate;
+                    s.channels = source_channels;
+                    s.bits_per_sample = bits_per_sample;
+                    s.quality = quality.clone();
+                }
 
                 tracing::info!(
                     "Track loaded: {}Hz / {}ch / {}bit ({})",
                     source_rate,
                     source_channels,
-                    dec.format_info.bit_depth,
-                    dec.format_info.codec
+                    bits_per_sample,
+                    quality.format
                 );
-
-                // Populate quality information
-                s.quality.format = dec.format_info.codec.clone();
-                s.quality.is_lossless = dec.format_info.is_lossless;
-                s.quality.bit_depth = dec.format_info.bit_depth;
-                s.quality.source_sample_rate = source_rate;
-                s.quality.output_sample_rate = self.output_sample_rate;
-                s.quality.is_bit_perfect =
-                    dec.format_info.is_lossless && source_rate == self.output_sample_rate;
 
                 // Sync atomic state
                 audio_shared.set_playing(true);
+                audio_shared.stop_flush();  // Resume normal playback - buffer is now drained
                 audio_shared.set_position(Duration::ZERO);
                 self.sample_counter = 0;
                 self.decoder = Some(dec);
                 self.resampler = Some(resampler);
+
+                // Emit events: track loaded and status changed
+                self.emit(PlayerEvent::TrackLoaded {
+                    path,
+                    duration,
+                    sample_rate: source_rate,
+                    channels: source_channels,
+                    bits_per_sample,
+                    quality,
+                });
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Playing));
             }
             Err(e) => {
                 tracing::error!("Failed to open file: {}", e);
                 state.write().status = PlaybackStatus::Stopped;
                 audio_shared.set_playing(false);
+                audio_shared.stop_flush();  // Don't leave in flushing state on error
+                self.emit(PlayerEvent::Error(format!("Failed to open file: {}", e)));
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
             }
         }
     }
@@ -640,6 +720,8 @@ impl AudioThreadContext {
                 audio_shared.set_playing(false);
                 self.decoder = None;
                 self.resampler = None;
+                self.emit(PlayerEvent::PlaybackFinished);
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
                 true
             }
             Err(e) => {
@@ -648,6 +730,8 @@ impl AudioThreadContext {
                 audio_shared.set_playing(false);
                 self.decoder = None;
                 self.resampler = None;
+                self.emit(PlayerEvent::Error(format!("Decode error: {}", e)));
+                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
                 true
             }
         }
@@ -659,12 +743,13 @@ fn audio_thread_main(
     state: Arc<RwLock<PlayerState>>,
     audio_shared: Arc<AudioSharedState>,
     command_rx: Receiver<PlayerCommand>,
+    event_tx: Sender<PlayerEvent>,
     mut producer: Producer<f32>,
     viz_tx: Sender<SpectrumData>,
     output_sample_rate: u32,
     output_channels: u16,
 ) {
-    let mut ctx = AudioThreadContext::new(output_sample_rate, output_channels);
+    let mut ctx = AudioThreadContext::new(output_sample_rate, output_channels, event_tx);
 
     loop {
         let is_idle = matches!(

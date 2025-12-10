@@ -15,6 +15,8 @@ pub struct AudioSharedState {
     volume_bits: AtomicU32,
     /// Whether playback is active
     is_playing: AtomicBool,
+    /// Whether the buffer is being flushed (drain old samples, output silence)
+    is_flushing: AtomicBool,
     /// Current position in nanoseconds
     position_nanos: AtomicU64,
     /// Buffer underrun count
@@ -34,6 +36,7 @@ impl Default for AudioSharedState {
         Self {
             volume_bits: AtomicU32::new(1.0_f32.to_bits()),
             is_playing: AtomicBool::new(false),
+            is_flushing: AtomicBool::new(false),
             position_nanos: AtomicU64::new(0),
             underruns: AtomicU32::new(0),
             callback_count: AtomicU64::new(0),
@@ -73,6 +76,24 @@ impl AudioSharedState {
     #[inline]
     pub fn set_playing(&self, playing: bool) {
         self.is_playing.store(playing, Ordering::Relaxed);
+    }
+
+    /// Check if buffer is being flushed.
+    #[inline]
+    pub fn is_flushing(&self) -> bool {
+        self.is_flushing.load(Ordering::Acquire)
+    }
+
+    /// Start flushing - audio callback will drain buffer and output silence.
+    #[inline]
+    pub fn start_flush(&self) {
+        self.is_flushing.store(true, Ordering::Release);
+    }
+
+    /// Stop flushing - audio callback resumes normal operation.
+    #[inline]
+    pub fn stop_flush(&self) {
+        self.is_flushing.store(false, Ordering::Release);
     }
 
     /// Get the current position as Duration.
@@ -300,6 +321,23 @@ impl PlayerState {
             quality_indicator
         )
     }
+    
+    /// Get a compact debug summary for logging.
+    /// Format: "Status@Pos/Dur" e.g. "Playing@1:23/4:56"
+    pub fn debug_summary(&self) -> String {
+        let status = match self.status {
+            PlaybackStatus::Stopped => "Stopped",
+            PlaybackStatus::Playing => "Playing",
+            PlaybackStatus::Paused => "Paused",
+            PlaybackStatus::Loading => "Loading",
+        };
+        format!(
+            "{}@{}/{}",
+            status,
+            self.position_str(),
+            self.duration_str()
+        )
+    }
 }
 
 /// Format a duration as MM:SS or HH:MM:SS.
@@ -331,6 +369,35 @@ pub enum PlayerCommand {
     Seek(f32),
     /// Shutdown the audio thread
     Shutdown,
+}
+
+/// Events sent from the audio thread to notify the UI of state changes.
+///
+/// This enables an event-driven architecture where:
+/// 1. UI sends commands via `PlayerCommand`
+/// 2. Audio thread processes commands and emits events
+/// 3. UI receives events and updates state (single source of truth)
+///
+/// This avoids race conditions from polling stale state after sending commands.
+#[derive(Debug, Clone)]
+pub enum PlayerEvent {
+    /// Playback status changed
+    StatusChanged(PlaybackStatus),
+    /// A new track was loaded with its metadata
+    TrackLoaded {
+        path: PathBuf,
+        duration: Duration,
+        sample_rate: u32,
+        channels: u16,
+        bits_per_sample: u16,
+        quality: AudioQuality,
+    },
+    /// Position updated (sent periodically during playback)
+    PositionChanged(Duration),
+    /// Playback finished (end of track)
+    PlaybackFinished,
+    /// An error occurred
+    Error(String),
 }
 
 /// Track metadata for display.

@@ -20,6 +20,38 @@
 //! │              Low-latency audio to hardware                      │
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
+//!
+//! # Event-Driven State Synchronization
+//!
+//! The player uses events to communicate state changes back to the UI:
+//!
+//! 1. UI sends `PlayerCommand` (Play, Pause, etc.) via channel
+//! 2. Audio thread processes command and updates actual state
+//! 3. Audio thread emits `PlayerEvent` back to UI
+//! 4. UI receives event via `poll_events()` and updates UI state
+//!
+//! This avoids race conditions from polling stale state after commands.
+//!
+//! # Debugging
+//!
+//! To see the full event flow, run with these log targets enabled:
+//!
+//! ```powershell
+//! $env:RUST_LOG="player::events=debug,ui::commands=debug,ui::events=debug"
+//! .\target\release\music-minder.exe
+//! ```
+//!
+//! Log targets:
+//! - `player::events` — Events emitted by audio thread (command processed)
+//! - `ui::commands` — Commands sent by UI (button clicks)
+//! - `ui::events` — Events received by UI (state updates)
+//!
+//! Example output:
+//! ```text
+//! DEBUG ui::commands: do_play() called
+//! DEBUG player::events: Emit: StatusChanged(Playing)
+//! DEBUG ui::events: Received StatusChanged: Stopped -> Playing
+//! ```
 
 mod audio;
 mod decoder;
@@ -37,7 +69,7 @@ pub use media_controls::{
 };
 pub use queue::{PlayQueue, QueueItem};
 pub use resampler::Resampler;
-pub use state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerState};
+pub use state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState};
 pub use visualization::{SpectrumData, VisualizationMode, Visualizer};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -53,6 +85,15 @@ use std::time::Duration;
 /// - Audio output (cpal/WASAPI)
 /// - Play queue
 /// - Visualization data
+///
+/// # Event-Driven Architecture
+///
+/// The player uses an event-driven model for state synchronization:
+/// 1. UI sends commands via methods like `play()`, `pause()`, etc.
+/// 2. Audio thread processes commands and emits `PlayerEvent`s
+/// 3. UI calls `poll_events()` to receive confirmed state changes
+///
+/// This avoids race conditions from reading state immediately after commands.
 pub struct Player {
     /// Current player state (shared with audio thread)
     state: Arc<RwLock<PlayerState>>,
@@ -60,6 +101,8 @@ pub struct Player {
     audio_shared: Option<Arc<AudioSharedState>>,
     /// Command sender to audio thread
     command_tx: Sender<PlayerCommand>,
+    /// Event receiver from audio thread
+    event_rx: Receiver<PlayerEvent>,
     /// Visualization data receiver from audio thread
     viz_rx: Receiver<SpectrumData>,
     /// The play queue
@@ -75,20 +118,35 @@ impl Player {
     pub fn new() -> Option<Self> {
         let state = Arc::new(RwLock::new(PlayerState::default()));
         let (command_tx, command_rx) = bounded(32);
+        let (event_tx, event_rx) = bounded(64); // Events from audio thread
         let (viz_tx, viz_rx) = bounded(4); // Small buffer, drop old frames
 
         // Try to initialize audio output
-        let audio = AudioOutput::new(Arc::clone(&state), command_rx, viz_tx).ok()?;
+        let audio = AudioOutput::new(Arc::clone(&state), command_rx, event_tx, viz_tx).ok()?;
         let audio_shared = Some(Arc::clone(&audio.audio_shared));
 
         Some(Self {
             state,
             audio_shared,
             command_tx,
+            event_rx,
             viz_rx,
             queue: PlayQueue::new(),
             _audio: Some(audio),
         })
+    }
+
+    /// Poll for events from the audio thread.
+    ///
+    /// Returns all pending events. This is the primary way for the UI to
+    /// receive state change notifications. Call this in response to a
+    /// subscription tick.
+    pub fn poll_events(&self) -> Vec<PlayerEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.event_rx.try_recv() {
+            events.push(event);
+        }
+        events
     }
 
     /// Load and play the current queue item.
