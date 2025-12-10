@@ -42,7 +42,7 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
 
 /// Watcher status indicator - shows if background scanning is active
 fn watcher_status_indicator(s: &LoadedState) -> Element<'_, Message> {
-    if s.watcher_state.active {
+    let status_text: Element<Message> = if s.watcher_state.active {
         if s.watcher_state.pending_changes > 0 {
             row![
                 text("⟳").size(10).color([0.4, 0.7, 0.4]),
@@ -61,8 +61,25 @@ fn watcher_status_indicator(s: &LoadedState) -> Element<'_, Message> {
             .into()
         }
     } else {
-        Space::with_height(0).into()
-    }
+        text("Not watching").size(10).color([0.4, 0.4, 0.4]).into()
+    };
+
+    // Refresh button - disabled while scanning
+    let refresh_btn = if s.is_scanning {
+        button(text("⟳").size(10))
+            .padding([2, 6])
+            .style(button::secondary)
+    } else {
+        button(text("⟳").size(10))
+            .padding([2, 6])
+            .style(button::secondary)
+            .on_press(Message::RescanLibrary)
+    };
+
+    row![status_text, Space::with_width(Length::Fill), refresh_btn]
+        .spacing(5)
+        .align_y(iced::Alignment::Center)
+        .into()
 }
 
 /// Sidebar with navigation and status

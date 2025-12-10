@@ -217,7 +217,7 @@ Never interrupt playback. Keep the library fresh automatically.
 - [x] **Scan indicator**: Subtle "● Watching" / "⟳ Syncing" in sidebar
 - [x] **Never interrupt audio**: File changes queued, processed in batches
 - [x] **CLI command**: `music-minder watch <path> -v --db <db> --scan-first`
-- [ ] **Manual refresh**: Button to force full rescan if needed (optional)
+- [x] **Manual refresh**: Button to force full rescan if needed
 
 ### 7.2 Library Search & Filter (High Priority)
 

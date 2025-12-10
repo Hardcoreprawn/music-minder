@@ -258,7 +258,8 @@ impl MusicMinder {
             Message::WatcherStarted
             | Message::WatcherStopped
             | Message::WatcherEvent(_)
-            | Message::LibraryFileChanged(_) => {
+            | Message::LibraryFileChanged(_)
+            | Message::RescanLibrary => {
                 return update::handle_watcher(s, message);
             }
 

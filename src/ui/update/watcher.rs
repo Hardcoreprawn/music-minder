@@ -17,6 +17,20 @@ use super::load_tracks_task;
 /// Handle file watcher messages.
 pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
     match message {
+        Message::RescanLibrary => {
+            // Trigger a full rescan using the first watch path (or scan_path)
+            let scan_path = s.watcher_state.watch_paths.first()
+                .cloned()
+                .unwrap_or_else(|| s.scan_path.clone());
+            
+            info!(target: "ui::watcher", path = %scan_path.display(), "Manual rescan triggered");
+            s.is_scanning = true;
+            s.scan_count = 0;
+            s.scan_path = scan_path;
+            s.status_message = "Rescanning library...".to_string();
+            Task::none()
+        }
+
         Message::WatcherStarted => {
             info!(target: "ui::watcher", "Background file watcher started");
             s.watcher_state.active = true;

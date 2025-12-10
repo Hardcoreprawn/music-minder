@@ -90,4 +90,5 @@ pub enum Message {
     WatcherStarted,
     WatcherStopped,
     LibraryFileChanged(PathBuf), // A file in the library changed, may need refresh
+    RescanLibrary,               // Force a full library rescan
 }
