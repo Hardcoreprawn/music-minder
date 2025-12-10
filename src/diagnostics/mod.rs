@@ -142,6 +142,26 @@ impl DiagnosticReport {
     pub fn generate() -> Self {
         let mut checks = Vec::new();
 
+        // SIMD capabilities (for audio processing acceleration)
+        let simd_level = crate::player::simd::current_simd_level();
+        checks.push(DiagnosticCheck {
+            name: "SIMD Acceleration".to_string(),
+            category: "CPU".to_string(),
+            status: match simd_level {
+                crate::player::simd::SimdLevel::Avx2 | crate::player::simd::SimdLevel::Avx512 => {
+                    CheckStatus::Pass
+                }
+                crate::player::simd::SimdLevel::Sse41 => CheckStatus::Pass,
+                crate::player::simd::SimdLevel::Scalar => CheckStatus::Warning,
+            },
+            value: simd_level.name().to_string(),
+            recommendation: if matches!(simd_level, crate::player::simd::SimdLevel::Scalar) {
+                Some("Audio processing will use scalar code (slower)".to_string())
+            } else {
+                None
+            },
+        });
+
         // Timer resolution
         let timer_info = TimerInfo::query();
         if let Some(ref info) = timer_info {

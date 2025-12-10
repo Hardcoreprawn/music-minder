@@ -27,6 +27,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use super::PlayerError;
 use super::decoder::AudioDecoder;
 use super::resampler::Resampler;
+use super::simd;
 use super::state::{AudioSharedState, PlaybackStatus, PlayerCommand, PlayerState};
 use super::visualization::SpectrumData;
 
@@ -73,6 +74,9 @@ impl AudioOutput {
 
         let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
         tracing::info!("Using audio device: {}", device_name);
+
+        // Log SIMD capabilities for audio processing
+        simd::log_simd_capabilities();
 
         // Get supported config
         let supported_config = device
@@ -234,16 +238,58 @@ where
             }
 
             let mut samples_read = 0u32;
+            let buffer_len = data.len();
 
-            // ✅ SAFE: Lock-free ring buffer pop - no allocations
-            for sample in data.iter_mut() {
-                match consumer.pop() {
-                    Ok(s) => {
-                        *sample = T::from_sample(s * volume);
-                        samples_read += 1;
+            // ✅ SIMD OPTIMIZATION: Batch read + vectorized volume scaling
+            // First, try to read all samples we need at once
+            let chunk = consumer.read_chunk(buffer_len);
+            match chunk {
+                Ok(chunk) => {
+                    let (first, second) = chunk.as_slices();
+                    let total_available = first.len() + second.len();
+
+                    if total_available >= buffer_len {
+                        // We have enough samples - use batch processing
+                        // Copy and apply volume using SIMD
+                        let mut temp_buffer: Vec<f32> = Vec::with_capacity(buffer_len);
+                        temp_buffer.extend_from_slice(&first[..first.len().min(buffer_len)]);
+                        if temp_buffer.len() < buffer_len {
+                            let remaining = buffer_len - temp_buffer.len();
+                            temp_buffer.extend_from_slice(&second[..remaining.min(second.len())]);
+                        }
+
+                        // Apply volume with SIMD (in-place)
+                        simd::apply_volume(&mut temp_buffer, volume);
+
+                        // Copy to output with sample type conversion
+                        for (out, &s) in data.iter_mut().zip(temp_buffer.iter()) {
+                            *out = T::from_sample(s);
+                        }
+
+                        samples_read = temp_buffer.len() as u32;
+                        // Commit the read
+                        chunk.commit(samples_read as usize);
+                    } else {
+                        // Not enough samples - partial fill + underrun
+                        chunk.commit(0); // Don't consume anything
+                        // Fall back to sample-by-sample for partial buffer
+                        for sample in data.iter_mut() {
+                            match consumer.pop() {
+                                Ok(s) => {
+                                    *sample = T::from_sample(s * volume);
+                                    samples_read += 1;
+                                }
+                                Err(_) => {
+                                    audio_shared.increment_underruns();
+                                    *sample = T::from_sample(0.0f32);
+                                }
+                            }
+                        }
                     }
-                    Err(_) => {
-                        // Underrun - output silence
+                }
+                Err(_) => {
+                    // Ring buffer empty - output silence
+                    for sample in data.iter_mut() {
                         audio_shared.increment_underruns();
                         *sample = T::from_sample(0.0f32);
                     }
@@ -297,16 +343,49 @@ fn build_stream_i16(
             }
 
             let mut samples_read = 0u32;
+            let buffer_len = data.len();
 
-            // ✅ SAFE: Lock-free ring buffer pop - no allocations
-            for sample in data.iter_mut() {
-                match consumer.pop() {
-                    Ok(s) => {
-                        *sample = (s * volume * 32767.0) as i16;
-                        samples_read += 1;
+            // ✅ SIMD OPTIMIZATION: Batch read + vectorized f32→i16 conversion
+            let chunk = consumer.read_chunk(buffer_len);
+            match chunk {
+                Ok(chunk) => {
+                    let (first, second) = chunk.as_slices();
+                    let total_available = first.len() + second.len();
+
+                    if total_available >= buffer_len {
+                        // We have enough samples - use batch SIMD processing
+                        let mut temp_buffer: Vec<f32> = Vec::with_capacity(buffer_len);
+                        temp_buffer.extend_from_slice(&first[..first.len().min(buffer_len)]);
+                        if temp_buffer.len() < buffer_len {
+                            let remaining = buffer_len - temp_buffer.len();
+                            temp_buffer.extend_from_slice(&second[..remaining.min(second.len())]);
+                        }
+
+                        // Convert f32→i16 with volume using SIMD (combined operation)
+                        simd::f32_to_i16_with_volume(&temp_buffer, data, volume);
+
+                        samples_read = temp_buffer.len() as u32;
+                        chunk.commit(samples_read as usize);
+                    } else {
+                        // Not enough samples - partial fill
+                        chunk.commit(0);
+                        for sample in data.iter_mut() {
+                            match consumer.pop() {
+                                Ok(s) => {
+                                    *sample = (s * volume * 32767.0) as i16;
+                                    samples_read += 1;
+                                }
+                                Err(_) => {
+                                    audio_shared.increment_underruns();
+                                    *sample = 0;
+                                }
+                            }
+                        }
                     }
-                    Err(_) => {
-                        // Underrun - output silence
+                }
+                Err(_) => {
+                    // Ring buffer empty - output silence
+                    for sample in data.iter_mut() {
                         audio_shared.increment_underruns();
                         *sample = 0;
                     }

@@ -26,6 +26,7 @@ mod decoder;
 pub mod media_controls;
 mod queue;
 mod resampler;
+pub mod simd;
 mod state;
 mod visualization;
 
@@ -228,6 +229,7 @@ impl Player {
                 peak_callback_us: shared.peak_callback_us(),
                 underruns: shared.underruns(),
                 buffer_fill_percent: shared.buffer_fill(),
+                simd_level: simd::current_simd_level().name(),
             })
     }
 
@@ -315,6 +317,8 @@ pub struct AudioPerformanceStats {
     pub underruns: u32,
     /// Current buffer fill percentage (0-100)
     pub buffer_fill_percent: u32,
+    /// SIMD acceleration level in use
+    pub simd_level: &'static str,
 }
 
 impl AudioPerformanceStats {
