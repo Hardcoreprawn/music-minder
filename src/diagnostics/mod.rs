@@ -114,6 +114,8 @@ pub struct DiagnosticReport {
     pub memory_info: Option<MemoryInfo>,
     pub power_info: Option<PowerInfo>,
     pub audio_devices: Vec<AudioDeviceInfo>,
+    /// SIMD benchmark results (if run)
+    pub simd_benchmark: Option<crate::player::simd::SimdBenchmarkResults>,
 }
 
 impl Default for DiagnosticReport {
@@ -133,6 +135,7 @@ impl Default for DiagnosticReport {
             memory_info: None,
             power_info: None,
             audio_devices: vec![],
+            simd_benchmark: None,
         }
     }
 }
@@ -161,6 +164,44 @@ impl DiagnosticReport {
                 None
             },
         });
+
+        // Run SIMD benchmark
+        let simd_benchmark = Some(crate::player::simd::run_benchmark());
+        if let Some(ref bench) = simd_benchmark {
+            checks.push(DiagnosticCheck {
+                name: "SIMD Volume Scaling".to_string(),
+                category: "CPU".to_string(),
+                status: if bench.volume_speedup > 2.0 {
+                    CheckStatus::Pass
+                } else if bench.volume_speedup > 1.2 {
+                    CheckStatus::Info
+                } else {
+                    CheckStatus::Warning
+                },
+                value: format!(
+                    "{:.1}x faster ({} ns → {} ns per 1024 samples)",
+                    bench.volume_speedup, bench.volume_scalar_ns, bench.volume_simd_ns
+                ),
+                recommendation: None,
+            });
+
+            checks.push(DiagnosticCheck {
+                name: "SIMD f32→i16 Conversion".to_string(),
+                category: "CPU".to_string(),
+                status: if bench.convert_speedup > 2.0 {
+                    CheckStatus::Pass
+                } else if bench.convert_speedup > 1.2 {
+                    CheckStatus::Info
+                } else {
+                    CheckStatus::Warning
+                },
+                value: format!(
+                    "{:.1}x faster ({} ns → {} ns per 1024 samples)",
+                    bench.convert_speedup, bench.convert_scalar_ns, bench.convert_simd_ns
+                ),
+                recommendation: None,
+            });
+        }
 
         // Timer resolution
         let timer_info = TimerInfo::query();
@@ -210,6 +251,7 @@ impl DiagnosticReport {
             memory_info,
             power_info,
             audio_devices,
+            simd_benchmark
         }
     }
 

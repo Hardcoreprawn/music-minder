@@ -126,7 +126,10 @@ pub fn apply_volume(samples: &mut [f32], volume: f32) {
 }
 
 /// Scalar fallback for volume application.
-#[inline]
+/// 
+/// Note: `#[inline(never)]` prevents LLVM from auto-vectorizing this loop,
+/// ensuring the benchmark honestly compares scalar vs explicit SIMD.
+#[inline(never)]
 fn apply_volume_scalar(samples: &mut [f32], volume: f32) {
     for sample in samples.iter_mut() {
         *sample *= volume;
@@ -232,7 +235,10 @@ pub fn f32_to_i16_with_volume(input: &[f32], output: &mut [i16], volume: f32) {
 }
 
 /// Scalar fallback for f32→i16 conversion with volume.
-#[inline]
+/// 
+/// Note: `#[inline(never)]` prevents LLVM from auto-vectorizing this loop,
+/// ensuring the benchmark honestly compares scalar vs explicit SIMD.
+#[inline(never)]
 fn f32_to_i16_scalar(input: &[f32], output: &mut [i16], volume: f32) {
     let scale = volume * 32767.0;
     for (inp, out) in input.iter().zip(output.iter_mut()) {
@@ -361,6 +367,182 @@ pub fn log_simd_capabilities() {
         if is_x86_feature_detected!("fma") {
             tracing::debug!("  ✓ FMA detected (available for future use)");
         }
+    }
+}
+
+// ============================================================================
+// User-facing Benchmark (for diagnostics display)
+// ============================================================================
+
+/// Results from running the SIMD benchmark.
+#[derive(Debug, Clone)]
+pub struct SimdBenchmarkResults {
+    /// Detected SIMD level
+    pub simd_level: SimdLevel,
+    /// Volume scaling: scalar time in nanoseconds per 1024 samples
+    pub volume_scalar_ns: u64,
+    /// Volume scaling: SIMD time in nanoseconds per 1024 samples
+    pub volume_simd_ns: u64,
+    /// Volume scaling: speedup factor
+    pub volume_speedup: f64,
+    /// f32→i16 conversion: scalar time in nanoseconds per 1024 samples
+    pub convert_scalar_ns: u64,
+    /// f32→i16 conversion: SIMD time in nanoseconds per 1024 samples
+    pub convert_simd_ns: u64,
+    /// f32→i16 conversion: speedup factor
+    pub convert_speedup: f64,
+    /// Number of iterations used for measurement
+    pub iterations: u32,
+}
+
+impl SimdBenchmarkResults {
+    /// Get a human-readable summary.
+    pub fn summary(&self) -> String {
+        format!(
+            "SIMD: {} | Volume: {:.1}x faster ({} → {} ns) | Convert: {:.1}x faster ({} → {} ns)",
+            self.simd_level.name(),
+            self.volume_speedup,
+            self.volume_scalar_ns,
+            self.volume_simd_ns,
+            self.convert_speedup,
+            self.convert_scalar_ns,
+            self.convert_simd_ns,
+        )
+    }
+
+    /// Check if SIMD is providing meaningful speedup.
+    pub fn is_simd_effective(&self) -> bool {
+        self.volume_speedup > 1.5 && self.convert_speedup > 1.5
+    }
+}
+
+/// Run the SIMD benchmark and return results.
+///
+/// This measures actual performance on the user's hardware, comparing
+/// scalar vs SIMD implementations of the audio hot-path operations.
+///
+/// Uses realistic audio buffer sizes and enough iterations to get stable measurements.
+pub fn run_benchmark() -> SimdBenchmarkResults {
+    use std::time::Instant;
+
+    // Use a realistic audio callback size (typical WASAPI buffer)
+    const SAMPLE_COUNT: usize = 4096;
+    const WARMUP_ITERATIONS: u32 = 1_000;
+    const BENCH_ITERATIONS: u32 = 100_000;
+
+    let simd_level = detect_simd_level();
+
+    // Prepare test data - realistic audio samples
+    let base_samples: Vec<f32> = (0..SAMPLE_COUNT)
+        .map(|i| {
+            // Simulate a sine wave (realistic audio)
+            let t = i as f32 / 48000.0;
+            (t * 440.0 * std::f32::consts::TAU).sin() * 0.8
+        })
+        .collect();
+
+    let mut samples_scalar = base_samples.clone();
+    let mut samples_simd = base_samples.clone();
+    let volume = 0.75f32;
+
+    // ========== Volume Benchmark ==========
+
+    // Warmup scalar
+    for _ in 0..WARMUP_ITERATIONS {
+        apply_volume_scalar(&mut samples_scalar, volume);
+        // Prevent the compiler from optimizing away the work
+        std::hint::black_box(&samples_scalar);
+    }
+
+    // Measure scalar volume
+    let start = Instant::now();
+    for _ in 0..BENCH_ITERATIONS {
+        apply_volume_scalar(&mut samples_scalar, volume);
+        std::hint::black_box(&samples_scalar);
+    }
+    let volume_scalar_total = start.elapsed();
+
+    // Warmup SIMD
+    for _ in 0..WARMUP_ITERATIONS {
+        apply_volume(&mut samples_simd, volume);
+        std::hint::black_box(&samples_simd);
+    }
+
+    // Measure SIMD volume
+    let start = Instant::now();
+    for _ in 0..BENCH_ITERATIONS {
+        apply_volume(&mut samples_simd, volume);
+        std::hint::black_box(&samples_simd);
+    }
+    let volume_simd_total = start.elapsed();
+
+    // Calculate ns per 1024 samples for comparison
+    let volume_scalar_ns =
+        (volume_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+    let volume_simd_ns =
+        (volume_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+
+    let volume_speedup = if volume_simd_total.as_nanos() > 0 {
+        volume_scalar_total.as_nanos() as f64 / volume_simd_total.as_nanos() as f64
+    } else {
+        1.0
+    };
+
+    // ========== f32→i16 Conversion Benchmark ==========
+
+    let input: Vec<f32> = base_samples.clone();
+    let mut output_scalar = vec![0i16; SAMPLE_COUNT];
+    let mut output_simd = vec![0i16; SAMPLE_COUNT];
+
+    // Warmup scalar
+    for _ in 0..WARMUP_ITERATIONS {
+        f32_to_i16_scalar(&input, &mut output_scalar, volume);
+        std::hint::black_box(&output_scalar);
+    }
+
+    // Measure scalar conversion
+    let start = Instant::now();
+    for _ in 0..BENCH_ITERATIONS {
+        f32_to_i16_scalar(&input, &mut output_scalar, volume);
+        std::hint::black_box(&output_scalar);
+    }
+    let convert_scalar_total = start.elapsed();
+
+    // Warmup SIMD
+    for _ in 0..WARMUP_ITERATIONS {
+        f32_to_i16_with_volume(&input, &mut output_simd, volume);
+        std::hint::black_box(&output_simd);
+    }
+
+    // Measure SIMD conversion
+    let start = Instant::now();
+    for _ in 0..BENCH_ITERATIONS {
+        f32_to_i16_with_volume(&input, &mut output_simd, volume);
+        std::hint::black_box(&output_simd);
+    }
+    let convert_simd_total = start.elapsed();
+
+    // Calculate ns per 1024 samples for comparison
+    let convert_scalar_ns =
+        (convert_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+    let convert_simd_ns =
+        (convert_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+
+    let convert_speedup = if convert_simd_total.as_nanos() > 0 {
+        convert_scalar_total.as_nanos() as f64 / convert_simd_total.as_nanos() as f64
+    } else {
+        1.0
+    };
+
+    SimdBenchmarkResults {
+        simd_level,
+        volume_scalar_ns,
+        volume_simd_ns,
+        volume_speedup,
+        convert_scalar_ns,
+        convert_simd_ns,
+        convert_speedup,
+        iterations: BENCH_ITERATIONS,
     }
 }
 
