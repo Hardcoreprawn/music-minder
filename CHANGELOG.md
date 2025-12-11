@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.4...music-minder-v0.1.5) (2025-12-09)
+
+
+### 🐛 Bug Fixes
+
+* use -C flag to pass WiX preprocessor variable ([a3a2476](https://github.com/Hardcoreprawn/music-minder/commit/a3a247643ad479bd87b614c2692c4fedb8334288))
+
 ## [0.1.4](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.3...music-minder-v0.1.4) (2025-12-09)
 
 
