@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/release-please-*.json'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/release-please-*.json'
 
 # Restrict permissions to minimum required (principle of least privilege)
 permissions:
@@ -15,8 +25,8 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
-  fmt:
-    name: Format
+  lint:
+    name: Lint (fmt + clippy)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,23 +36,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
           
       - name: Check formatting
         run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
-        with:
-          components: clippy
           
       - name: Cache cargo
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -58,6 +55,8 @@ jobs:
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    # Run on push to main, but skip on PRs (audits rarely change between commits)
+    if: github.event_name == 'push'
     permissions:
       contents: read
     steps:
@@ -122,14 +121,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [fmt, clippy, audit, test-linux, test-windows]
+    needs: [lint, test-linux, test-windows]
+    # audit is optional on PRs, so not in needs list
     if: always()
     steps:
       - name: Check all jobs passed
         run: |
-          if [[ "${{ needs.fmt.result }}" != "success" ]] || \
-             [[ "${{ needs.clippy.result }}" != "success" ]] || \
-             [[ "${{ needs.audit.result }}" != "success" ]] || \
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
              [[ "${{ needs.test-linux.result }}" != "success" ]] || \
              [[ "${{ needs.test-windows.result }}" != "success" ]]; then
             echo "One or more jobs failed"
