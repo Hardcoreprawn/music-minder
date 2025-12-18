@@ -150,14 +150,18 @@ enum PreviewStreamState {
 ///
 /// Emits `WatcherEvent` messages whenever audio files are created,
 /// modified, or removed in the watched directories.
+///
+/// Uses `tokio::sync::mpsc` with async `.recv().await` to avoid blocking
+/// Iced's cooperative async scheduler. This allows other subscriptions
+/// (like `PlayerTick`) to continue firing normally.
 pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
     futures::stream::unfold(WatcherStreamState::Init { watch_paths }, |state| async move {
         match state {
             WatcherStreamState::Init { watch_paths } => {
-                // Create the file watcher
-                match scanner::FileWatcher::new(watch_paths.clone()) {
+                // Create the file watcher with async channel
+                match scanner::FileWatcher::new_async(watch_paths.clone()) {
                     Ok((watcher, rx)) => {
-                        tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started");
+                        tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started (async)");
                         Some((
                             Message::WatcherStarted,
                             WatcherStreamState::Running {
@@ -175,36 +179,22 @@ pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = 
                     }
                 }
             }
-            WatcherStreamState::Running { _watcher, rx } => {
-                // Block on receiving the next event
-                // Use recv_timeout to yield back to async runtime periodically
-                match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                    Ok(event) => Some((
+            WatcherStreamState::Running { _watcher, mut rx } => {
+                // Non-blocking async receive - yields to other tasks while waiting
+                match rx.recv().await {
+                    Some(event) => Some((
                         Message::WatcherEvent(event),
                         WatcherStreamState::Running { _watcher, rx },
                     )),
-                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                        // No event, just continue polling
-                        Some((
-                            Message::WatcherEvent(scanner::WatchEvent::Error(String::new())), // Dummy, filtered out
-                            WatcherStreamState::Running { _watcher, rx },
-                        ))
-                    }
-                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                        tracing::warn!(target: "ui::watcher", "File watcher disconnected");
+                    None => {
+                        // Channel closed (watcher dropped)
+                        tracing::warn!(target: "ui::watcher", "File watcher channel closed");
                         Some((Message::WatcherStopped, WatcherStreamState::Done))
                     }
                 }
             }
             WatcherStreamState::Done => None,
         }
-    })
-    // Filter out empty error messages (timeout placeholders)
-    .filter(|msg| {
-        futures::future::ready(!matches!(
-            msg,
-            Message::WatcherEvent(scanner::WatchEvent::Error(s)) if s.is_empty()
-        ))
     })
 }
 
@@ -213,7 +203,7 @@ enum WatcherStreamState {
     Init { watch_paths: Vec<PathBuf> },
     Running {
         _watcher: scanner::FileWatcher,
-        rx: crossbeam_channel::Receiver<scanner::WatchEvent>,
+        rx: tokio::sync::mpsc::Receiver<scanner::WatchEvent>,
     },
     Done,
 }

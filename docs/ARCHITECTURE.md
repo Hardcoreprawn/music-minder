@@ -26,6 +26,7 @@ Music Minder is a cross-platform desktop music player written in Rust. It manage
 - **Composability**: Script workflows, chain commands
 
 **Pattern for new features:**
+
 1. Implement core logic as a library function
 2. Expose via `clap` CLI with `--verbose`, `--json`, `--dry-run` flags
 3. Add `tracing` instrumentation at key decision points
@@ -238,13 +239,13 @@ The audio thread runs asynchronously. The UI **never reads shared state directly
 
 **PlayerEvent types:**
 
-| Event | When Emitted | UI Action |
-|-------|--------------|-----------|
-| `StatusChanged(status)` | Play/pause/stop processed | Update transport buttons |
-| `TrackLoaded { path, duration, ... }` | New file decoded | Show track info, fetch cover |
-| `PositionChanged(duration)` | Seek processed | Update progress bar |
-| `PlaybackFinished` | Track ended naturally | Auto-advance queue |
-| `Error(message)` | Decode/playback failure | Show error toast |
+| Event                                  | When Emitted              | UI Action                     |
+| -------------------------------------- | ------------------------- | ----------------------------- |
+| `StatusChanged(status)`                | Play/pause/stop processed | Update transport buttons      |
+| `TrackLoaded { path, duration, ... }` | New file decoded          | Show track info, fetch cover  |
+| `PositionChanged(duration)`            | Seek processed            | Update progress bar           |
+| `PlaybackFinished`                     | Track ended naturally     | Auto-advance queue            |
+| `Error(message)`                       | Decode/playback failure   | Show error toast              |
 
 **Performance:** Events use `crossbeam_channel::try_send()` which is lock-free. The channel has 64 slots; if UI can't keep up, old events are dropped (acceptable since PlayerTick runs every 100ms).
 
@@ -360,6 +361,54 @@ The OS media controls run on a dedicated thread (`media_controls.rs`) and commun
 - **Inbound** (from OS): play/pause/next/prev/seek commands
 
 Polling happens in `ui/mod.rs` via `MediaControlPoll` subscription (50ms interval). Commands are converted to `MediaControlCommand` messages and routed through `handle_player()`.
+
+### Subscription Architecture
+
+Iced uses an **async subscription system** for background tasks. Each subscription is a `futures::Stream` that emits messages to the UI. Critically, Iced's internal subscription tracker uses **bounded channels** — if a subscription produces messages faster than the UI can consume them, the channel fills up and events are dropped.
+
+**Active Subscriptions:**
+
+| Subscription | Interval | Purpose | Implementation |
+|--------------|----------|---------|----------------|
+| `PlayerTick` | 33ms (~30fps) | Poll player events, update progress bar | `time::every()` |
+| `PlayerVisualizationTick` | 16ms (~60fps) | FFT data for spectrum analyzer | `time::every()` |
+| `MediaControlPoll` | 50ms | Poll OS media key commands | `time::every()` |
+| `WatcherStream` | N/A | File change notifications | **DISABLED** (see below) |
+
+**Key Constraints:**
+
+1. **No blocking in async streams**: Iced runs subscriptions cooperatively. A blocking call (like `recv_timeout()`) in one subscription starves ALL other subscriptions.
+2. **Bounded internal channels**: Iced's subscription tracker drops events when its internal channel fills. Originally we used `window::frames()` (~60fps) for `PlayerTick`, which overflowed the channel. Reduced to 30fps via `time::every(33ms)`.
+3. **CPU efficiency**: Faster tick rates consume more CPU. 30fps is sufficient for smooth progress bar updates.
+
+**Watcher Subscription (Fixed)**
+
+The file watcher subscription uses `tokio::sync::mpsc` with async `.recv().await` for non-blocking event polling. This allows other subscriptions (like `PlayerTick`) to continue firing normally.
+
+**Architecture:**
+
+- `FileWatcher::new_async()` returns a `tokio::sync::mpsc::Receiver<WatchEvent>`
+- The `notify` callback uses `tx.try_send()` which is safe from sync contexts
+- `watcher_stream()` uses `rx.recv().await` which yields to other async tasks
+- The sync `FileWatcher::new()` with `crossbeam_channel` is preserved for CLI use
+
+```rust
+// Non-blocking watcher stream
+pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
+    futures::stream::unfold(WatcherStreamState::Init { watch_paths }, |state| async move {
+        match state {
+            WatcherStreamState::Running { _watcher, mut rx } => {
+                // Non-blocking async receive - yields to other tasks while waiting
+                match rx.recv().await {
+                    Some(event) => Some((Message::WatcherEvent(event), ...)),
+                    None => Some((Message::WatcherStopped, WatcherStreamState::Done)),
+                }
+            }
+            // ...
+        }
+    })
+}
+```
 
 ## Mutation Philosophy
 

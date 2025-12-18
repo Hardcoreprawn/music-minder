@@ -206,7 +206,7 @@ cargo run --release
 
 This phase focuses on making the library actually usable for large collections.
 
-### 7.1 Smart Background Scanning ✅
+### 7.1 Smart Background Scanning ⚠️
 
 Never interrupt playback. Keep the library fresh automatically.
 
@@ -218,6 +218,7 @@ Never interrupt playback. Keep the library fresh automatically.
 - [x] **Never interrupt audio**: File changes queued, processed in batches
 - [x] **CLI command**: `music-minder watch <path> -v --db <db> --scan-first`
 - [x] **Manual refresh**: Button to force full rescan if needed
+- [x] **Re-architect watcher subscription**: Migrated to `tokio::sync::mpsc` with async `.recv().await` to avoid blocking the runtime
 
 ### 7.2 Library Search & Filter (High Priority)
 
