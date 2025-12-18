@@ -477,8 +477,54 @@ impl AudioThreadContext {
     /// (audio callback) may still be reading.
     /// Send an event to the UI. Ignores send failures (UI may have disconnected).
     fn emit(&self, event: PlayerEvent) {
-        tracing::debug!(target: "player::events", "Emit: {:?}", event);
-        let _ = self.event_tx.try_send(event);
+        // Log the event being emitted with full context
+        match &event {
+            PlayerEvent::StatusChanged(status) => {
+                tracing::debug!(
+                    target: "player::events",
+                    status = ?status,
+                    "Emitting StatusChanged event"
+                );
+            }
+            PlayerEvent::TrackLoaded { path, duration, .. } => {
+                tracing::debug!(
+                    target: "player::events",
+                    path = ?path.file_name(),
+                    duration_ms = duration.as_millis(),
+                    "Emitting TrackLoaded event"
+                );
+            }
+            PlayerEvent::PositionChanged(pos) => {
+                tracing::trace!(
+                    target: "player::events",
+                    position_ms = pos.as_millis(),
+                    "Emitting PositionChanged event"
+                );
+            }
+            PlayerEvent::PlaybackFinished => {
+                tracing::debug!(target: "player::events", "Emitting PlaybackFinished event");
+            }
+            PlayerEvent::Error(err) => {
+                tracing::warn!(target: "player::events", error = %err, "Emitting Error event");
+            }
+        }
+        
+        // Try to send, log if channel is full (potential timing issue)
+        match self.event_tx.try_send(event) {
+            Ok(()) => {}
+            Err(crossbeam_channel::TrySendError::Full(_)) => {
+                tracing::warn!(
+                    target: "player::events",
+                    "Event channel full - UI may be falling behind"
+                );
+            }
+            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                tracing::debug!(
+                    target: "player::events",
+                    "Event channel disconnected - UI shutting down"
+                );
+            }
+        }
     }
 
     /// Handle a player command, returning whether to continue running
@@ -489,19 +535,35 @@ impl AudioThreadContext {
         audio_shared: &AudioSharedState,
         producer: &mut Producer<f32>,
     ) -> bool {
+        tracing::debug!(
+            target: "player::commands",
+            command = ?cmd,
+            current_status = ?state.read().status,
+            has_decoder = self.decoder.is_some(),
+            has_pending = self.pending_path.is_some(),
+            "Audio thread received command"
+        );
+        
         match cmd {
             PlayerCommand::Load(path) => {
+                tracing::info!(
+                    target: "player::commands",
+                    path = ?path.file_name(),
+                    "Queuing track for load"
+                );
                 self.pending_path = Some(path);
             }
             PlayerCommand::Play => {
                 self.start_or_resume(state, audio_shared, producer);
             }
             PlayerCommand::Pause => {
+                tracing::debug!(target: "player::commands", "Processing Pause command");
                 state.write().status = PlaybackStatus::Paused;
                 audio_shared.set_playing(false);
                 self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Paused));
             }
             PlayerCommand::Stop => {
+                tracing::debug!(target: "player::commands", "Processing Stop command");
                 state.write().status = PlaybackStatus::Stopped;
                 audio_shared.set_playing(false);
                 self.decoder = None;
@@ -509,12 +571,28 @@ impl AudioThreadContext {
                 self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
             }
             PlayerCommand::Seek(pos) => {
+                tracing::debug!(
+                    target: "player::commands",
+                    seek_fraction = pos,
+                    "Processing Seek command"
+                );
                 if let Some(ref mut dec) = self.decoder {
                     // Flush the ring buffer before seeking
                     // This prevents hearing stale audio after seek
                     // Note: We reset the sample counter and position to signal discontinuity
                     let _slots = producer.slots();
-                    audio_shared.set_position(Duration::ZERO);
+                    
+                    // Calculate new position immediately so UI updates instantly
+                    let duration = dec.duration();
+                    let new_pos = duration.mul_f32(pos);
+                    tracing::debug!(
+                        target: "player::commands",
+                        new_pos_ms = new_pos.as_millis(),
+                        duration_ms = duration.as_millis(),
+                        "Seek calculated position"
+                    );
+                    audio_shared.set_position(new_pos);
+                    
                     self.sample_counter = 0;
 
                     // Reset resampler state to avoid artifacts
@@ -523,12 +601,17 @@ impl AudioThreadContext {
                     }
 
                     if let Err(e) = dec.seek(pos) {
-                        tracing::warn!("Seek failed: {}", e);
+                        tracing::warn!(target: "player::commands", error = %e, "Seek failed");
                         self.emit(PlayerEvent::Error(format!("Seek failed: {}", e)));
                     }
+                } else {
+                    tracing::warn!(target: "player::commands", "Seek ignored - no decoder");
                 }
             }
-            PlayerCommand::Shutdown => return false,
+            PlayerCommand::Shutdown => {
+                tracing::info!(target: "player::commands", "Shutdown command received");
+                return false;
+            }
         }
         true
     }
@@ -539,13 +622,37 @@ impl AudioThreadContext {
         audio_shared: &AudioSharedState,
         producer: &mut Producer<f32>,
     ) {
+        tracing::debug!(
+            target: "player::commands",
+            has_pending = self.pending_path.is_some(),
+            has_decoder = self.decoder.is_some(),
+            "start_or_resume called"
+        );
+        
         match self.pending_path.take() {
-            Some(path) => self.load_and_play(path, state, audio_shared, producer),
+            Some(path) => {
+                tracing::debug!(
+                    target: "player::commands",
+                    path = ?path.file_name(),
+                    "Loading new track"
+                );
+                self.load_and_play(path, state, audio_shared, producer);
+            }
             None => {
-                // Resume playback
-                state.write().status = PlaybackStatus::Playing;
-                audio_shared.set_playing(true);
-                self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Playing));
+                // Only resume if we have a decoder (track loaded)
+                if self.decoder.is_some() {
+                    // Resume playback
+                    tracing::debug!(target: "player::commands", "Resuming existing track");
+                    state.write().status = PlaybackStatus::Playing;
+                    audio_shared.set_playing(true);
+                    self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Playing));
+                } else {
+                    tracing::warn!(target: "player::commands", "Play command ignored: No track loaded");
+                    // Ensure we are stopped
+                    state.write().status = PlaybackStatus::Stopped;
+                    audio_shared.set_playing(false);
+                    self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
+                }
             }
         }
     }

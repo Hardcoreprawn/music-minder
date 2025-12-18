@@ -178,8 +178,25 @@ impl Player {
         self.queue.add(QueueItem::from_path(path));
     }
 
+    /// Play the current track in the queue (loading it if necessary).
+    ///
+    /// If paused, resumes playback.
+    /// If playing, does nothing.
+    /// If stopped, reloads the current queue item and plays.
+    pub fn play_current(&mut self) -> Result<(), PlayerError> {
+        let status = self.state.read().status;
+        if status == PlaybackStatus::Paused {
+            self.play()
+        } else if status == PlaybackStatus::Playing {
+            Ok(()) // Already playing, do nothing
+        } else {
+            self.load_and_play_current()
+        }
+    }
+
     /// Play / resume playback.
     pub fn play(&self) -> Result<(), PlayerError> {
+        tracing::debug!(target: "player::commands", "Player::play() - sending Play command");
         self.command_tx
             .send(PlayerCommand::Play)
             .map_err(|_| PlayerError::ChannelClosed)
@@ -187,6 +204,7 @@ impl Player {
 
     /// Pause playback.
     pub fn pause(&self) -> Result<(), PlayerError> {
+        tracing::debug!(target: "player::commands", "Player::pause() - sending Pause command");
         self.command_tx
             .send(PlayerCommand::Pause)
             .map_err(|_| PlayerError::ChannelClosed)
@@ -195,10 +213,24 @@ impl Player {
     /// Toggle play/pause.
     pub fn toggle(&self) -> Result<(), PlayerError> {
         let status = self.state.read().status;
+        tracing::debug!(
+            target: "player::toggle",
+            status = ?status,
+            "Player::toggle() - deciding action based on current state"
+        );
         match status {
-            PlaybackStatus::Playing => self.pause(),
-            PlaybackStatus::Paused | PlaybackStatus::Stopped => self.play(),
-            PlaybackStatus::Loading => Ok(()),
+            PlaybackStatus::Playing => {
+                tracing::debug!(target: "player::toggle", "Sending Pause command");
+                self.pause()
+            }
+            PlaybackStatus::Paused | PlaybackStatus::Stopped => {
+                tracing::debug!(target: "player::toggle", "Sending Play command");
+                self.play()
+            }
+            PlaybackStatus::Loading => {
+                tracing::debug!(target: "player::toggle", "Ignoring toggle - currently Loading");
+                Ok(())
+            }
         }
     }
 
