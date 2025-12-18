@@ -11,7 +11,8 @@ Write-Host "🔧 Setting up Music Minder development environment..." -Foreground
 if (-not $SkipHooks) {
     Write-Host "📎 Installing git hooks..." -ForegroundColor Yellow
     
-    $hooksDir = Join-Path $PSScriptRoot "..\..\.git\hooks"
+    $repoRoot = Split-Path $PSScriptRoot -Parent
+    $hooksDir = Join-Path $repoRoot ".git\hooks"
     $preCommitDest = Join-Path $hooksDir "pre-commit"
     
     # Create hooks directory if it doesn't exist

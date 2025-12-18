@@ -290,7 +290,7 @@ impl Drop for FileWatcher {
 }
 
 /// Check if a path is an audio file by extension.
-fn is_audio_file(path: &PathBuf) -> bool {
+fn is_audio_file(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| {
@@ -303,7 +303,7 @@ fn is_audio_file(path: &PathBuf) -> bool {
 }
 
 /// Check if a path looks like it could be an audio file (for deleted files).
-fn looks_like_audio_path(path: &PathBuf) -> bool {
+fn looks_like_audio_path(path: &std::path::Path) -> bool {
     is_audio_file(path)
 }
 

@@ -849,6 +849,7 @@ impl AudioThreadContext {
 }
 
 /// Main loop for the audio/decoder thread.
+#[allow(clippy::too_many_arguments)]
 fn audio_thread_main(
     state: Arc<RwLock<PlayerState>>,
     audio_shared: Arc<AudioSharedState>,

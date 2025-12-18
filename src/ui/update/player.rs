@@ -235,11 +235,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             }
             // Log position drift if significant (>100ms) and not seeking
             if s.seek_preview.is_none() {
-                let pos_diff = if s.player_state.position > real_state.position {
-                    s.player_state.position - real_state.position
-                } else {
-                    real_state.position - s.player_state.position
-                };
+                let pos_diff = s.player_state.position.abs_diff(real_state.position);
                 if pos_diff > std::time::Duration::from_millis(100) {
                     tracing::debug!(
                         target: "ui::sync",
@@ -255,10 +251,10 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             auto_queue_if_needed(player, s);
 
             // === PHASE 3: Update visualization if playing ===
-            if s.player_state.status == crate::player::PlaybackStatus::Playing {
-                if let Some(viz) = player.visualization() {
-                    s.visualization = viz;
-                }
+            if s.player_state.status == crate::player::PlaybackStatus::Playing
+                && let Some(viz) = player.visualization()
+            {
+                s.visualization = viz;
             }
 
             // === PHASE 4: Poll media controls ===
