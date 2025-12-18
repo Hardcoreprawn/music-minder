@@ -43,6 +43,18 @@ pub enum VisualizationMode {
     Off,
 }
 
+/// Column to sort the library by
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SortColumn {
+    #[default]
+    Title,
+    Artist,
+    Album,
+    Year,
+    Duration,
+    Format,
+}
+
 /// Virtualization constants - defined once, used everywhere
 pub mod virtualization {
     /// Height of each track row in pixels
@@ -73,6 +85,14 @@ pub struct LoadedState {
     // Scroll state for track list
     pub scroll_offset: f32,
     pub viewport_height: f32,
+
+    // Search and filter state
+    pub search_query: String,
+    pub filtered_indices: Vec<usize>, // Indices into `tracks` that match search/filters
+    pub sort_column: SortColumn,
+    pub sort_ascending: bool,
+    pub filter_format: Option<String>, // None = all formats, Some("FLAC") = only FLAC
+    pub filter_lossless: Option<bool>, // None = all, Some(true) = lossless only
 
     // Scroll state for preview list
     pub preview_scroll_offset: f32,

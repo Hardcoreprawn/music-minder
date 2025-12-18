@@ -8,8 +8,8 @@ use crate::{diagnostics, enrichment, organizer, player};
 use super::super::messages::Message;
 use super::super::platform::get_user_music_folder;
 use super::super::state::{
-    ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, VisualizationMode,
-    WatcherState,
+    ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, SortColumn,
+    VisualizationMode, WatcherState,
 };
 use super::load_tracks_task;
 
@@ -100,6 +100,13 @@ pub fn handle_db_init(
                     watch_paths: vec![music_folder],
                     ..Default::default()
                 },
+                // Search and filter state
+                search_query: String::new(),
+                filtered_indices: vec![],
+                sort_column: SortColumn::Title,
+                sort_ascending: true,
+                filter_format: None,
+                filter_lossless: None,
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])

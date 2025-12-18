@@ -247,6 +247,15 @@ impl MusicMinder {
                 return update::handle_watcher(s, message);
             }
 
+            // Search and filter messages
+            Message::SearchQueryChanged(_)
+            | Message::SortByColumn(_)
+            | Message::FilterByFormat(_)
+            | Message::FilterByLossless(_)
+            | Message::ClearFilters => {
+                return update::handle_search_filter(s, message);
+            }
+
             _ => {}
         }
         Task::none()

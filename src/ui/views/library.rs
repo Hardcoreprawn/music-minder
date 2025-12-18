@@ -8,7 +8,7 @@ use iced::{Element, Length};
 use crate::db::TrackWithMetadata;
 use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
-use crate::ui::state::{LoadedState, OrganizeView, virtualization as virt};
+use crate::ui::state::{LoadedState, OrganizeView, SortColumn, virtualization as virt};
 
 use super::helpers::{action_button, calc_visible_range};
 
@@ -20,18 +20,28 @@ pub fn library_pane(s: &LoadedState) -> Element<'_, Message> {
     let scan_path = s.scan_path.display().to_string();
 
     // Loading indicator for tracks
+    let (filtered_count, total_count) =
+        if s.filtered_indices.is_empty() && s.search_query.is_empty() {
+            (s.tracks.len(), s.tracks.len())
+        } else {
+            (s.filtered_indices.len(), s.tracks.len())
+        };
+
     let track_count_text = if s.is_scanning {
         text("Loading tracks...").size(16).color([0.6, 0.6, 0.6])
+    } else if filtered_count == total_count {
+        text(format!("{} tracks", total_count)).size(16)
     } else {
-        text(format!("{} tracks", s.tracks.len())).size(16)
+        text(format!("{} of {} tracks", filtered_count, total_count)).size(16)
     };
 
     column![
         text("Library").size(28),
         scan_controls(s, scan_path),
+        search_bar(s),
         track_count_text,
         Space::with_height(10),
-        track_table_header(),
+        track_table_header(s),
         track_list(s),
     ]
     .spacing(10)
@@ -55,6 +65,103 @@ fn scan_controls(state: &LoadedState, path_display: String) -> Element<'_, Messa
     ]
     .spacing(10)
     .into()
+}
+
+/// Renders the search bar and filter chips
+fn search_bar(state: &LoadedState) -> Element<'_, Message> {
+    let search_input = text_input("Search tracks...", &state.search_query)
+        .on_input(Message::SearchQueryChanged)
+        .padding(8)
+        .width(Length::FillPortion(3));
+
+    // Filter chips
+    let format_filters = ["FLAC", "MP3", "WAV", "OGG", "AAC"];
+    let format_chips: Vec<Element<Message>> = format_filters
+        .iter()
+        .map(|&fmt| {
+            let is_active = state.filter_format.as_deref() == Some(fmt);
+            let style = if is_active {
+                chip_style_active
+            } else {
+                chip_style_inactive
+            };
+            let msg = if is_active {
+                Message::FilterByFormat(None)
+            } else {
+                Message::FilterByFormat(Some(fmt.to_string()))
+            };
+            button(text(fmt).size(11))
+                .padding([4, 8])
+                .style(style)
+                .on_press(msg)
+                .into()
+        })
+        .collect();
+
+    // Lossless filter chip
+    let lossless_active = state.filter_lossless == Some(true);
+    let lossless_chip: Element<Message> = button(text("Lossless").size(11))
+        .padding([4, 8])
+        .style(if lossless_active {
+            chip_style_active
+        } else {
+            chip_style_inactive
+        })
+        .on_press(if lossless_active {
+            Message::FilterByLossless(None)
+        } else {
+            Message::FilterByLossless(Some(true))
+        })
+        .into();
+
+    // Clear filters button (only show when filters active)
+    let has_filters = !state.search_query.is_empty()
+        || state.filter_format.is_some()
+        || state.filter_lossless.is_some();
+
+    let clear_btn: Element<Message> = if has_filters {
+        button(text("Clear").size(11))
+            .padding([4, 8])
+            .on_press(Message::ClearFilters)
+            .into()
+    } else {
+        Space::with_width(Length::Shrink).into()
+    };
+
+    row![
+        search_input,
+        row(format_chips).spacing(4),
+        lossless_chip,
+        clear_btn,
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// Active filter chip style
+fn chip_style_active(_theme: &iced::Theme, _status: button::Status) -> button::Style {
+    button::Style {
+        background: Some(iced::Background::Color([0.3, 0.5, 0.7].into())),
+        text_color: iced::Color::WHITE,
+        border: iced::Border {
+            radius: 12.0.into(),
+            ..Default::default()
+        },
+        shadow: iced::Shadow::default(),
+    }
+}
+
+/// Inactive filter chip style
+fn chip_style_inactive(_theme: &iced::Theme, _status: button::Status) -> button::Style {
+    button::Style {
+        background: Some(iced::Background::Color([0.25, 0.25, 0.3].into())),
+        text_color: iced::Color::from_rgb(0.7, 0.7, 0.7),
+        border: iced::Border {
+            radius: 12.0.into(),
+            ..Default::default()
+        },
+        shadow: iced::Shadow::default(),
+    }
 }
 
 /// Renders the organize section based on current view
@@ -230,18 +337,62 @@ fn preview_item<'a>(
 
 /// Renders virtualized track list with play buttons
 fn track_list(state: &LoadedState) -> Element<'_, Message> {
+    // Use filtered indices if filtering is active, otherwise show all tracks
+    let display_indices: &[usize] = if state.filtered_indices.is_empty()
+        && state.search_query.is_empty()
+        && state.filter_format.is_none()
+        && state.filter_lossless.is_none()
+    {
+        // No filtering - create indices for all tracks (done inline)
+        &[]
+    } else {
+        &state.filtered_indices
+    };
+
+    // Get total count for virtualization
+    let total_count = if display_indices.is_empty() && state.search_query.is_empty() {
+        state.tracks.len()
+    } else {
+        display_indices.len()
+    };
+
     let (start, end, top, bottom) = calc_visible_range(
         state.scroll_offset,
         state.viewport_height,
-        state.tracks.len(),
+        total_count,
         virt::TRACK_ROW_HEIGHT,
     );
+
     let selected = state.enrichment.selected_track;
-    let items = state.tracks[start..end].iter().enumerate().map(|(i, t)| {
-        let idx = start + i;
-        let is_selected = selected == Some(idx);
-        track_row(t, idx, is_selected)
-    });
+
+    // Build track rows based on whether we're filtering or not
+    let items: Vec<Element<Message>> =
+        if display_indices.is_empty() && state.search_query.is_empty() {
+            // No filtering - iterate directly over tracks slice
+            state.tracks[start..end]
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let idx = start + i;
+                    let is_selected = selected == Some(idx);
+                    track_row(t, idx, is_selected)
+                })
+                .collect()
+        } else {
+            // Filtering active - use filtered indices
+            display_indices[start..end]
+                .iter()
+                .map(|&idx| {
+                    let is_selected = selected == Some(idx);
+                    if let Some(t) = state.tracks.get(idx) {
+                        track_row(t, idx, is_selected)
+                    } else {
+                        Space::with_height(Length::Fixed(virt::TRACK_ROW_HEIGHT)).into()
+                    }
+                })
+                .collect()
+        };
+
     scrollable(
         column![
             Space::with_height(Length::Fixed(top)),
@@ -256,27 +407,100 @@ fn track_list(state: &LoadedState) -> Element<'_, Message> {
     .into()
 }
 
-/// Renders the table header row
-fn track_table_header() -> Element<'static, Message> {
+/// Renders the table header row with sortable columns
+fn track_table_header(state: &LoadedState) -> Element<'_, Message> {
     row![
         // Spacer for play/queue buttons
         Space::with_width(Length::Fixed(70.0)),
         // Title column
-        container(text("Title").size(12).color(MUTED_COLOR)).width(Length::FillPortion(3)),
+        sortable_header("Title", SortColumn::Title, state),
         // Artist column
-        container(text("Artist").size(12).color(MUTED_COLOR)).width(Length::FillPortion(2)),
+        sortable_header("Artist", SortColumn::Artist, state),
         // Album column
-        container(text("Album").size(12).color(MUTED_COLOR)).width(Length::FillPortion(2)),
+        sortable_header("Album", SortColumn::Album, state),
         // Year column
-        container(text("Year").size(12).color(MUTED_COLOR)).width(Length::Fixed(50.0)),
+        container(sortable_header_btn("Year", SortColumn::Year, state)).width(Length::Fixed(50.0)),
         // Duration column
-        container(text("Duration").size(12).color(MUTED_COLOR)).width(Length::Fixed(60.0)),
+        container(sortable_header_btn("Duration", SortColumn::Duration, state))
+            .width(Length::Fixed(60.0)),
         // Format column
-        container(text("Format").size(12).color(MUTED_COLOR)).width(Length::Fixed(50.0)),
+        container(sortable_header_btn("Format", SortColumn::Format, state))
+            .width(Length::Fixed(50.0)),
     ]
     .spacing(8)
     .padding([4, 0])
     .into()
+}
+
+/// Creates a sortable header button that fills available space
+fn sortable_header<'a>(
+    label: &'static str,
+    col: SortColumn,
+    state: &LoadedState,
+) -> Element<'a, Message> {
+    let is_sorted = state.sort_column == col;
+    let arrow = if is_sorted {
+        if state.sort_ascending { " ▲" } else { " ▼" }
+    } else {
+        ""
+    };
+    let color = if is_sorted {
+        [0.9, 0.9, 0.95]
+    } else {
+        MUTED_COLOR
+    };
+
+    let portion = match col {
+        SortColumn::Title => 3,
+        SortColumn::Artist | SortColumn::Album => 2,
+        _ => 1,
+    };
+
+    button(text(format!("{}{}", label, arrow)).size(12).color(color))
+        .padding([2, 4])
+        .style(header_btn_style)
+        .on_press(Message::SortByColumn(col))
+        .width(Length::FillPortion(portion))
+        .into()
+}
+
+/// Creates a sortable header button for fixed-width columns
+fn sortable_header_btn<'a>(
+    label: &'static str,
+    col: SortColumn,
+    state: &LoadedState,
+) -> Element<'a, Message> {
+    let is_sorted = state.sort_column == col;
+    let arrow = if is_sorted {
+        if state.sort_ascending { " ▲" } else { " ▼" }
+    } else {
+        ""
+    };
+    let color = if is_sorted {
+        [0.9, 0.9, 0.95]
+    } else {
+        MUTED_COLOR
+    };
+
+    button(text(format!("{}{}", label, arrow)).size(12).color(color))
+        .padding([2, 4])
+        .style(header_btn_style)
+        .on_press(Message::SortByColumn(col))
+        .into()
+}
+
+/// Style for header buttons (transparent background)
+fn header_btn_style(_theme: &iced::Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Background::Color([0.25, 0.25, 0.3].into())),
+        _ => None,
+    };
+    button::Style {
+        background: bg,
+        text_color: iced::Color::WHITE,
+        border: iced::Border::default(),
+        shadow: iced::Shadow::default(),
+    }
 }
 
 /// Format duration as mm:ss

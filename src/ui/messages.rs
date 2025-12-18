@@ -1,6 +1,6 @@
 //! Message types for the Music Minder UI.
 
-use super::state::{ActivePane, LoadedCoverArt, VisualizationMode};
+use super::state::{ActivePane, LoadedCoverArt, SortColumn, VisualizationMode};
 use crate::{db, diagnostics, enrichment, library, organizer, player, scanner};
 use iced::widget::scrollable::Viewport;
 use sqlx::SqlitePool;
@@ -29,6 +29,13 @@ pub enum Message {
     // Scroll messages
     ScrollChanged(Viewport),
     PreviewScrollChanged(Viewport),
+
+    // Search and filter messages
+    SearchQueryChanged(String),
+    SortByColumn(SortColumn),
+    FilterByFormat(Option<String>),
+    FilterByLossless(Option<bool>),
+    ClearFilters,
 
     // Organize messages
     OrganizeDestinationChanged(String),

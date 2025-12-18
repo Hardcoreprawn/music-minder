@@ -222,11 +222,11 @@ Never interrupt playback. Keep the library fresh automatically.
 
 ### 7.2 Library Search & Filter (High Priority)
 
-- [ ] **Search bar**: Filter tracks by typing (searches title, artist, album)
-- [ ] **Instant filtering**: Results update as you type (no Enter needed)
-- [ ] **Column sorting**: Click column headers to sort (Artist, Album, Title, Duration)
-- [ ] **Sort indicator**: Visual arrow showing sort direction
-- [ ] **Filter chips**: Quick filters for format (FLAC/MP3), lossless, etc.
+- [x] **Search bar**: Filter tracks by typing (searches title, artist, album)
+- [x] **Instant filtering**: Results update as you type (no Enter needed)
+- [x] **Column sorting**: Click column headers to sort (Artist, Album, Title, Duration)
+- [x] **Sort indicator**: Visual arrow showing sort direction
+- [x] **Filter chips**: Quick filters for format (FLAC/MP3), lossless, etc.
 - [ ] **Artist/Album grouping**: Collapsible groups in library view
 
 ### 7.3 Queue Management (High Priority)

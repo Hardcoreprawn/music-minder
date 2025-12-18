@@ -8,6 +8,7 @@
 //! - `player`: Audio playback and media controls
 //! - `diagnostics`: System diagnostics and cover art
 //! - `watcher`: Background file system watching
+//! - `search`: Search and filter functionality
 
 mod db;
 mod diagnostics;
@@ -15,6 +16,7 @@ mod enrichment;
 mod organize;
 mod player;
 mod scan;
+mod search;
 mod watcher;
 
 use iced::Task;
@@ -31,6 +33,7 @@ pub use enrichment::handle_enrichment;
 pub use organize::{handle_organize, handle_undo};
 pub use player::handle_player;
 pub use scan::handle_scan;
+pub use search::handle_search_filter;
 pub use watcher::handle_watcher;
 
 /// Helper to load tracks from database
