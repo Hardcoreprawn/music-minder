@@ -10,11 +10,10 @@ mod update;
 mod views;
 
 use iced::widget::{container, text};
-use iced::{Element, Length, Subscription, Task, time};
+use iced::{time, Element, Length, Subscription, Task};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::player::PlaybackStatus;
 pub use messages::Message;
 use state::AppState;
 
@@ -68,7 +67,7 @@ impl MusicMinder {
             ));
         }
 
-        // Background file watcher - always active when enabled
+        // Background file watcher - uses async channel to avoid blocking the runtime
         if s.watcher_state.active && !s.watcher_state.watch_paths.is_empty() {
             subscriptions.push(Subscription::run_with_id(
                 "file-watcher",
@@ -76,26 +75,13 @@ impl MusicMinder {
             ));
         }
 
-        // Player event polling (every 100ms) - ALWAYS runs when player exists
-        // This is critical for event-driven state updates. Without this, the UI
-        // never receives StatusChanged events and can't update the play/pause button.
-        if s.player.is_some() {
-            subscriptions
-                .push(time::every(Duration::from_millis(100)).map(|_| Message::PlayerTick));
-        }
-
-        // Visualization update (every 33ms = ~30fps) - only when playing
-        if s.player_state.status == PlaybackStatus::Playing {
-            subscriptions.push(
-                time::every(Duration::from_millis(33)).map(|_| Message::PlayerVisualizationTick),
-            );
-        }
-
-        // OS media controls polling (every 50ms) - always active when media controls available
-        if s.media_controls.is_some() {
-            subscriptions
-                .push(time::every(Duration::from_millis(50)).map(|_| Message::MediaControlPoll));
-        }
+        // Player event polling - Poll at 30fps (33ms) for smooth progress bar updates.
+        // Uses time::every() instead of window::frames() because:
+        // 1. window::frames() fires at monitor refresh rate (60-144+ fps)
+        // 2. Iced's subscription tracker has a bounded channel that can overflow
+        // 3. This caused "TrySendError { kind: Full }" and dropped ticks
+        // 30fps is sufficient for event polling and visualization updates.
+        subscriptions.push(time::every(Duration::from_millis(33)).map(|_| Message::PlayerTick));
 
         Subscription::batch(subscriptions)
     }
@@ -117,6 +103,12 @@ impl MusicMinder {
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Debug: log every message type at top level
+        let is_tick = matches!(message, Message::PlayerTick | Message::PlayerVisualizationTick);
+        if !is_tick {
+            tracing::trace!(target: "ui::update", message = ?message, "Update received");
+        }
+        
         // Handle messages that work regardless of state
         match &message {
             Message::DbInitialized(result) => {
@@ -213,7 +205,8 @@ impl MusicMinder {
             | Message::PlayerStop
             | Message::PlayerNext
             | Message::PlayerPrevious
-            | Message::PlayerSeek(_)
+            | Message::PlayerSeekPreview(_)
+            | Message::PlayerSeekRelease
             | Message::PlayerVolumeChanged(_)
             | Message::PlayerPlayTrack(_)
             | Message::PlayerQueueTrack(_)
@@ -221,30 +214,11 @@ impl MusicMinder {
             | Message::PlayerVisualizationTick
             | Message::PlayerVisualizationModeChanged(_)
             | Message::PlayerEvent(_)
-            | Message::MediaControlCommand(_) => {
+            | Message::MediaControlCommand(_)
+            | Message::MediaControlPoll => {
+                // Note: MediaControlPoll is now handled in PlayerTick for simplicity,
+                // but we keep it routed here as a fallback
                 return update::handle_player(s, message);
-            }
-
-            // OS media controls polling - process all queued commands
-            Message::MediaControlPoll => {
-                // Collect commands first to avoid borrow conflicts
-                let commands: Vec<_> = s
-                    .media_controls
-                    .as_ref()
-                    .map(|mc| {
-                        let mut cmds = Vec::new();
-                        while let Some(cmd) = mc.try_recv_command() {
-                            tracing::debug!("Media control command: {:?}", cmd);
-                            cmds.push(cmd);
-                        }
-                        cmds
-                    })
-                    .unwrap_or_default();
-
-                // Process each command through the standard handler
-                for cmd in commands {
-                    let _ = update::handle_player(s, Message::MediaControlCommand(cmd));
-                }
             }
 
             // Diagnostics messages

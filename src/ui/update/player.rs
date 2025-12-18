@@ -58,11 +58,18 @@ use super::resolve_cover_art_task;
 /// MediaControlCommand is converted to the equivalent action and uses
 /// the same code path as direct UI messages.
 pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
+    // Log entry to diagnose if handler is being reached
+    let is_tick = matches!(msg, Message::PlayerTick);
+    if !is_tick {
+        tracing::debug!(target: "ui::handler", message = ?msg, "handle_player entered");
+    }
+    
     // Ensure player is initialized
     s.ensure_player();
 
     // Take the player out temporarily to avoid borrow conflicts
     let Some(mut player) = s.player.take() else {
+        tracing::error!(target: "ui::handler", "Player is None! Cannot handle message");
         s.status_message = "Audio output not available".to_string();
         return Task::none();
     };
@@ -92,24 +99,36 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
 
         // UI messages - use same helpers
         Message::PlayerPlay => {
-            // Check current state
-            let queue_empty = player.queue().is_empty();
-            let no_track = s.player_state.current_track.is_none();
-            tracing::debug!(target: "ui::commands", "PlayerPlay: queue_empty={}, no_track={}", queue_empty, no_track);
+            // Simplified Play logic:
+            // 1. If we have a track loaded (Paused), resume it.
+            // 2. If we are Stopped but have a current track in queue, play it.
+            // 3. If no current track but queue has items, start from top.
+            // 4. Otherwise, warn.
             
-            if queue_empty && no_track {
-                // Nothing queued, nothing playing → start random shuffle
-                start_random_shuffle(player, s);
-            } else if !queue_empty && no_track {
-                // Queue has tracks but nothing loaded → start from queue
+            let status = s.player_state.status;
+            let queue_has_current = player.queue().current().is_some();
+            let queue_has_items = !player.queue().is_empty();
+            
+            tracing::debug!(target: "ui::commands", "PlayerPlay: status={:?}, queue_has_current={}, queue_has_items={}", status, queue_has_current, queue_has_items);
+
+            if status == crate::player::PlaybackStatus::Paused {
+                do_play(player, s);
+            } else if queue_has_current {
+                // Stopped but have a current track - reload and play
+                if let Err(e) = player.play_current() {
+                    s.status_message = format!("Play error: {}", e);
+                } else {
+                    on_track_changed(player, s);
+                }
+            } else if queue_has_items {
+                // Start from the top of the queue
                 if let Err(e) = player.skip_forward() {
                     s.status_message = format!("Play error: {}", e);
                 } else {
                     on_track_changed(player, s);
                 }
             } else {
-                // Track is loaded → resume playback
-                do_play(player, s);
+                s.status_message = "Queue is empty. Add tracks or use Shuffle.".to_string();
             }
         }
 
@@ -118,9 +137,41 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         Message::PlayerStop => do_stop(player, s),
         Message::PlayerNext => do_next(player, s),
         Message::PlayerPrevious => do_previous(player, s),
-        Message::PlayerSeek(pos) => do_seek(player, s, pos),
+        
+        // Seek preview - just update UI display, no audio seek yet
+        Message::PlayerSeekPreview(pos) => {
+            tracing::trace!(
+                target: "ui::seek",
+                preview_pos = pos,
+                current_pos_ms = s.player_state.position.as_millis(),
+                duration_ms = s.player_state.duration.as_millis(),
+                "Seek preview started/updated"
+            );
+            s.seek_preview = Some(pos);
+        }
+        
+        // Seek release - perform actual seek using stored preview position, then clear preview
+        Message::PlayerSeekRelease => {
+            if let Some(pos) = s.seek_preview.take() {
+                tracing::debug!(
+                    target: "ui::seek",
+                    seek_to = pos,
+                    duration_ms = s.player_state.duration.as_millis(),
+                    "Seek release - performing actual seek"
+                );
+                do_seek(player, s, pos);
+            } else {
+                tracing::warn!(target: "ui::seek", "Seek release called but no preview position set");
+            }
+        }
 
         Message::PlayerVolumeChanged(vol) => {
+            tracing::debug!(
+                target: "ui::volume",
+                old_volume = s.player_state.volume,
+                new_volume = vol,
+                "Volume changed"
+            );
             player.set_volume(vol);
             s.player_state.volume = vol;
         }
@@ -142,13 +193,103 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         }
 
         Message::PlayerTick => {
-            // Poll for events from the audio thread
-            for event in player.poll_events() {
+            // === PHASE 1: Poll events from audio thread ===
+            let events = player.poll_events();
+            let event_count = events.len();
+            
+            // Log tick with full context for debugging timing issues
+            tracing::debug!(
+                target: "ui::tick",
+                tick_events = event_count,
+                ui_status = ?s.player_state.status,
+                ui_pos_ms = s.player_state.position.as_millis(),
+                ui_dur_ms = s.player_state.duration.as_millis(),
+                seek_preview = ?s.seek_preview,
+                "PlayerTick start"
+            );
+            
+            for event in events {
                 handle_player_event(event, player, s);
             }
-            // Update position from lock-free atomics (always up-to-date)
-            s.player_state.position = player.state().position;
+            
+            // === PHASE 2: Sync state from player (source of truth) ===
+            // This happens AFTER events so we have the latest state
+            let real_state = player.state();
+
+            // Log any desyncs we detect and fix
+            if s.player_state.status != real_state.status {
+                tracing::warn!(
+                    target: "ui::sync",
+                    ui_status = ?s.player_state.status,
+                    real_status = ?real_state.status,
+                    "Fixed status desync"
+                );
+            }
+            if s.player_state.duration != real_state.duration {
+                tracing::warn!(
+                    target: "ui::sync",
+                    ui_dur_ms = s.player_state.duration.as_millis(),
+                    real_dur_ms = real_state.duration.as_millis(),
+                    "Fixed duration desync"
+                );
+            }
+            // Log position drift if significant (>100ms) and not seeking
+            if s.seek_preview.is_none() {
+                let pos_diff = if s.player_state.position > real_state.position {
+                    s.player_state.position - real_state.position
+                } else {
+                    real_state.position - s.player_state.position
+                };
+                if pos_diff > std::time::Duration::from_millis(100) {
+                    tracing::debug!(
+                        target: "ui::sync",
+                        ui_pos_ms = s.player_state.position.as_millis(),
+                        real_pos_ms = real_state.position.as_millis(),
+                        diff_ms = pos_diff.as_millis(),
+                        "Position drift detected"
+                    );
+                }
+            }
+
+            s.player_state = real_state;
             auto_queue_if_needed(player, s);
+            
+            // === PHASE 3: Update visualization if playing ===
+            if s.player_state.status == crate::player::PlaybackStatus::Playing {
+                if let Some(viz) = player.visualization() {
+                    s.visualization = viz;
+                }
+            }
+            
+            // === PHASE 4: Poll media controls ===
+            // IMPORTANT: Process commands directly here, NOT via handle_player()
+            // to avoid re-entrancy issues (player is already borrowed)
+            let commands: Vec<_> = s
+                .media_controls
+                .as_ref()
+                .map(|mc| {
+                    let mut cmds = Vec::new();
+                    while let Some(cmd) = mc.try_recv_command() {
+                        cmds.push(cmd);
+                    }
+                    cmds
+                })
+                .unwrap_or_default();
+
+            // Process commands directly using the already-borrowed player
+            for cmd in commands {
+                tracing::debug!(target: "ui::media_control", command = ?cmd, "Processing media control");
+                match cmd {
+                    player::MediaControlCommand::Play => { do_play(player, s); }
+                    player::MediaControlCommand::Pause => { do_pause(player, s); }
+                    player::MediaControlCommand::Toggle => { do_toggle(player, s); }
+                    player::MediaControlCommand::Stop => { do_stop(player, s); }
+                    player::MediaControlCommand::Next => { do_next(player, s); }
+                    player::MediaControlCommand::Previous => { do_previous(player, s); }
+                    player::MediaControlCommand::Seek(duration) => { do_seek_absolute(player, s, duration); }
+                    player::MediaControlCommand::SeekRelative(dir) => { do_seek_relative(player, s, dir); }
+                }
+            }
         }
         
         Message::PlayerEvent(event) => {
@@ -156,6 +297,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         }
 
         Message::PlayerVisualizationTick => {
+            // Now handled in PlayerTick, but kept for backwards compatibility
             if let Some(viz) = player.visualization() {
                 s.visualization = viz;
             }
@@ -163,6 +305,11 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
 
         Message::PlayerVisualizationModeChanged(mode) => {
             s.visualization_mode = mode;
+        }
+        
+        Message::MediaControlPoll => {
+            // Now handled in PlayerTick, but kept as explicit fallback handler
+            // (actual polling happens in PlayerTick to consolidate all event polling)
         }
 
         Message::PlayerSelectDevice(device_name) => {
@@ -247,9 +394,26 @@ fn do_pause(player: &mut Player, s: &mut LoadedState) {
 
 /// Toggle play/pause.
 fn do_toggle(player: &mut Player, s: &mut LoadedState) {
-    tracing::debug!(target: "ui::commands", "do_toggle() called, current status: {:?}", s.player_state.status);
+    let ui_status = s.player_state.status;
+    let real_status = player.state().status;
+    tracing::debug!(
+        target: "ui::commands",
+        ui_status = ?ui_status,
+        real_status = ?real_status,
+        "do_toggle() called"
+    );
+    // Log if UI and real state differ (potential desync)
+    if ui_status != real_status {
+        tracing::warn!(
+            target: "ui::commands",
+            ui_status = ?ui_status,
+            real_status = ?real_status,
+            "Toggle called with status desync - using real state"
+        );
+    }
     if let Err(e) = player.toggle() {
         s.status_message = format!("Toggle error: {}", e);
+        tracing::error!(target: "ui::commands", error = %e, "Toggle failed");
     }
 }
 
@@ -367,42 +531,6 @@ fn send_track_to_smtc(mc: &player::MediaControlsHandle, track: &crate::db::Track
 // ============================================================================
 // Complex operations
 // ============================================================================
-
-/// Start playback with random shuffled tracks.
-fn start_random_shuffle(player: &mut Player, s: &mut LoadedState) {
-    use rand::seq::SliceRandom;
-    let mut rng = rand::rng();
-
-    tracing::debug!(target: "ui::commands", "start_random_shuffle: tracks.len()={}", s.tracks.len());
-
-    if s.tracks.is_empty() {
-        s.status_message = "No tracks in library. Scan a folder first.".to_string();
-        return;
-    }
-
-    let mut indices: Vec<usize> = (0..s.tracks.len()).collect();
-    indices.shuffle(&mut rng);
-    let count = 25.min(indices.len());
-
-    for &idx in indices.iter().take(count) {
-        if let Some(track) = s.tracks.get(idx) {
-            player.queue_file(PathBuf::from(&track.path));
-        }
-    }
-
-    tracing::debug!(target: "ui::commands", "Queued {} tracks, calling skip_forward", count);
-
-    if let Err(e) = player.skip_forward() {
-        s.status_message = format!("Play error: {}", e);
-        s.player_state = player.state();
-        tracing::warn!(target: "ui::commands", "skip_forward failed: {}", e);
-    } else {
-        s.status_message = format!("Started shuffle with {} random tracks", count);
-        s.auto_queue_enabled = true;
-        on_track_changed(player, s);
-        tracing::debug!(target: "ui::commands", "Shuffle started successfully");
-    }
-}
 
 /// Shuffle and play random tracks (clears current queue).
 fn shuffle_random_tracks(player: &mut Player, s: &mut LoadedState) {
