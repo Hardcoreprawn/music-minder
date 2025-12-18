@@ -101,6 +101,9 @@ pub struct LoadedState {
     pub auto_queue_enabled: bool,
     pub audio_devices: Vec<String>,
     pub current_audio_device: String,
+    /// Seek preview position - when user is dragging the slider
+    /// None = not seeking, Some(pos) = user is dragging to this position
+    pub seek_preview: Option<f32>,
 
     // OS media controls (SMTC/MPRIS)
     pub media_controls: Option<player::MediaControlsHandle>,

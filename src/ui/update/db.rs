@@ -90,6 +90,7 @@ pub fn handle_db_init(
                 auto_queue_enabled: true,
                 audio_devices,
                 current_audio_device,
+                seek_preview: None,
                 media_controls,
                 cover_art: Default::default(),
                 diagnostics: None,

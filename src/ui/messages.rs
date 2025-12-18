@@ -63,7 +63,8 @@ pub enum Message {
     PlayerStop,
     PlayerNext,
     PlayerPrevious,
-    PlayerSeek(f32),
+    PlayerSeekPreview(f32),   // While dragging - updates display only
+    PlayerSeekRelease,        // On release - performs actual seek using stored preview position
     PlayerVolumeChanged(f32),
     PlayerPlayTrack(usize),     // Play track at index from library
     PlayerQueueTrack(usize),    // Add track to queue

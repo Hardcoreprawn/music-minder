@@ -7,6 +7,23 @@ use crate::player::PlaybackStatus;
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
 
+/// Maximum volume level (because this one goes to 11)
+const MAX_VOLUME: f32 = 11.0;
+
+/// Format seconds as MM:SS or HH:MM:SS
+fn format_duration_secs(secs: f32) -> String {
+    let secs = secs as u64;
+    let hours = secs / 3600;
+    let mins = (secs % 3600) / 60;
+    let secs = secs % 60;
+
+    if hours > 0 {
+        format!("{}:{:02}:{:02}", hours, mins, secs)
+    } else {
+        format!("{}:{:02}", mins, secs)
+    }
+}
+
 /// Player controls bar (always visible at bottom)
 pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
     let state = &s.player_state;
@@ -39,22 +56,38 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
             .on_press(Message::PlayerPlay),
     };
 
-    // Time display
+    // Time display - show preview position when seeking
+    let display_pos = s.seek_preview.unwrap_or_else(|| state.position_fraction());
+    let display_time = if s.seek_preview.is_some() {
+        // Show preview time while dragging
+        let preview_secs = display_pos * state.duration.as_secs_f32();
+        format_duration_secs(preview_secs)
+    } else {
+        state.position_str()
+    };
     let time_display = text(format!(
         "{} / {}",
-        state.position_str(),
+        display_time,
         state.duration_str()
     ))
     .size(12);
 
-    // Seek slider
-    let seek_pos = state.position_fraction();
-    let seek_slider =
-        slider(0.0..=1.0, seek_pos, Message::PlayerSeek).width(Length::FillPortion(3));
+    // Seek slider - use on_release to only seek when user finishes dragging
+    // on_change updates the preview position (visual feedback)
+    // on_release performs the actual seek command using the stored preview position
+    let seek_slider = slider(0.0..=1.0, display_pos, Message::PlayerSeekPreview)
+        .on_release(Message::PlayerSeekRelease)
+        .step(0.001) // Fine-grained seeking
+        .width(Length::FillPortion(3));
 
-    // Volume slider
-    let volume_slider =
-        slider(0.0..=1.0, state.volume, Message::PlayerVolumeChanged).width(Length::Fixed(80.0));
+    // Volume slider: 0-11 scale (because this one goes to 11!)
+    // Internal volume is 0.0-1.0, display is 0-11
+    let volume_display = state.volume * MAX_VOLUME;
+    let volume_slider = slider(0.0..=MAX_VOLUME, volume_display, |v| {
+        Message::PlayerVolumeChanged(v / MAX_VOLUME)
+    })
+    .step(0.5) // Half-step increments
+    .width(Length::Fixed(80.0));
 
     // Audio device picker
     let device_picker = pick_list(
@@ -86,7 +119,7 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
             Space::with_width(10),
             time_display,
             Space::with_width(15),
-            text("Vol").size(11),
+            text(format!("{:.0}", volume_display)).size(11),
             volume_slider,
             Space::with_width(10),
             device_picker,
