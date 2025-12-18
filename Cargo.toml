@@ -31,8 +31,8 @@ urlencoding = "2.1"
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 walkdir = "2.5.0"
-notify = { version = "7.0", default-features = false, features = ["macos_fsevent"] }  # File system watcher
-notify-debouncer-full = "0.4"  # Debounced events with file tracking
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }  # File system watcher
+notify-debouncer-full = "0.6"  # Debounced events with file tracking
 
 # Audio playback and decoding
 cpal = "0.16"                # Cross-platform audio output (WASAPI on Windows)

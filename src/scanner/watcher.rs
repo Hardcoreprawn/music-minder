@@ -33,7 +33,7 @@ use notify::{
     RecommendedWatcher, RecursiveMode,
     event::{CreateKind, ModifyKind, RemoveKind},
 };
-use notify_debouncer_full::{DebounceEventResult, Debouncer, FileIdMap, new_debouncer};
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -59,7 +59,7 @@ pub enum WatchEvent {
 ///
 /// Dropping this handle will stop the watcher.
 pub struct FileWatcher {
-    _debouncer: Debouncer<RecommendedWatcher, FileIdMap>,
+    _debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
     running: Arc<AtomicBool>,
 }
 
