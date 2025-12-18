@@ -227,21 +227,18 @@ Never interrupt playback. Keep the library fresh automatically.
 - [x] **Column sorting**: Click column headers to sort (Artist, Album, Title, Duration)
 - [x] **Sort indicator**: Visual arrow showing sort direction
 - [x] **Filter chips**: Quick filters for format (FLAC/MP3), lossless, etc.
-- [ ] **Artist/Album grouping**: Collapsible groups in library view
 
-### 7.3 Queue Management (High Priority)
+### 7.3 Queue Management (High Priority) ✅
 
-The queue infrastructure exists but UI controls are missing:
-
-- [ ] **Queue panel**: Visible queue in Now Playing view (scrollable list)
-- [ ] **Current track highlight**: Visual indicator of what's playing
-- [ ] **Double-click to jump**: Click any queued track to play it immediately
-- [ ] **Remove from queue**: X button or swipe to remove tracks
-- [ ] **Reorder queue**: Drag-and-drop to rearrange (reorder() exists)
-- [ ] **Clear queue**: Button to clear entire queue
-- [ ] **Repeat modes**: Off / All / One with visual toggle (cycle_repeat exists)
-- [ ] **Shuffle toggle**: Shuffle on/off button (set_shuffle exists)
-- [ ] **Play next**: Right-click → "Play Next" (add_next exists)
+- [x] **Queue panel**: Visible queue in Now Playing view (scrollable list)
+- [x] **Current track highlight**: Visual indicator of what's playing
+- [x] **Click to jump**: Click any queued track to play it immediately
+- [x] **Remove from queue**: X button to remove tracks
+- [ ] **Reorder queue**: Drag-and-drop to rearrange (deferred - needs custom widget)
+- [x] **Clear queue**: Button to clear entire queue
+- [x] **Repeat modes**: Off / All / One with visual toggle
+- [x] **Shuffle toggle**: Shuffle on/off button
+- [x] **Play next**: Right-click → "Play Next" (add_next exists)
 
 ### 7.4 Keyboard Shortcuts (Medium Priority)
 
@@ -354,6 +351,8 @@ Capture that iconic late-90s/early-2000s look with modern rendering.
 - [ ] MusicBrainz release ID in database (for remote cover fetching)
 - [ ] Smart playlists (auto-generated based on rules)
 - [ ] Album view with grid layout
+- [ ] Artist/Album grouping with collapsible sections (needs custom iced widget)
+- [ ] Queue drag-and-drop reorder (needs custom iced widget)
 
 ### Integration
 
