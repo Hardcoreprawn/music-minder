@@ -285,6 +285,22 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
     };
 
     let track_display = if state.current_track.is_some() {
+        // Get the file path for display
+        let file_path_text = state
+            .current_track
+            .as_ref()
+            .map(|p| {
+                // Show just the filename, or relative path if short enough
+                let display = p
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| p.display().to_string());
+                text(format!("📁 {}", display))
+                    .size(11)
+                    .color([0.4, 0.4, 0.45])
+            })
+            .unwrap_or_else(|| text("").size(11));
+
         container(
             row![
                 cover_widget,
@@ -296,6 +312,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     Space::with_height(8),
                     text(state.format_info()).size(14).color([0.5, 0.5, 0.5]),
                     cover_source_text,
+                    file_path_text,
                 ]
                 .spacing(5),
             ]
@@ -347,17 +364,29 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
 
     // Queue display with controls
     let queue_section = {
-        let (queue_len, shuffle_on, repeat_mode) = s
+        let (queue_len, current_idx, shuffle_on, repeat_mode) = s
             .player
             .as_ref()
             .map(|p| {
                 (
                     p.queue().items().len(),
+                    p.queue().current_index(),
                     p.queue().shuffle(),
                     p.queue().repeat(),
                 )
             })
-            .unwrap_or((0, false, crate::player::RepeatMode::Off));
+            .unwrap_or((0, None, false, crate::player::RepeatMode::Off));
+
+        // Track position indicator (e.g., "Track 3 of 25")
+        let position_text = if let Some(idx) = current_idx {
+            text(format!("Track {} of {}", idx + 1, queue_len))
+                .size(12)
+                .color([0.6, 0.6, 0.6])
+        } else {
+            text(format!("{} tracks", queue_len))
+                .size(12)
+                .color([0.5, 0.5, 0.5])
+        };
 
         // Shuffle button with active state
         let shuffle_btn = {
@@ -427,9 +456,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
             shuffle_btn,
             repeat_btn,
             Space::with_width(Length::Fill),
-            text(format!("{} tracks", queue_len))
-                .size(12)
-                .color([0.5, 0.5, 0.5]),
+            position_text,
             Space::with_width(8),
             clear_btn,
         ]

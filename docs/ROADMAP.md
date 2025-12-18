@@ -256,18 +256,19 @@ Winamp's global hotkeys were legendary. Start with in-app, then go global.
 
 ### 7.5 Now Playing Enhancements (Medium Priority)
 
-- [ ] **Read metadata from file**: Use decoder metadata, not just DB lookup
-- [ ] **Metadata fallback chain**: File tags → DB cache → filename
-- [ ] **Track info panel**: Expandable details (format, bitrate, file path)
-- [ ] **Queue count display**: "Track 3 of 25" indicator
+- [x] **Queue count display**: "Track 3 of 25" indicator
+- [x] **Track info panel**: Format, bitrate, file path display
+- [ ] **Read metadata from file**: Use decoder metadata when DB miss (needs audio thread event)
+- [ ] **Metadata fallback chain**: Currently: DB → filename. Goal: DB → file tags → filename
 
-### 7.5 Code Cleanup (Low Priority)
+### 7.6 Code Cleanup (Low Priority)
 
 Remove or wire up unused code identified in review:
 
-- [ ] Wire up `PlayQueue::cycle_repeat()` to UI button
-- [ ] Wire up `PlayQueue::set_shuffle()` to UI toggle
-- [ ] Wire up `PlayQueue::remove()` and `reorder()` to queue panel
+- [x] Wire up `PlayQueue::cycle_repeat()` to UI button
+- [x] Wire up `PlayQueue::set_shuffle()` to UI toggle
+- [x] Wire up `PlayQueue::remove()` to queue panel
+- [ ] Wire up `PlayQueue::reorder()` to queue panel (needs drag-drop)
 - [ ] Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`
 - [ ] Remove or use `AudioDecoder::metadata()` (decide: file vs DB)
 - [ ] Consolidate duplicate `format_duration()` functions
