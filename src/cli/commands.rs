@@ -968,7 +968,7 @@ fn cmd_watch(
             match rx.recv_timeout(batch_delay) {
                 Ok(event) => {
                     last_event_time = std::time::Instant::now();
-                    
+
                     match &event {
                         scanner::WatchEvent::Created(p) => {
                             if verbose {
@@ -1002,7 +1002,7 @@ fn cmd_watch(
                     // Process batch if we have pending events and enough time has passed
                     if !pending.is_empty() && last_event_time.elapsed() >= batch_delay {
                         let batch: Vec<_> = pending.drain().collect();
-                        
+
                         if let Some(ref pool) = pool {
                             process_watch_batch(pool, &batch, verbose).await;
                         } else {
@@ -1010,7 +1010,7 @@ fn cmd_watch(
                             let created = batch.iter().filter(|(_, e)| matches!(e, scanner::WatchEvent::Created(_))).count();
                             let modified = batch.iter().filter(|(_, e)| matches!(e, scanner::WatchEvent::Modified(_))).count();
                             let removed = batch.iter().filter(|(_, e)| matches!(e, scanner::WatchEvent::Removed(_))).count();
-                            
+
                             if created > 0 || modified > 0 || removed > 0 {
                                 println!("Batch: {} created, {} modified, {} removed", created, modified, removed);
                             }

@@ -420,7 +420,10 @@ pub async fn delete_track_by_path(pool: &SqlitePool, path: &str) -> sqlx::Result
 }
 
 /// Get a track by path.
-pub async fn get_track_by_path(pool: &SqlitePool, path: &str) -> sqlx::Result<Option<TrackFileInfo>> {
+pub async fn get_track_by_path(
+    pool: &SqlitePool,
+    path: &str,
+) -> sqlx::Result<Option<TrackFileInfo>> {
     sqlx::query_as::<_, TrackFileInfo>("SELECT id, path, mtime FROM tracks WHERE path = ?")
         .bind(path)
         .fetch_optional(pool)

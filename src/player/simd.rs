@@ -126,7 +126,7 @@ pub fn apply_volume(samples: &mut [f32], volume: f32) {
 }
 
 /// Scalar fallback for volume application.
-/// 
+///
 /// Note: `#[inline(never)]` prevents LLVM from auto-vectorizing this loop,
 /// ensuring the benchmark honestly compares scalar vs explicit SIMD.
 #[inline(never)]
@@ -235,7 +235,7 @@ pub fn f32_to_i16_with_volume(input: &[f32], output: &mut [i16], volume: f32) {
 }
 
 /// Scalar fallback for f32→i16 conversion with volume.
-/// 
+///
 /// Note: `#[inline(never)]` prevents LLVM from auto-vectorizing this loop,
 /// ensuring the benchmark honestly compares scalar vs explicit SIMD.
 #[inline(never)]
@@ -477,10 +477,10 @@ pub fn run_benchmark() -> SimdBenchmarkResults {
     let volume_simd_total = start.elapsed();
 
     // Calculate ns per 1024 samples for comparison
-    let volume_scalar_ns =
-        (volume_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
-    let volume_simd_ns =
-        (volume_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+    let volume_scalar_ns = (volume_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024
+        / SAMPLE_COUNT as u64;
+    let volume_simd_ns = (volume_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024
+        / SAMPLE_COUNT as u64;
 
     let volume_speedup = if volume_simd_total.as_nanos() > 0 {
         volume_scalar_total.as_nanos() as f64 / volume_simd_total.as_nanos() as f64
@@ -523,10 +523,11 @@ pub fn run_benchmark() -> SimdBenchmarkResults {
     let convert_simd_total = start.elapsed();
 
     // Calculate ns per 1024 samples for comparison
-    let convert_scalar_ns =
-        (convert_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
-    let convert_simd_ns =
-        (convert_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024 / SAMPLE_COUNT as u64;
+    let convert_scalar_ns = (convert_scalar_total.as_nanos() as u64 / BENCH_ITERATIONS as u64)
+        * 1024
+        / SAMPLE_COUNT as u64;
+    let convert_simd_ns = (convert_simd_total.as_nanos() as u64 / BENCH_ITERATIONS as u64) * 1024
+        / SAMPLE_COUNT as u64;
 
     let convert_speedup = if convert_simd_total.as_nanos() > 0 {
         convert_scalar_total.as_nanos() as f64 / convert_simd_total.as_nanos() as f64
@@ -648,7 +649,9 @@ mod tests {
     fn test_f32_to_i16_various_sizes() {
         // Test different buffer sizes
         for size in [1, 3, 4, 7, 8, 15, 16, 100, 1024] {
-            let input: Vec<f32> = (0..size).map(|i| (i as f32 / size as f32) * 2.0 - 1.0).collect();
+            let input: Vec<f32> = (0..size)
+                .map(|i| (i as f32 / size as f32) * 2.0 - 1.0)
+                .collect();
             let mut output = vec![0i16; size];
             let mut expected = vec![0i16; size];
 

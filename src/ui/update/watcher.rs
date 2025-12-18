@@ -19,10 +19,13 @@ pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
     match message {
         Message::RescanLibrary => {
             // Trigger a full rescan using the first watch path (or scan_path)
-            let scan_path = s.watcher_state.watch_paths.first()
+            let scan_path = s
+                .watcher_state
+                .watch_paths
+                .first()
                 .cloned()
                 .unwrap_or_else(|| s.scan_path.clone());
-            
+
             info!(target: "ui::watcher", path = %scan_path.display(), "Manual rescan triggered");
             s.is_scanning = true;
             s.scan_count = 0;
@@ -79,7 +82,7 @@ pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
             if s.watcher_state.pending_changes > 0 {
                 s.watcher_state.pending_changes -= 1;
             }
-            
+
             // If no more pending changes, trigger a lightweight refresh
             if s.watcher_state.pending_changes == 0 && !s.is_scanning {
                 info!(target: "ui::watcher", "All pending changes processed, refreshing track list");
@@ -95,7 +98,7 @@ pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
 /// Handle a new file being created in the library.
 fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
     let pool = s.pool.clone();
-    
+
     Task::perform(
         async move {
             // Read metadata from the new file
@@ -118,21 +121,29 @@ fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 
             // Insert or update artist
             let artist_id = if !meta.artist.is_empty() {
-                crate::db::get_or_create_artist(&pool, &meta.artist).await.ok()
+                crate::db::get_or_create_artist(&pool, &meta.artist)
+                    .await
+                    .ok()
             } else {
                 None
             };
 
             // Insert or update album
             let album_id = if !meta.album.is_empty() {
-                crate::db::get_or_create_album(&pool, &meta.album, None).await.ok()
+                crate::db::get_or_create_album(&pool, &meta.album, None)
+                    .await
+                    .ok()
             } else {
                 None
             };
 
             // Insert track with mtime
             let path_str = path.to_string_lossy().to_string();
-            if let Err(e) = crate::db::insert_track_with_mtime(&pool, &meta, &path_str, artist_id, album_id, mtime).await {
+            if let Err(e) = crate::db::insert_track_with_mtime(
+                &pool, &meta, &path_str, artist_id, album_id, mtime,
+            )
+            .await
+            {
                 warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to insert track");
             } else {
                 info!(target: "ui::watcher", path = %path.display(), title = %meta.title, "Track added to library");
@@ -147,12 +158,15 @@ fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 /// Handle a file being modified in the library.
 fn handle_file_modified(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
     let pool = s.pool.clone();
-    
+
     Task::perform(
         async move {
             // Check if we know this file
             let path_str = path.to_string_lossy().to_string();
-            let existing = crate::db::get_track_by_path(&pool, &path_str).await.ok().flatten();
+            let existing = crate::db::get_track_by_path(&pool, &path_str)
+                .await
+                .ok()
+                .flatten();
 
             // Get current mtime
             let mtime = path
@@ -181,18 +195,26 @@ fn handle_file_modified(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 
                 // Get or create artist/album
                 let artist_id = if !meta.artist.is_empty() {
-                    crate::db::get_or_create_artist(&pool, &meta.artist).await.ok()
+                    crate::db::get_or_create_artist(&pool, &meta.artist)
+                        .await
+                        .ok()
                 } else {
                     None
                 };
                 let album_id = if !meta.album.is_empty() {
-                    crate::db::get_or_create_album(&pool, &meta.album, None).await.ok()
+                    crate::db::get_or_create_album(&pool, &meta.album, None)
+                        .await
+                        .ok()
                 } else {
                     None
                 };
 
                 // Update track
-                if let Err(e) = crate::db::insert_track_with_mtime(&pool, &meta, &path_str, artist_id, album_id, mtime).await {
+                if let Err(e) = crate::db::insert_track_with_mtime(
+                    &pool, &meta, &path_str, artist_id, album_id, mtime,
+                )
+                .await
+                {
                     warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to update track");
                 } else {
                     debug!(target: "ui::watcher", path = %path.display(), "Track updated");
@@ -211,11 +233,11 @@ fn handle_file_modified(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 /// Handle a file being removed from the library.
 fn handle_file_removed(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
     let pool = s.pool.clone();
-    
+
     Task::perform(
         async move {
             let path_str = path.to_string_lossy().to_string();
-            
+
             match crate::db::delete_track_by_path(&pool, &path_str).await {
                 Ok(true) => {
                     info!(target: "ui::watcher", path = %path.display(), "Track removed from library");

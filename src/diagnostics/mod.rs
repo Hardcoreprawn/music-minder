@@ -251,7 +251,7 @@ impl DiagnosticReport {
             memory_info,
             power_info,
             audio_devices,
-            simd_benchmark
+            simd_benchmark,
         }
     }
 

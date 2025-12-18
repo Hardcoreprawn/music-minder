@@ -67,9 +67,11 @@ pub use decoder::AudioDecoder;
 pub use media_controls::{
     MediaControlCommand, MediaControlsHandle, MediaControlsMetadata, MediaPlaybackState,
 };
-pub use queue::{PlayQueue, QueueItem};
+pub use queue::{PlayQueue, QueueItem, RepeatMode};
 pub use resampler::Resampler;
-pub use state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState};
+pub use state::{
+    AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState,
+};
 pub use visualization::{SpectrumData, VisualizationMode, Visualizer};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -153,7 +155,7 @@ impl Player {
     ///
     /// This is the SINGLE place that sends Load+Play commands to the audio thread.
     /// All playback initiation (play_file, skip_forward, previous) should use this.
-    fn load_and_play_current(&mut self) -> Result<(), PlayerError> {
+    pub fn load_and_play_current(&mut self) -> Result<(), PlayerError> {
         if let Some(item) = self.queue.current() {
             self.command_tx
                 .send(PlayerCommand::Load(item.path.clone()))

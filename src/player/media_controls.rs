@@ -247,9 +247,9 @@ fn run_media_controls(
                 0,
                 0,
                 0,
-                0,                  // Position and size (0,0 to make it effectively invisible)
-                ptr::null_mut(),    // No parent (top-level window, but hidden)
-                ptr::null_mut(),    // No menu
+                0,               // Position and size (0,0 to make it effectively invisible)
+                ptr::null_mut(), // No parent (top-level window, but hidden)
+                ptr::null_mut(), // No menu
                 h_instance,
                 ptr::null(),
             );
@@ -631,10 +631,7 @@ mod windows_sys_api_tests {
         use windows_sys::Win32::UI::WindowsAndMessaging::{RegisterClassExW, WNDCLASSEXW};
 
         // Verify the function accepts a pointer to WNDCLASSEXW and returns u16
-        fn check_signature(
-            _f: unsafe extern "system" fn(*const WNDCLASSEXW) -> u16,
-        ) {
-        }
+        fn check_signature(_f: unsafe extern "system" fn(*const WNDCLASSEXW) -> u16) {}
         check_signature(RegisterClassExW);
     }
 
@@ -646,18 +643,18 @@ mod windows_sys_api_tests {
         // Verify the function exists by taking its address
         // All HANDLE types are now *mut c_void in windows-sys 0.59+
         let _fn_ptr: unsafe extern "system" fn(
-            u32,                        // dwExStyle
-            *const u16,                 // lpClassName
-            *const u16,                 // lpWindowName
-            u32,                        // dwStyle
-            i32,                        // x
-            i32,                        // y
-            i32,                        // nWidth
-            i32,                        // nHeight
-            *mut core::ffi::c_void,     // hWndParent (HWND)
-            *mut core::ffi::c_void,     // hMenu (HMENU)
-            *mut core::ffi::c_void,     // hInstance (HMODULE)
-            *const core::ffi::c_void,   // lpParam
+            u32,                      // dwExStyle
+            *const u16,               // lpClassName
+            *const u16,               // lpWindowName
+            u32,                      // dwStyle
+            i32,                      // x
+            i32,                      // y
+            i32,                      // nWidth
+            i32,                      // nHeight
+            *mut core::ffi::c_void,   // hWndParent (HWND)
+            *mut core::ffi::c_void,   // hMenu (HMENU)
+            *mut core::ffi::c_void,   // hInstance (HMODULE)
+            *const core::ffi::c_void, // lpParam
         ) -> *mut core::ffi::c_void = CreateWindowExW;
     }
 
@@ -665,7 +662,7 @@ mod windows_sys_api_tests {
     #[test]
     fn test_message_pump_functions_exist() {
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
+            DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
         };
 
         // Verify constants

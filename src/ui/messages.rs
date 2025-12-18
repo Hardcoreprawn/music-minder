@@ -63,15 +63,22 @@ pub enum Message {
     PlayerStop,
     PlayerNext,
     PlayerPrevious,
-    PlayerSeekPreview(f32),   // While dragging - updates display only
-    PlayerSeekRelease,        // On release - performs actual seek using stored preview position
+    PlayerSeekPreview(f32), // While dragging - updates display only
+    PlayerSeekRelease,      // On release - performs actual seek using stored preview position
     PlayerVolumeChanged(f32),
     PlayerPlayTrack(usize),     // Play track at index from library
     PlayerQueueTrack(usize),    // Add track to queue
     PlayerShuffleRandom,        // Shuffle 20-30 random tracks
     PlayerSelectDevice(String), // Switch audio output device
     PlayerTick,                 // Timer tick for updating UI
-    PlayerVisualizationTick,    // Fast tick for visualization
+
+    // Queue management messages
+    QueueJumpTo(usize),      // Jump to track at index in queue
+    QueueRemove(usize),      // Remove track at index from queue
+    QueueClear,              // Clear entire queue
+    QueueToggleShuffle,      // Toggle shuffle mode
+    QueueCycleRepeat,        // Cycle repeat mode (Off -> All -> One -> Off)
+    PlayerVisualizationTick, // Fast tick for visualization
     PlayerVisualizationModeChanged(VisualizationMode),
     PlayerEvent(player::PlayerEvent), // Event from audio thread (state changed, track loaded, etc.)
 

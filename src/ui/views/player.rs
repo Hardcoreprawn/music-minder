@@ -65,12 +65,7 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
     } else {
         state.position_str()
     };
-    let time_display = text(format!(
-        "{} / {}",
-        display_time,
-        state.duration_str()
-    ))
-    .size(12);
+    let time_display = text(format!("{} / {}", display_time, state.duration_str())).size(12);
 
     // Seek slider - use on_release to only seek when user finishes dragging
     // on_change updates the preview position (visual feedback)

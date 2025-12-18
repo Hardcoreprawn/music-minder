@@ -155,52 +155,57 @@ enum PreviewStreamState {
 /// Iced's cooperative async scheduler. This allows other subscriptions
 /// (like `PlayerTick`) to continue firing normally.
 pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
-    futures::stream::unfold(WatcherStreamState::Init { watch_paths }, |state| async move {
-        match state {
-            WatcherStreamState::Init { watch_paths } => {
-                // Create the file watcher with async channel
-                match scanner::FileWatcher::new_async(watch_paths.clone()) {
-                    Ok((watcher, rx)) => {
-                        tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started (async)");
-                        Some((
-                            Message::WatcherStarted,
-                            WatcherStreamState::Running {
-                                _watcher: watcher,
-                                rx,
-                            },
-                        ))
-                    }
-                    Err(e) => {
-                        tracing::error!(target: "ui::watcher", error = %e, "Failed to start file watcher");
-                        Some((
-                            Message::WatcherEvent(scanner::WatchEvent::Error(e.to_string())),
-                            WatcherStreamState::Done,
-                        ))
-                    }
-                }
-            }
-            WatcherStreamState::Running { _watcher, mut rx } => {
-                // Non-blocking async receive - yields to other tasks while waiting
-                match rx.recv().await {
-                    Some(event) => Some((
-                        Message::WatcherEvent(event),
-                        WatcherStreamState::Running { _watcher, rx },
-                    )),
-                    None => {
-                        // Channel closed (watcher dropped)
-                        tracing::warn!(target: "ui::watcher", "File watcher channel closed");
-                        Some((Message::WatcherStopped, WatcherStreamState::Done))
+    futures::stream::unfold(
+        WatcherStreamState::Init { watch_paths },
+        |state| async move {
+            match state {
+                WatcherStreamState::Init { watch_paths } => {
+                    // Create the file watcher with async channel
+                    match scanner::FileWatcher::new_async(watch_paths.clone()) {
+                        Ok((watcher, rx)) => {
+                            tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started (async)");
+                            Some((
+                                Message::WatcherStarted,
+                                WatcherStreamState::Running {
+                                    _watcher: watcher,
+                                    rx,
+                                },
+                            ))
+                        }
+                        Err(e) => {
+                            tracing::error!(target: "ui::watcher", error = %e, "Failed to start file watcher");
+                            Some((
+                                Message::WatcherEvent(scanner::WatchEvent::Error(e.to_string())),
+                                WatcherStreamState::Done,
+                            ))
+                        }
                     }
                 }
+                WatcherStreamState::Running { _watcher, mut rx } => {
+                    // Non-blocking async receive - yields to other tasks while waiting
+                    match rx.recv().await {
+                        Some(event) => Some((
+                            Message::WatcherEvent(event),
+                            WatcherStreamState::Running { _watcher, rx },
+                        )),
+                        None => {
+                            // Channel closed (watcher dropped)
+                            tracing::warn!(target: "ui::watcher", "File watcher channel closed");
+                            Some((Message::WatcherStopped, WatcherStreamState::Done))
+                        }
+                    }
+                }
+                WatcherStreamState::Done => None,
             }
-            WatcherStreamState::Done => None,
-        }
-    })
+        },
+    )
 }
 
 /// Internal state machine for watcher streaming
 enum WatcherStreamState {
-    Init { watch_paths: Vec<PathBuf> },
+    Init {
+        watch_paths: Vec<PathBuf>,
+    },
     Running {
         _watcher: scanner::FileWatcher,
         rx: tokio::sync::mpsc::Receiver<scanner::WatchEvent>,

@@ -342,38 +342,113 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
     .spacing(8);
 
     // Large visualization canvas
-    let viz_height = 300.0;
+    let viz_height = 200.0;
     let viz_canvas = visualization_view(s.visualization_mode, &s.visualization, viz_height);
 
-    // Queue display
+    // Queue display with controls
     let queue_section = {
+        let (queue_len, shuffle_on, repeat_mode) = s
+            .player
+            .as_ref()
+            .map(|p| {
+                (
+                    p.queue().items().len(),
+                    p.queue().shuffle(),
+                    p.queue().repeat(),
+                )
+            })
+            .unwrap_or((0, false, crate::player::RepeatMode::Off));
+
+        // Shuffle button with active state
+        let shuffle_btn = {
+            let (fg, bg) = if shuffle_on {
+                ([0.3, 0.8, 0.5], [0.15, 0.25, 0.18])
+            } else {
+                ([0.5, 0.5, 0.5], [0.15, 0.15, 0.18])
+            };
+            button(text("🔀").size(14).color(fg))
+                .padding([4, 8])
+                .style(move |_, _| button::Style {
+                    background: Some(iced::Background::Color(bg.into())),
+                    text_color: fg.into(),
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .on_press(Message::QueueToggleShuffle)
+        };
+
+        // Repeat button with mode indicator
+        let repeat_text = match repeat_mode {
+            crate::player::RepeatMode::Off => "🔁",
+            crate::player::RepeatMode::All => "🔁",
+            crate::player::RepeatMode::One => "🔂",
+        };
+        let repeat_active = repeat_mode != crate::player::RepeatMode::Off;
+        let repeat_btn = {
+            let (fg, bg) = if repeat_active {
+                ([0.3, 0.7, 0.9], [0.15, 0.2, 0.25])
+            } else {
+                ([0.5, 0.5, 0.5], [0.15, 0.15, 0.18])
+            };
+            button(text(repeat_text).size(14).color(fg))
+                .padding([4, 8])
+                .style(move |_, _| button::Style {
+                    background: Some(iced::Background::Color(bg.into())),
+                    text_color: fg.into(),
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .on_press(Message::QueueCycleRepeat)
+        };
+
+        // Clear button
+        let clear_btn = button(text("✕").size(12).color([0.6, 0.4, 0.4]))
+            .padding([4, 8])
+            .style(|_, _| button::Style {
+                background: Some(iced::Background::Color([0.2, 0.15, 0.15].into())),
+                text_color: [0.8, 0.5, 0.5].into(),
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .on_press(Message::QueueClear);
+
         let queue_header = row![
             text("Play Queue").size(16),
+            Space::with_width(8),
+            shuffle_btn,
+            repeat_btn,
             Space::with_width(Length::Fill),
-            text(format!(
-                "{} tracks",
-                s.player
-                    .as_ref()
-                    .map(|p| p.queue().items().len())
-                    .unwrap_or(0)
-            ))
-            .size(12)
-            .color([0.5, 0.5, 0.5]),
-        ];
+            text(format!("{} tracks", queue_len))
+                .size(12)
+                .color([0.5, 0.5, 0.5]),
+            Space::with_width(8),
+            clear_btn,
+        ]
+        .align_y(iced::Alignment::Center);
 
         let queue_list = if let Some(ref player) = s.player {
-            let items: Vec<_> = player
+            let items: Vec<Element<Message>> = player
                 .queue()
                 .items()
                 .iter()
                 .enumerate()
-                .take(10)
                 .map(|(i, item)| {
                     let is_current = player.queue().current_index() == Some(i);
                     let bg = if is_current {
                         [0.2, 0.3, 0.4]
-                    } else {
+                    } else if i % 2 == 0 {
                         [0.12, 0.12, 0.15]
+                    } else {
+                        [0.1, 0.1, 0.13]
                     };
                     let fg = if is_current {
                         [0.4, 0.8, 1.0]
@@ -390,18 +465,44 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                             .unwrap_or_else(|| "Unknown".to_string())
                     };
 
-                    container(row![
-                        text(if is_current { ">" } else { " " }).size(12).color(fg),
-                        Space::with_width(8),
-                        text(display_text).size(12).color(fg),
-                    ])
-                    .style(move |_| container::Style {
+                    // Index number with current indicator
+                    let index_text = if is_current {
+                        text("▶").size(10).color(fg)
+                    } else {
+                        text(format!("{}", i + 1)).size(10).color([0.4, 0.4, 0.4])
+                    };
+
+                    // Remove button for this item
+                    let remove_btn = button(text("×").size(12).color([0.5, 0.4, 0.4]))
+                        .padding([2, 6])
+                        .style(|_, _| button::Style {
+                            background: Some(iced::Background::Color([0.0, 0.0, 0.0, 0.0].into())),
+                            text_color: [0.6, 0.4, 0.4].into(),
+                            ..Default::default()
+                        })
+                        .on_press(Message::QueueRemove(i));
+
+                    // Make the row clickable to jump to track
+                    let track_btn = button(
+                        row![
+                            container(index_text).width(Length::Fixed(24.0)),
+                            text(display_text).size(12).color(fg),
+                            Space::with_width(Length::Fill),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .width(Length::Fill)
+                    .padding([4, 8])
+                    .style(move |_, _| button::Style {
                         background: Some(iced::Background::Color(bg.into())),
+                        text_color: fg.into(),
                         ..Default::default()
                     })
-                    .padding([4, 8])
-                    .width(Length::Fill)
-                    .into()
+                    .on_press(Message::QueueJumpTo(i));
+
+                    row![track_btn, remove_btn]
+                        .align_y(iced::Alignment::Center)
+                        .into()
                 })
                 .collect();
 
@@ -416,7 +517,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     .center_x(Length::Fill)
                 ]
             } else {
-                column(items).spacing(2)
+                column(items).spacing(1)
             }
         } else {
             column![
@@ -429,7 +530,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
         column![
             queue_header,
             Space::with_height(8),
-            scrollable(queue_list).height(Length::Fixed(150.0)),
+            scrollable(queue_list).height(Length::Fill),
         ]
     };
 

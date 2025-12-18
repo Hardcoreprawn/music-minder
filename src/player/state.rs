@@ -321,7 +321,7 @@ impl PlayerState {
             quality_indicator
         )
     }
-    
+
     /// Get a compact debug summary for logging.
     /// Format: "Status@Pos/Dur" e.g. "Playing@1:23/4:56"
     pub fn debug_summary(&self) -> String {
@@ -331,12 +331,7 @@ impl PlayerState {
             PlaybackStatus::Paused => "Paused",
             PlaybackStatus::Loading => "Loading",
         };
-        format!(
-            "{}@{}/{}",
-            status,
-            self.position_str(),
-            self.duration_str()
-        )
+        format!("{}@{}/{}", status, self.position_str(), self.duration_str())
     }
 }
 

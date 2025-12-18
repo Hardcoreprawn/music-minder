@@ -10,7 +10,7 @@ mod update;
 mod views;
 
 use iced::widget::{container, text};
-use iced::{time, Element, Length, Subscription, Task};
+use iced::{Element, Length, Subscription, Task, time};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -104,11 +104,14 @@ impl MusicMinder {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         // Debug: log every message type at top level
-        let is_tick = matches!(message, Message::PlayerTick | Message::PlayerVisualizationTick);
+        let is_tick = matches!(
+            message,
+            Message::PlayerTick | Message::PlayerVisualizationTick
+        );
         if !is_tick {
             tracing::trace!(target: "ui::update", message = ?message, "Update received");
         }
-        
+
         // Handle messages that work regardless of state
         match &message {
             Message::DbInitialized(result) => {
@@ -211,11 +214,18 @@ impl MusicMinder {
             | Message::PlayerPlayTrack(_)
             | Message::PlayerQueueTrack(_)
             | Message::PlayerTick
+            | Message::PlayerShuffleRandom
+            | Message::PlayerSelectDevice(_)
             | Message::PlayerVisualizationTick
             | Message::PlayerVisualizationModeChanged(_)
             | Message::PlayerEvent(_)
             | Message::MediaControlCommand(_)
-            | Message::MediaControlPoll => {
+            | Message::MediaControlPoll
+            | Message::QueueJumpTo(_)
+            | Message::QueueRemove(_)
+            | Message::QueueClear
+            | Message::QueueToggleShuffle
+            | Message::QueueCycleRepeat => {
                 // Note: MediaControlPoll is now handled in PlayerTick for simplicity,
                 // but we keep it routed here as a fallback
                 return update::handle_player(s, message);

@@ -63,7 +63,7 @@ pub fn handle_player(s: &mut LoadedState, msg: Message) -> Task<Message> {
     if !is_tick {
         tracing::debug!(target: "ui::handler", message = ?msg, "handle_player entered");
     }
-    
+
     // Ensure player is initialized
     s.ensure_player();
 
@@ -104,11 +104,11 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             // 2. If we are Stopped but have a current track in queue, play it.
             // 3. If no current track but queue has items, start from top.
             // 4. Otherwise, warn.
-            
+
             let status = s.player_state.status;
             let queue_has_current = player.queue().current().is_some();
             let queue_has_items = !player.queue().is_empty();
-            
+
             tracing::debug!(target: "ui::commands", "PlayerPlay: status={:?}, queue_has_current={}, queue_has_items={}", status, queue_has_current, queue_has_items);
 
             if status == crate::player::PlaybackStatus::Paused {
@@ -137,7 +137,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         Message::PlayerStop => do_stop(player, s),
         Message::PlayerNext => do_next(player, s),
         Message::PlayerPrevious => do_previous(player, s),
-        
+
         // Seek preview - just update UI display, no audio seek yet
         Message::PlayerSeekPreview(pos) => {
             tracing::trace!(
@@ -149,7 +149,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             );
             s.seek_preview = Some(pos);
         }
-        
+
         // Seek release - perform actual seek using stored preview position, then clear preview
         Message::PlayerSeekRelease => {
             if let Some(pos) = s.seek_preview.take() {
@@ -196,7 +196,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             // === PHASE 1: Poll events from audio thread ===
             let events = player.poll_events();
             let event_count = events.len();
-            
+
             // Log tick with full context for debugging timing issues
             tracing::debug!(
                 target: "ui::tick",
@@ -207,11 +207,11 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
                 seek_preview = ?s.seek_preview,
                 "PlayerTick start"
             );
-            
+
             for event in events {
                 handle_player_event(event, player, s);
             }
-            
+
             // === PHASE 2: Sync state from player (source of truth) ===
             // This happens AFTER events so we have the latest state
             let real_state = player.state();
@@ -253,14 +253,14 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
 
             s.player_state = real_state;
             auto_queue_if_needed(player, s);
-            
+
             // === PHASE 3: Update visualization if playing ===
             if s.player_state.status == crate::player::PlaybackStatus::Playing {
                 if let Some(viz) = player.visualization() {
                     s.visualization = viz;
                 }
             }
-            
+
             // === PHASE 4: Poll media controls ===
             // IMPORTANT: Process commands directly here, NOT via handle_player()
             // to avoid re-entrancy issues (player is already borrowed)
@@ -280,18 +280,34 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
             for cmd in commands {
                 tracing::debug!(target: "ui::media_control", command = ?cmd, "Processing media control");
                 match cmd {
-                    player::MediaControlCommand::Play => { do_play(player, s); }
-                    player::MediaControlCommand::Pause => { do_pause(player, s); }
-                    player::MediaControlCommand::Toggle => { do_toggle(player, s); }
-                    player::MediaControlCommand::Stop => { do_stop(player, s); }
-                    player::MediaControlCommand::Next => { do_next(player, s); }
-                    player::MediaControlCommand::Previous => { do_previous(player, s); }
-                    player::MediaControlCommand::Seek(duration) => { do_seek_absolute(player, s, duration); }
-                    player::MediaControlCommand::SeekRelative(dir) => { do_seek_relative(player, s, dir); }
+                    player::MediaControlCommand::Play => {
+                        do_play(player, s);
+                    }
+                    player::MediaControlCommand::Pause => {
+                        do_pause(player, s);
+                    }
+                    player::MediaControlCommand::Toggle => {
+                        do_toggle(player, s);
+                    }
+                    player::MediaControlCommand::Stop => {
+                        do_stop(player, s);
+                    }
+                    player::MediaControlCommand::Next => {
+                        do_next(player, s);
+                    }
+                    player::MediaControlCommand::Previous => {
+                        do_previous(player, s);
+                    }
+                    player::MediaControlCommand::Seek(duration) => {
+                        do_seek_absolute(player, s, duration);
+                    }
+                    player::MediaControlCommand::SeekRelative(dir) => {
+                        do_seek_relative(player, s, dir);
+                    }
                 }
             }
         }
-        
+
         Message::PlayerEvent(event) => {
             handle_player_event(event, player, s);
         }
@@ -306,7 +322,7 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         Message::PlayerVisualizationModeChanged(mode) => {
             s.visualization_mode = mode;
         }
-        
+
         Message::MediaControlPoll => {
             // Now handled in PlayerTick, but kept as explicit fallback handler
             // (actual polling happens in PlayerTick to consolidate all event polling)
@@ -315,6 +331,56 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         Message::PlayerSelectDevice(device_name) => {
             s.current_audio_device = device_name.clone();
             s.status_message = format!("Audio device: {} (restart to apply)", device_name);
+        }
+
+        // Queue management messages
+        Message::QueueJumpTo(idx) => {
+            tracing::debug!(target: "ui::queue", index = idx, "Jumping to queue index");
+            if player.queue_mut().jump_to(idx).is_some() {
+                if let Err(e) = player.load_and_play_current() {
+                    s.status_message = format!("Play error: {}", e);
+                } else {
+                    on_track_changed(player, s);
+                }
+            }
+        }
+
+        Message::QueueRemove(idx) => {
+            tracing::debug!(target: "ui::queue", index = idx, "Removing from queue");
+            if let Some(removed) = player.queue_mut().remove(idx) {
+                let name = removed.display_title();
+                s.status_message = format!("Removed: {}", name);
+            }
+        }
+
+        Message::QueueClear => {
+            tracing::debug!(target: "ui::queue", "Clearing queue");
+            player.queue_mut().clear();
+            if let Err(e) = player.stop() {
+                s.status_message = format!("Stop error: {}", e);
+            } else {
+                s.status_message = "Queue cleared".to_string();
+            }
+        }
+
+        Message::QueueToggleShuffle => {
+            let current = player.queue().shuffle();
+            player.queue_mut().set_shuffle(!current);
+            let mode = if !current { "ON" } else { "OFF" };
+            s.status_message = format!("Shuffle: {}", mode);
+            tracing::debug!(target: "ui::queue", shuffle = !current, "Toggled shuffle");
+        }
+
+        Message::QueueCycleRepeat => {
+            player.queue_mut().cycle_repeat();
+            let mode = player.queue().repeat();
+            let mode_str = match mode {
+                crate::player::RepeatMode::Off => "Off",
+                crate::player::RepeatMode::All => "All",
+                crate::player::RepeatMode::One => "One",
+            };
+            s.status_message = format!("Repeat: {}", mode_str);
+            tracing::debug!(target: "ui::queue", mode = ?mode, "Cycled repeat mode");
         }
 
         _ => {}
@@ -337,8 +403,15 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
             s.player_state.status = status;
             update_smtc_playback_state(s);
         }
-        
-        PlayerEvent::TrackLoaded { path, duration, sample_rate, channels, bits_per_sample, quality } => {
+
+        PlayerEvent::TrackLoaded {
+            path,
+            duration,
+            sample_rate,
+            channels,
+            bits_per_sample,
+            quality,
+        } => {
             tracing::debug!(target: "ui::events", "Received TrackLoaded: {:?}", path.file_name());
             s.player_state.current_track = Some(path);
             s.player_state.duration = duration;
@@ -347,20 +420,20 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
             s.player_state.channels = channels;
             s.player_state.bits_per_sample = bits_per_sample;
             s.player_state.quality = quality;
-            
+
             // Sync metadata to OS media controls
             sync_metadata(s);
         }
-        
+
         PlayerEvent::PositionChanged(position) => {
             s.player_state.position = position;
         }
-        
+
         PlayerEvent::PlaybackFinished => {
             tracing::debug!(target: "ui::events", "Received PlaybackFinished");
             // Auto-queue next track if needed (handled in PlayerTick)
         }
-        
+
         PlayerEvent::Error(err) => {
             tracing::warn!(target: "ui::events", "Received Error: {}", err);
             s.status_message = format!("Player error: {}", err);

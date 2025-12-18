@@ -143,7 +143,7 @@ impl FileWatcher {
         self._debouncer
             .watch(path, RecursiveMode::Recursive)
             .map_err(|e| WatchError::Watch(e.to_string()))?;
-        
+
         Ok(())
     }
 
@@ -179,8 +179,8 @@ impl FileWatcher {
                                 tracing::debug!(target: "scanner::watcher", path = %path.display(), "Directory created");
                                 Some(WatchEvent::DirCreated(path.clone()))
                             }
-                            notify::EventKind::Modify(ModifyKind::Data(_)) |
-                            notify::EventKind::Modify(ModifyKind::Metadata(_)) => {
+                            notify::EventKind::Modify(ModifyKind::Data(_))
+                            | notify::EventKind::Modify(ModifyKind::Metadata(_)) => {
                                 if is_audio_file(path) {
                                     tracing::debug!(target: "scanner::watcher", path = %path.display(), "File modified");
                                     Some(WatchEvent::Modified(path.clone()))
@@ -219,7 +219,10 @@ impl FileWatcher {
     /// Handle debounced events from notify (async channel variant).
     ///
     /// Uses `try_send()` which is safe to call from sync code (notify's callback thread).
-    fn handle_debounced_events_async(result: DebounceEventResult, tx: &tokio_mpsc::Sender<WatchEvent>) {
+    fn handle_debounced_events_async(
+        result: DebounceEventResult,
+        tx: &tokio_mpsc::Sender<WatchEvent>,
+    ) {
         match result {
             Ok(events) => {
                 for event in events {
@@ -242,8 +245,8 @@ impl FileWatcher {
                                 tracing::debug!(target: "scanner::watcher", path = %path.display(), "Directory created");
                                 Some(WatchEvent::DirCreated(path.clone()))
                             }
-                            notify::EventKind::Modify(ModifyKind::Data(_)) |
-                            notify::EventKind::Modify(ModifyKind::Metadata(_)) => {
+                            notify::EventKind::Modify(ModifyKind::Data(_))
+                            | notify::EventKind::Modify(ModifyKind::Metadata(_)) => {
                                 if is_audio_file(path) {
                                     tracing::debug!(target: "scanner::watcher", path = %path.display(), "File modified");
                                     Some(WatchEvent::Modified(path.clone()))
@@ -290,7 +293,12 @@ impl Drop for FileWatcher {
 fn is_audio_file(path: &PathBuf) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| matches!(e.to_lowercase().as_str(), "mp3" | "flac" | "ogg" | "wav" | "m4a"))
+        .map(|e| {
+            matches!(
+                e.to_lowercase().as_str(),
+                "mp3" | "flac" | "ogg" | "wav" | "m4a"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -344,7 +352,7 @@ mod tests {
 
         // Wait for event (with timeout)
         let event = rx.recv_timeout(Duration::from_secs(2));
-        
+
         // Clean up
         drop(watcher);
 
@@ -364,17 +372,17 @@ mod tests {
     }
 
     /// Test that async watcher doesn't block concurrent async tasks.
-    /// 
+    ///
     /// This is a regression test for the bug where `recv_timeout()` in the
     /// watcher stream blocked Iced's async runtime, causing PlayerTick to freeze.
-    /// 
+    ///
     /// The test verifies that:
     /// 1. The async watcher receiver can be polled without blocking
     /// 2. Other async tasks continue to run while waiting for watcher events
     #[tokio::test]
     async fn test_async_watcher_does_not_block_runtime() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         let dir = tempdir().unwrap();
         let (watcher, mut rx) = FileWatcher::new_async(vec![dir.path().to_path_buf()]).unwrap();

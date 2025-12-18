@@ -28,7 +28,9 @@ use super::PlayerError;
 use super::decoder::AudioDecoder;
 use super::resampler::Resampler;
 use super::simd;
-use super::state::{AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState};
+use super::state::{
+    AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState,
+};
 use super::visualization::SpectrumData;
 
 /// Audio output configuration.
@@ -508,7 +510,7 @@ impl AudioThreadContext {
                 tracing::warn!(target: "player::events", error = %err, "Emitting Error event");
             }
         }
-        
+
         // Try to send, log if channel is full (potential timing issue)
         match self.event_tx.try_send(event) {
             Ok(()) => {}
@@ -543,7 +545,7 @@ impl AudioThreadContext {
             has_pending = self.pending_path.is_some(),
             "Audio thread received command"
         );
-        
+
         match cmd {
             PlayerCommand::Load(path) => {
                 tracing::info!(
@@ -581,7 +583,7 @@ impl AudioThreadContext {
                     // This prevents hearing stale audio after seek
                     // Note: We reset the sample counter and position to signal discontinuity
                     let _slots = producer.slots();
-                    
+
                     // Calculate new position immediately so UI updates instantly
                     let duration = dec.duration();
                     let new_pos = duration.mul_f32(pos);
@@ -592,7 +594,7 @@ impl AudioThreadContext {
                         "Seek calculated position"
                     );
                     audio_shared.set_position(new_pos);
-                    
+
                     self.sample_counter = 0;
 
                     // Reset resampler state to avoid artifacts
@@ -628,7 +630,7 @@ impl AudioThreadContext {
             has_decoder = self.decoder.is_some(),
             "start_or_resume called"
         );
-        
+
         match self.pending_path.take() {
             Some(path) => {
                 tracing::debug!(
@@ -694,10 +696,11 @@ impl AudioThreadContext {
                     bit_depth: bits_per_sample,
                     source_sample_rate: source_rate,
                     output_sample_rate: self.output_sample_rate,
-                    is_bit_perfect: dec.format_info.is_lossless && source_rate == self.output_sample_rate,
-                    latency_ms: 0.0,      // Updated dynamically
-                    buffer_size: 48000,   // Ring buffer size
-                    buffer_fill: 0.0,     // Updated dynamically
+                    is_bit_perfect: dec.format_info.is_lossless
+                        && source_rate == self.output_sample_rate,
+                    latency_ms: 0.0,    // Updated dynamically
+                    buffer_size: 48000, // Ring buffer size
+                    buffer_fill: 0.0,   // Updated dynamically
                 };
 
                 // Update shared state
@@ -723,7 +726,7 @@ impl AudioThreadContext {
 
                 // Sync atomic state
                 audio_shared.set_playing(true);
-                audio_shared.stop_flush();  // Resume normal playback - buffer is now drained
+                audio_shared.stop_flush(); // Resume normal playback - buffer is now drained
                 audio_shared.set_position(Duration::ZERO);
                 self.sample_counter = 0;
                 self.decoder = Some(dec);
@@ -744,7 +747,7 @@ impl AudioThreadContext {
                 tracing::error!("Failed to open file: {}", e);
                 state.write().status = PlaybackStatus::Stopped;
                 audio_shared.set_playing(false);
-                audio_shared.stop_flush();  // Don't leave in flushing state on error
+                audio_shared.stop_flush(); // Don't leave in flushing state on error
                 self.emit(PlayerEvent::Error(format!("Failed to open file: {}", e)));
                 self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Stopped));
             }
