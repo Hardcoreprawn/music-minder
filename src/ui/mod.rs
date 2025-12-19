@@ -6,6 +6,7 @@ mod messages;
 mod platform;
 mod state;
 mod streams;
+pub mod theme;
 mod update;
 mod views;
 
@@ -75,13 +76,13 @@ impl MusicMinder {
             ));
         }
 
-        // Player event polling - Poll at 30fps (33ms) for smooth progress bar updates.
+        // Player event polling and UI animation tick
         // Uses time::every() instead of window::frames() because:
-        // 1. window::frames() fires at monitor refresh rate (60-144+ fps)
-        // 2. Iced's subscription tracker has a bounded channel that can overflow
-        // 3. This caused "TrySendError { kind: Full }" and dropped ticks
-        // 30fps is sufficient for event polling and visualization updates.
-        subscriptions.push(time::every(Duration::from_millis(33)).map(|_| Message::PlayerTick));
+        // 1. window::frames() fires at monitor refresh rate and caused channel overflow
+        // 2. This caused "TrySendError { kind: Full }" and dropped ticks
+        // 60fps (16ms) is a good balance for smooth animations without overwhelming.
+        // Audio playback is on a separate thread and unaffected by this rate.
+        subscriptions.push(time::every(Duration::from_millis(16)).map(|_| Message::PlayerTick));
 
         Subscription::batch(subscriptions)
     }
@@ -131,6 +132,12 @@ impl MusicMinder {
             // Navigation
             Message::SwitchPane(pane) => {
                 s.active_pane = *pane;
+            }
+            Message::ToggleSidebar => {
+                s.sidebar_collapsed = !s.sidebar_collapsed;
+            }
+            Message::ToggleOrganizeSection => {
+                s.organize_collapsed = !s.organize_collapsed;
             }
 
             // Scroll updates
@@ -190,7 +197,7 @@ impl MusicMinder {
                 return update::handle_undo(s, message);
             }
 
-            // Enrichment messages
+            // Enrichment messages (single track - Settings pane)
             Message::EnrichmentApiKeyChanged(_)
             | Message::EnrichmentTrackSelected(_)
             | Message::EnrichmentIdentifyPressed
@@ -199,6 +206,24 @@ impl MusicMinder {
             | Message::EnrichmentWriteTagsPressed
             | Message::EnrichmentWriteTagsResult(_) => {
                 return update::handle_enrichment(s, message);
+            }
+
+            // Enrich Pane messages (batch operations)
+            Message::EnrichAddFromLibrary
+            | Message::EnrichAddTracks(_)
+            | Message::EnrichRemoveTrack(_)
+            | Message::EnrichClearTracks
+            | Message::EnrichTrackChecked(_, _)
+            | Message::EnrichFillOnlyToggled(_)
+            | Message::EnrichFetchCoverArtToggled(_)
+            | Message::EnrichBatchIdentify
+            | Message::EnrichBatchIdentifyResult(_, _)
+            | Message::EnrichBatchComplete
+            | Message::EnrichReviewResult(_)
+            | Message::EnrichWriteResult(_)
+            | Message::EnrichWriteAllConfirmed
+            | Message::EnrichExportReport => {
+                return update::handle_enrich_pane(s, message);
             }
 
             // Player messages
@@ -234,6 +259,7 @@ impl MusicMinder {
             // Diagnostics messages
             Message::DiagnosticsRunPressed
             | Message::DiagnosticsComplete(_)
+            | Message::DiagnosticsToggleCheck(_)
             | Message::CoverArtResolved(_, _) => {
                 return update::handle_diagnostics(s, message);
             }

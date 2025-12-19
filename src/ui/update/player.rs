@@ -193,6 +193,20 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
         }
 
         Message::PlayerTick => {
+            // Increment animation tick for spinners and other subtle animations
+            s.animation_tick = s.animation_tick.wrapping_add(1);
+
+            // Check if diagnostics animation is complete and we have pending results
+            if s.diagnostics_pending.is_some() {
+                let elapsed = s.animation_tick.wrapping_sub(s.diagnostics_started_tick);
+                // 7 phases × 90 ticks each = 630 ticks minimum
+                if elapsed >= 630 {
+                    // Commit pending results to final state
+                    s.diagnostics = s.diagnostics_pending.take();
+                    s.diagnostics_loading = false;
+                }
+            }
+
             // === PHASE 1: Poll events from audio thread ===
             let events = player.poll_events();
             let event_count = events.len();
@@ -208,8 +222,9 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
                 "PlayerTick start"
             );
 
+            let mut tasks: Vec<Task<Message>> = Vec::new();
             for event in events {
-                handle_player_event(event, player, s);
+                tasks.push(handle_player_event(event, player, s));
             }
 
             // === PHASE 2: Sync state from player (source of truth) ===
@@ -302,10 +317,15 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
                     }
                 }
             }
+
+            // Return any tasks from event processing (e.g., cover art resolution)
+            if !tasks.is_empty() {
+                return Task::batch(tasks);
+            }
         }
 
         Message::PlayerEvent(event) => {
-            handle_player_event(event, player, s);
+            return handle_player_event(event, player, s);
         }
 
         Message::PlayerVisualizationTick => {
@@ -392,12 +412,15 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
 ///
 /// This is the ONLY place that updates player state in response to audio thread changes.
 /// Events arrive in order, so rapid button mashing resolves deterministically.
-fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState) {
+///
+/// Returns a Task if the event requires async follow-up (e.g., cover art resolution).
+fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState) -> Task<Message> {
     match event {
         PlayerEvent::StatusChanged(status) => {
             tracing::debug!(target: "ui::events", "Received StatusChanged: {:?} -> {:?}", s.player_state.status, status);
             s.player_state.status = status;
             update_smtc_playback_state(s);
+            Task::none()
         }
 
         PlayerEvent::TrackLoaded {
@@ -409,7 +432,7 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
             quality,
         } => {
             tracing::debug!(target: "ui::events", "Received TrackLoaded: {:?}", path.file_name());
-            s.player_state.current_track = Some(path);
+            s.player_state.current_track = Some(path.clone());
             s.player_state.duration = duration;
             s.player_state.position = std::time::Duration::ZERO;
             s.player_state.sample_rate = sample_rate;
@@ -419,20 +442,32 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
 
             // Sync metadata to OS media controls
             sync_metadata(s);
+
+            // Trigger cover art resolution for the new track
+            s.cover_art = CoverArtState {
+                current: None,
+                for_track: Some(path.clone()),
+                loading: true,
+                error: None,
+            };
+            resolve_cover_art_task(path, None)
         }
 
         PlayerEvent::PositionChanged(position) => {
             s.player_state.position = position;
+            Task::none()
         }
 
         PlayerEvent::PlaybackFinished => {
             tracing::debug!(target: "ui::events", "Received PlaybackFinished");
             // Auto-queue next track if needed (handled in PlayerTick)
+            Task::none()
         }
 
         PlayerEvent::Error(err) => {
             tracing::warn!(target: "ui::events", "Received Error: {}", err);
             s.status_message = format!("Player error: {}", err);
+            Task::none()
         }
     }
 }

@@ -29,7 +29,7 @@ use super::messages::Message;
 // Re-export all handler functions
 pub use db::handle_db_init;
 pub use diagnostics::handle_diagnostics;
-pub use enrichment::handle_enrichment;
+pub use enrichment::{handle_enrich_pane, handle_enrichment};
 pub use organize::{handle_organize, handle_undo};
 pub use player::handle_player;
 pub use scan::handle_scan;

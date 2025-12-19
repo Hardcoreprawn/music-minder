@@ -13,6 +13,8 @@ pub fn handle_diagnostics(s: &mut LoadedState, msg: Message) -> Task<Message> {
         Message::DiagnosticsRunPressed => {
             s.diagnostics_loading = true;
             s.diagnostics = None;
+            // Record when diagnostics started for animation timing
+            s.diagnostics_started_tick = s.animation_tick;
 
             return Task::perform(
                 async {
@@ -29,8 +31,16 @@ pub fn handle_diagnostics(s: &mut LoadedState, msg: Message) -> Task<Message> {
             );
         }
         Message::DiagnosticsComplete(report) => {
-            s.diagnostics_loading = false;
-            s.diagnostics = Some(report);
+            // Store in pending - will be revealed when animation completes
+            s.diagnostics_pending = Some(report);
+        }
+        Message::DiagnosticsToggleCheck(name) => {
+            // Toggle expanded state for this check
+            if s.diagnostics_expanded.contains(&name) {
+                s.diagnostics_expanded.remove(&name);
+            } else {
+                s.diagnostics_expanded.insert(name);
+            }
         }
         Message::CoverArtResolved(path, result) => {
             // Only update if this is still the current track

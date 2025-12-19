@@ -3,13 +3,13 @@
 use iced::Task;
 use smallvec::smallvec;
 
-use crate::{diagnostics, enrichment, organizer, player};
+use crate::{diagnostics, enrichment, health, organizer, player};
 
 use super::super::messages::Message;
 use super::super::platform::get_user_music_folder;
 use super::super::state::{
-    ActivePane, AppState, EnrichmentState, LoadedState, OrganizeView, SortColumn,
-    VisualizationMode, WatcherState,
+    ActivePane, AppState, EnrichmentPaneState, EnrichmentState, GardenerState, LoadedState,
+    OrganizeView, SortColumn, VisualizationMode, WatcherState,
 };
 use super::load_tracks_task;
 
@@ -79,8 +79,15 @@ pub fn handle_db_init(
                 can_undo: organizer::UndoLog::has_undo(),
                 preview_loading: false,
                 enrichment: EnrichmentState {
+                    api_key: api_key.clone(),
+                    fpcalc_available,
+                    ..Default::default()
+                },
+                enrichment_pane: EnrichmentPaneState {
                     api_key,
                     fpcalc_available,
+                    fill_only: true, // Default to safer option
+                    fetch_cover_art: true,
                     ..Default::default()
                 },
                 player: player_instance,
@@ -95,10 +102,30 @@ pub fn handle_db_init(
                 cover_art: Default::default(),
                 diagnostics: None,
                 diagnostics_loading: true,
+                diagnostics_started_tick: 0, // Starting at tick 0
+                diagnostics_pending: None,
+                diagnostics_expanded: std::collections::HashSet::new(),
+                // Request high resolution timer for better audio scheduling
+                #[cfg(windows)]
+                high_res_timer: diagnostics::HighResolutionTimer::request(),
+                animation_tick: 0,
                 watcher_state: WatcherState {
                     active: true, // Start watching by default
                     watch_paths: vec![music_folder],
                     ..Default::default()
+                },
+                // Start the quality gardener
+                gardener_state: {
+                    let gardener = health::QualityGardener::new(pool.clone());
+                    let command_tx = gardener.command_sender();
+                    // Start the gardener in the background
+                    let _handle = gardener.start();
+                    tracing::info!("Quality gardener started");
+                    GardenerState {
+                        active: true,
+                        command_tx: Some(command_tx),
+                        ..Default::default()
+                    }
                 },
                 // Search and filter state
                 search_query: String::new(),
@@ -107,6 +134,10 @@ pub fn handle_db_init(
                 sort_ascending: true,
                 filter_format: None,
                 filter_lossless: None,
+                // Sidebar state
+                sidebar_collapsed: false,
+                // Organize section collapsed state
+                organize_collapsed: true, // Collapsed by default per design spec
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])

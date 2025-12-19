@@ -2,12 +2,13 @@
 //!
 //! Handles events from the background file watcher that monitors the
 //! music library directories for changes. When files are added, modified,
-//! or removed, we update the database incrementally.
+//! or removed, we update the database incrementally and queue quality checks.
 
 use iced::Task;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
 
+use crate::health::GardenerCommand;
 use crate::scanner::WatchEvent;
 
 use super::super::messages::Message;
@@ -44,6 +45,42 @@ pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
         Message::WatcherStopped => {
             warn!(target: "ui::watcher", "Background file watcher stopped");
             s.watcher_state.active = false;
+            Task::none()
+        }
+
+        Message::GardenerStarted => {
+            info!(target: "ui::gardener", "Quality gardener started");
+            s.gardener_state.active = true;
+            Task::none()
+        }
+
+        Message::GardenerStopped => {
+            info!(target: "ui::gardener", "Quality gardener stopped");
+            s.gardener_state.active = false;
+            Task::none()
+        }
+
+        Message::QueueQualityCheck(track_id) => {
+            // Send the track to the gardener for quality checking
+            if let Some(ref tx) = s.gardener_state.command_tx {
+                let tx = tx.clone();
+                return Task::perform(
+                    async move {
+                        let _ = tx.send(GardenerCommand::ProcessTrack(track_id)).await;
+                        track_id
+                    },
+                    |_| Message::Noop,
+                );
+            }
+            Task::none()
+        }
+
+        Message::QualityCheckComplete(track_id, score) => {
+            debug!(target: "ui::gardener", track_id, score, "Quality check complete");
+            s.gardener_state.tracks_assessed += 1;
+            if score < 70 {
+                s.gardener_state.tracks_needing_attention += 1;
+            }
             Task::none()
         }
 
@@ -98,6 +135,7 @@ pub fn handle_watcher(s: &mut LoadedState, message: Message) -> Task<Message> {
 /// Handle a new file being created in the library.
 fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
     let pool = s.pool.clone();
+    let gardener_tx = s.gardener_state.command_tx.clone();
 
     Task::perform(
         async move {
@@ -139,14 +177,25 @@ fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 
             // Insert track with mtime
             let path_str = path.to_string_lossy().to_string();
-            if let Err(e) = crate::db::insert_track_with_mtime(
+            let track_id = match crate::db::insert_track_with_mtime(
                 &pool, &meta, &path_str, artist_id, album_id, mtime,
             )
             .await
             {
-                warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to insert track");
-            } else {
-                info!(target: "ui::watcher", path = %path.display(), title = %meta.title, "Track added to library");
+                Ok(id) => {
+                    info!(target: "ui::watcher", path = %path.display(), title = %meta.title, "Track added to library");
+                    Some(id)
+                }
+                Err(e) => {
+                    warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to insert track");
+                    None
+                }
+            };
+
+            // Queue quality check for the new track
+            if let (Some(tx), Some(id)) = (gardener_tx, track_id) {
+                let _ = tx.send(GardenerCommand::ProcessTrack(id)).await;
+                debug!(target: "ui::watcher", track_id = id, "Queued quality check for new track");
             }
 
             path
@@ -158,6 +207,7 @@ fn handle_file_created(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
 /// Handle a file being modified in the library.
 fn handle_file_modified(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
     let pool = s.pool.clone();
+    let gardener_tx = s.gardener_state.command_tx.clone();
 
     Task::perform(
         async move {
@@ -210,14 +260,25 @@ fn handle_file_modified(s: &mut LoadedState, path: PathBuf) -> Task<Message> {
                 };
 
                 // Update track
-                if let Err(e) = crate::db::insert_track_with_mtime(
+                let track_id = match crate::db::insert_track_with_mtime(
                     &pool, &meta, &path_str, artist_id, album_id, mtime,
                 )
                 .await
                 {
-                    warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to update track");
-                } else {
-                    debug!(target: "ui::watcher", path = %path.display(), "Track updated");
+                    Ok(id) => {
+                        debug!(target: "ui::watcher", path = %path.display(), "Track updated");
+                        Some(id)
+                    }
+                    Err(e) => {
+                        warn!(target: "ui::watcher", path = %path.display(), error = %e, "Failed to update track");
+                        None
+                    }
+                };
+
+                // Queue quality re-check for modified track
+                if let (Some(tx), Some(id)) = (gardener_tx, track_id) {
+                    let _ = tx.send(GardenerCommand::ProcessTrack(id)).await;
+                    debug!(target: "ui::watcher", track_id = id, "Queued quality check for modified track");
                 }
             } else {
                 // New file (not in DB) - treat as create

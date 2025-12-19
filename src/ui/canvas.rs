@@ -5,6 +5,10 @@
 //! - Particle explosions and swirling galaxy effects
 //! - 3D wave simulations like an ocean
 //! - All reactive to audio frequency and amplitude
+//!
+//! Note: This module is prepared for future visualization features.
+
+#![allow(dead_code)]
 
 use iced::mouse::Cursor;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke};
