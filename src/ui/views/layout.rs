@@ -1,16 +1,17 @@
 //! Layout composition and main pane structure.
 
-use iced::widget::{Space, button, column, container, row, text};
-use iced::{Element, Length};
-
-use crate::ui::canvas::visualization_view;
 use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::{ActivePane, LoadedState};
+use crate::ui::theme::{self, color, layout, spacing, typography};
+use iced::widget::{Space, button, column, container, row, scrollable, text, tooltip};
+use iced::{Element, Length};
 
 use super::diagnostics_view::diagnostics_pane;
+use super::enrich::enrich_pane;
 use super::library::library_pane;
 use super::player::player_controls;
+use super::settings::settings_pane;
 
 /// Main loaded state view - integrated layout with sidebar
 pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
@@ -18,6 +19,7 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
     let main_content = match s.active_pane {
         ActivePane::Library => library_pane(s),
         ActivePane::NowPlaying => now_playing_pane(s),
+        ActivePane::Enrich => enrich_pane(s),
         ActivePane::Settings => settings_pane(s),
         ActivePane::Diagnostics => diagnostics_pane(s),
     };
@@ -25,179 +27,419 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
     // Player controls always visible at bottom
     let player_bar = player_controls(s);
 
-    column![
-        row![
-            sidebar,
-            container(main_content)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(20),
-        ]
-        .height(Length::Fill),
-        player_bar,
-    ]
-    .spacing(0)
-    .into()
+    // Main content area with BASE background
+    let content_area = container(main_content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(spacing::XL)
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(color::BASE)),
+            ..Default::default()
+        });
+
+    column![row![sidebar, content_area].height(Length::Fill), player_bar,]
+        .spacing(0)
+        .into()
 }
 
 /// Watcher status indicator - shows if background scanning is active
-fn watcher_status_indicator(s: &LoadedState) -> Element<'_, Message> {
-    let status_text: Element<Message> = if s.watcher_state.active {
-        if s.watcher_state.pending_changes > 0 {
-            row![
-                text("⟳").size(10).color([0.4, 0.7, 0.4]),
-                text(format!(" Syncing {}...", s.watcher_state.pending_changes))
-                    .size(10)
-                    .color([0.4, 0.7, 0.4]),
-            ]
-            .spacing(2)
-            .into()
+fn watcher_status_indicator(s: &LoadedState, collapsed: bool) -> Element<'_, Message> {
+    if collapsed {
+        // Collapsed: just show a dot indicator
+        let (icon, color) = if s.watcher_state.active {
+            if s.watcher_state.pending_changes > 0 {
+                (icons::SYNC, color::SUCCESS)
+            } else {
+                (icons::EYE, color::SUCCESS)
+            }
         } else {
-            row![
-                text("●").size(8).color([0.3, 0.5, 0.3]),
-                text(" Watching").size(10).color([0.4, 0.4, 0.4]),
-            ]
-            .spacing(2)
+            (icons::EYE_SLASH, color::TEXT_MUTED)
+        };
+        container(icon_sized(icon, typography::SIZE_SMALL).color(color))
+            .center_x(Length::Fill)
             .into()
-        }
     } else {
-        text("Not watching").size(10).color([0.4, 0.4, 0.4]).into()
-    };
+        // Expanded: full status text
+        let status_text: Element<Message> = if s.watcher_state.active {
+            if s.watcher_state.pending_changes > 0 {
+                // Animated spinner while syncing - fixed width container prevents jank
+                let spinner_char = icons::spinner_frame(s.animation_tick);
+                row![
+                    container(
+                        text(spinner_char)
+                            .size(typography::SIZE_TINY)
+                            .color(color::SUCCESS)
+                    )
+                    .width(Length::Fixed(12.0))
+                    .center_x(Length::Fixed(12.0)),
+                    text(format!("Syncing {}...", s.watcher_state.pending_changes))
+                        .size(typography::SIZE_TINY)
+                        .color(color::SUCCESS),
+                ]
+                .spacing(spacing::XS)
+                .into()
+            } else {
+                row![
+                    text("●").size(8).color(color::SUCCESS),
+                    text(" Watching")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED),
+                ]
+                .spacing(spacing::XS)
+                .into()
+            }
+        } else {
+            text("Not watching")
+                .size(typography::SIZE_TINY)
+                .color(color::TEXT_MUTED)
+                .into()
+        };
 
-    // Refresh button - disabled while scanning
-    let refresh_btn = if s.is_scanning {
-        button(text("⟳").size(10))
-            .padding([2, 6])
-            .style(button::secondary)
-    } else {
-        button(text("⟳").size(10))
-            .padding([2, 6])
-            .style(button::secondary)
-            .on_press(Message::RescanLibrary)
-    };
+        // Refresh button - disabled while scanning
+        let refresh_btn = button(icon_sized(icons::ARROW_ROTATE, typography::SIZE_TINY))
+            .padding([spacing::XS, spacing::SM])
+            .style(theme::button_ghost);
 
-    row![status_text, Space::with_width(Length::Fill), refresh_btn]
-        .spacing(5)
-        .align_y(iced::Alignment::Center)
+        let refresh_btn = if s.is_scanning {
+            refresh_btn
+        } else {
+            refresh_btn.on_press(Message::RescanLibrary)
+        };
+
+        row![status_text, Space::with_width(Length::Fill), refresh_btn]
+            .spacing(spacing::SM)
+            .align_y(iced::Alignment::Center)
+            .into()
+    }
+}
+
+/// Horizontal divider for sidebar sections
+fn sidebar_divider() -> Element<'static, Message> {
+    container(Space::new(Length::Fill, Length::Fixed(1.0)))
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(color::BORDER_SUBTLE)),
+            ..Default::default()
+        })
+        .padding([0, spacing::XS])
         .into()
 }
 
 /// Sidebar with navigation and status
 fn sidebar_view(s: &LoadedState) -> Element<'_, Message> {
+    let collapsed = s.sidebar_collapsed;
+    let sidebar_width = if collapsed {
+        layout::SIDEBAR_COLLAPSED as f32
+    } else {
+        layout::SIDEBAR_WIDTH as f32
+    };
+
     let is_library = s.active_pane == ActivePane::Library;
     let is_playing = s.active_pane == ActivePane::NowPlaying;
+    let is_enrich = s.active_pane == ActivePane::Enrich;
     let is_settings = s.active_pane == ActivePane::Settings;
     let is_diagnostics = s.active_pane == ActivePane::Diagnostics;
 
-    // System status indicator
-    let system_status = if let Some(ref diag) = s.diagnostics {
-        let (status_icon, color) = match diag.overall_rating {
-            crate::diagnostics::AudioReadiness::Excellent => (icons::CHECK_CIRCLE, [0.2, 0.7, 0.2]),
-            crate::diagnostics::AudioReadiness::Good => (icons::CHECK_CIRCLE, [0.4, 0.7, 0.2]),
-            crate::diagnostics::AudioReadiness::Fair => {
-                (icons::EXCLAMATION_CIRCLE, [0.8, 0.6, 0.0])
+    // Track count for stats section
+    let track_count = s.tracks.len();
+
+    // System status indicator - returns (icon_char, color, label, is_loading)
+    let system_status: (char, iced::Color, &str, bool) = if let Some(ref diag) = s.diagnostics {
+        let (status_icon, status_color, status_label) = match diag.overall_rating {
+            crate::diagnostics::AudioReadiness::Excellent => {
+                (icons::CIRCLE_CHECK, color::SUCCESS, "Excellent")
             }
-            crate::diagnostics::AudioReadiness::Poor => (icons::X_CIRCLE, [0.8, 0.2, 0.2]),
+            crate::diagnostics::AudioReadiness::Good => {
+                (icons::CIRCLE_CHECK, color::SUCCESS, "Good")
+            }
+            crate::diagnostics::AudioReadiness::Fair => {
+                (icons::CIRCLE_EXCLAIM, color::WARNING, "Fair")
+            }
+            crate::diagnostics::AudioReadiness::Poor => (icons::CIRCLE_XMARK, color::ERROR, "Poor"),
         };
-        row![
-            icon_sized(status_icon, 14).color(color),
-            text(format!("{:?}", diag.overall_rating))
-                .size(12)
-                .color(color),
-        ]
-        .spacing(5)
+        (status_icon, status_color, status_label, false)
     } else {
-        row![
-            icon_sized(icons::INFO_CIRCLE, 14).color([0.5, 0.5, 0.5]),
-            text("Checking...").size(12).color([0.5, 0.5, 0.5]),
-        ]
-        .spacing(5)
+        // Use a placeholder char - we'll render the spinner text directly
+        (' ', color::TEXT_MUTED, "...", true)
     };
 
-    let library_style = if is_library {
-        button::primary
-    } else {
-        button::secondary
-    };
-    let playing_style = if is_playing {
-        button::primary
-    } else {
-        button::secondary
-    };
-    let settings_style = if is_settings {
-        button::primary
-    } else {
-        button::secondary
-    };
-    let diagnostics_style = if is_diagnostics {
-        button::primary
-    } else {
-        button::secondary
+    // Helper to render the system status icon (animated spinner when loading)
+    let render_status_icon = |size: u16| -> Element<'_, Message> {
+        if system_status.3 {
+            // Loading: use animated ASCII spinner in fixed-width container to prevent jitter
+            let spinner_char = icons::spinner_frame(s.animation_tick);
+            container(text(spinner_char).size(size).color(system_status.1))
+                .width(Length::Fixed(size as f32))
+                .center_x(Length::Fixed(size as f32))
+                .into()
+        } else {
+            // Loaded: use Font Awesome icon
+            icon_sized(system_status.0, size)
+                .color(system_status.1)
+                .into()
+        }
     };
 
-    container(
-        column![
-            text("Music Minder").size(20),
-            Space::with_height(20),
-            button(
-                row![icon_sized(icons::COLLECTION, 14), text(" Library").size(14)]
-                    .align_y(iced::Alignment::Center)
+    // Nav button helper - creates consistent styled buttons with proper icon/text alignment
+    let nav_button = |icon: char,
+                      label: &'static str,
+                      is_active: bool,
+                      pane: ActivePane|
+     -> Element<'_, Message> {
+        let (icon_color, text_color) = if is_active {
+            (color::TEXT_PRIMARY, color::TEXT_PRIMARY)
+        } else {
+            (color::TEXT_MUTED, color::TEXT_SECONDARY)
+        };
+
+        let style_fn = if is_active {
+            theme::button_nav_active
+        } else {
+            theme::button_nav
+        };
+
+        if collapsed {
+            // Collapsed: icon only with tooltip
+            let btn = button(
+                container(icon_sized(icon, typography::SIZE_BODY).color(icon_color))
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill),
             )
-            .padding([8, 16])
+            .padding(spacing::SM)
             .width(Length::Fill)
-            .style(library_style)
-            .on_press(Message::SwitchPane(ActivePane::Library)),
+            .height(Length::Fixed(40.0))
+            .style(style_fn)
+            .on_press(Message::SwitchPane(pane));
+
+            tooltip(btn, label, tooltip::Position::Right)
+                .gap(spacing::SM as f32)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
+                    border: iced::Border {
+                        color: color::BORDER,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .into()
+        } else {
+            // Expanded: icon + label
             button(
                 row![
-                    icon_sized(icons::MUSIC_NOTE, 14),
-                    text(" Now Playing").size(14)
+                    container(icon_sized(icon, typography::SIZE_BODY).color(icon_color))
+                        .width(Length::Fixed(24.0)),
+                    text(label).size(typography::SIZE_BODY).color(text_color),
+                ]
+                .spacing(spacing::SM)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([spacing::SM, spacing::MD])
+            .width(Length::Fill)
+            .style(style_fn)
+            .on_press(Message::SwitchPane(pane))
+            .into()
+        }
+    };
+
+    // Toggle collapse button
+    let toggle_icon = if collapsed {
+        icons::CHEVRON_RIGHT
+    } else {
+        icons::CHEVRON_LEFT
+    };
+    let toggle_btn = button(
+        container(icon_sized(toggle_icon, typography::SIZE_SMALL).color(color::TEXT_MUTED))
+            .center_x(Length::Fill),
+    )
+    .padding([spacing::XS, spacing::SM])
+    .width(Length::Fill)
+    .style(theme::button_ghost)
+    .on_press(Message::ToggleSidebar);
+
+    // Build sidebar content based on collapsed state
+    let sidebar_content: Element<Message> = if collapsed {
+        // Collapsed sidebar: icons only
+        column![
+            // App icon (music note as logo)
+            container(icon_sized(icons::MUSIC, typography::SIZE_TITLE).color(color::PRIMARY))
+                .padding([spacing::SM, 0])
+                .center_x(Length::Fill),
+            Space::with_height(spacing::SM),
+            sidebar_divider(),
+            Space::with_height(spacing::SM),
+            // Navigation icons
+            nav_button(
+                icons::MUSIC,
+                "Now Playing",
+                is_playing,
+                ActivePane::NowPlaying
+            ),
+            nav_button(icons::LIST, "Library", is_library, ActivePane::Library),
+            nav_button(icons::WAND, "Enrich", is_enrich, ActivePane::Enrich),
+            nav_button(icons::GEAR, "Settings", is_settings, ActivePane::Settings),
+            Space::with_height(Length::Fill),
+            // Status section (compact)
+            sidebar_divider(),
+            Space::with_height(spacing::SM),
+            watcher_status_indicator(s, true),
+            Space::with_height(spacing::XS),
+            // Track count as icon with tooltip
+            tooltip(
+                container(icon_sized(icons::DISC, typography::SIZE_SMALL).color(color::TEXT_MUTED))
+                    .center_x(Length::Fill),
+                text(format!("{} tracks", track_count)).size(typography::SIZE_SMALL),
+                tooltip::Position::Right
+            )
+            .gap(spacing::SM as f32)
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
+                border: iced::Border {
+                    color: color::BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }),
+            Space::with_height(spacing::SM),
+            sidebar_divider(),
+            Space::with_height(spacing::SM),
+            // System status (icon only with tooltip)
+            tooltip(
+                button(
+                    container(render_status_icon(typography::SIZE_SMALL)).center_x(Length::Fill)
+                )
+                .padding(spacing::SM)
+                .width(Length::Fill)
+                .style(if is_diagnostics {
+                    theme::button_nav_active
+                } else {
+                    theme::button_nav
+                })
+                .on_press(Message::SwitchPane(ActivePane::Diagnostics)),
+                text(format!("System: {}", system_status.2)).size(typography::SIZE_SMALL),
+                tooltip::Position::Right
+            )
+            .gap(spacing::SM as f32)
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
+                border: iced::Border {
+                    color: color::BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }),
+            Space::with_height(spacing::SM),
+            sidebar_divider(),
+            Space::with_height(spacing::SM),
+            // Toggle expand button
+            toggle_btn,
+        ]
+        .spacing(spacing::XS)
+        .width(Length::Fixed(sidebar_width))
+        .into()
+    } else {
+        // Expanded sidebar: full content
+        column![
+            // App title / logo area
+            container(
+                text("Music Minder")
+                    .size(typography::SIZE_TITLE)
+                    .color(color::TEXT_PRIMARY)
+            )
+            .padding([spacing::SM, 0]),
+            Space::with_height(spacing::MD),
+            sidebar_divider(),
+            Space::with_height(spacing::MD),
+            // Navigation buttons
+            nav_button(
+                icons::MUSIC,
+                "Now Playing",
+                is_playing,
+                ActivePane::NowPlaying
+            ),
+            nav_button(icons::LIST, "Library", is_library, ActivePane::Library),
+            nav_button(icons::WAND, "Enrich", is_enrich, ActivePane::Enrich),
+            nav_button(icons::GEAR, "Settings", is_settings, ActivePane::Settings),
+            Space::with_height(Length::Fill),
+            // Stats section header
+            sidebar_divider(),
+            Space::with_height(spacing::MD),
+            text("Status")
+                .size(typography::SIZE_TINY)
+                .color(color::TEXT_MUTED),
+            Space::with_height(spacing::SM),
+            // Watcher status with icon
+            watcher_status_indicator(s, false),
+            // Track count
+            row![
+                icon_sized(icons::DISC, typography::SIZE_SMALL).color(color::TEXT_MUTED),
+                Space::with_width(spacing::XS),
+                text(format!("{} tracks", track_count))
+                    .size(typography::SIZE_SMALL)
+                    .color(color::TEXT_MUTED),
+            ]
+            .align_y(iced::Alignment::Center),
+            Space::with_height(spacing::MD),
+            sidebar_divider(),
+            Space::with_height(spacing::MD),
+            // System status section - clickable to go to Diagnostics
+            button(
+                row![
+                    text("System")
+                        .size(typography::SIZE_SMALL)
+                        .color(color::TEXT_MUTED),
+                    Space::with_width(Length::Fill),
+                    row![
+                        render_status_icon(typography::SIZE_SMALL),
+                        Space::with_width(spacing::XS),
+                        text(system_status.2)
+                            .size(typography::SIZE_SMALL)
+                            .color(system_status.1),
+                    ]
+                    .align_y(iced::Alignment::Center),
                 ]
                 .align_y(iced::Alignment::Center)
+                .width(Length::Fill)
             )
-            .padding([8, 16])
+            .padding([spacing::SM, spacing::XS])
             .width(Length::Fill)
-            .style(playing_style)
-            .on_press(Message::SwitchPane(ActivePane::NowPlaying)),
-            button(
-                row![icon_sized(icons::GEAR, 14), text(" Settings").size(14)]
-                    .align_y(iced::Alignment::Center)
-            )
-            .padding([8, 16])
-            .width(Length::Fill)
-            .style(settings_style)
-            .on_press(Message::SwitchPane(ActivePane::Settings)),
-            button(
-                row![icon_sized(icons::GEAR, 14), text(" Diagnostics").size(14)]
-                    .align_y(iced::Alignment::Center)
-            )
-            .padding([8, 16])
-            .width(Length::Fill)
-            .style(diagnostics_style)
+            .style(if is_diagnostics {
+                theme::button_nav_active
+            } else {
+                theme::button_nav
+            })
             .on_press(Message::SwitchPane(ActivePane::Diagnostics)),
-            Space::with_height(Length::Fill),
-            text("System Status").size(12).color([0.6, 0.6, 0.6]),
-            system_status,
-            Space::with_height(10),
-            // Watcher status indicator
-            watcher_status_indicator(s),
-            text(&s.status_message).size(10).color([0.5, 0.5, 0.5]),
+            Space::with_height(spacing::SM),
+            sidebar_divider(),
+            Space::with_height(spacing::SM),
+            // Toggle collapse button
+            toggle_btn,
         ]
-        .spacing(5)
-        .width(Length::Fixed(180.0)),
-    )
-    .style(|_| container::Style {
-        background: Some(iced::Background::Color([0.15, 0.15, 0.18].into())),
-        ..Default::default()
-    })
-    .padding(15)
-    .height(Length::Fill)
-    .into()
+        .spacing(spacing::XS)
+        .width(Length::Fixed(sidebar_width))
+        .into()
+    };
+
+    container(sidebar_content)
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(color::SURFACE)),
+            border: iced::Border {
+                color: color::BORDER_SUBTLE,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
+        .padding(spacing::MD)
+        .height(Length::Fill)
+        .width(Length::Fixed(sidebar_width))
+        .into()
 }
 
-/// Now Playing pane with large visualization
+/// Now Playing pane - cover art, track info, and queue
 fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
-    use crate::ui::state::VisualizationMode;
-    use iced::widget::{image, scrollable};
+    use iced::widget::image;
 
     let state = &s.player_state;
 
@@ -218,149 +460,131 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
         ("No Track Playing".to_string(), String::new(), String::new())
     };
 
-    // Cover art display (200x200 or placeholder)
-    let cover_size = 200.0;
+    // Cover art display (300x300 per design doc)
+    let cover_size = layout::COVER_ART_LARGE as f32;
     let cover_widget: Element<Message> = if let Some(ref cover) = s.cover_art.current {
-        // Display the loaded cover art
-        image(image::Handle::from_bytes(cover.data.clone()))
-            .width(Length::Fixed(cover_size))
-            .height(Length::Fixed(cover_size))
-            .into()
+        container(
+            image(image::Handle::from_bytes(cover.data.clone()))
+                .width(Length::Fixed(cover_size))
+                .height(Length::Fixed(cover_size)),
+        )
+        .style(|_| container::Style {
+            border: iced::Border {
+                color: color::BORDER_SUBTLE,
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
     } else if s.cover_art.loading {
-        // Show loading placeholder
-        container(text("Loading...").size(14).color([0.5, 0.5, 0.5]))
+        container(icon_sized(icons::SPINNER, typography::SIZE_TITLE).color(color::TEXT_MUTED))
             .width(Length::Fixed(cover_size))
             .height(Length::Fixed(cover_size))
             .center_x(Length::Fixed(cover_size))
             .center_y(Length::Fixed(cover_size))
             .style(|_| container::Style {
-                background: Some(iced::Background::Color([0.15, 0.15, 0.18].into())),
+                background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
                 border: iced::Border {
-                    color: [0.25, 0.25, 0.28].into(),
+                    color: color::BORDER_SUBTLE,
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: 8.0.into(),
                 },
                 ..Default::default()
             })
             .into()
     } else {
-        // Show placeholder when no cover available
         container(
             column![
-                text("♫").size(48).color([0.3, 0.3, 0.35]),
-                text("No Cover").size(12).color([0.4, 0.4, 0.45]),
+                icon_sized(icons::MUSIC, 64).color(color::TEXT_MUTED),
+                text("No Cover")
+                    .size(typography::SIZE_SMALL)
+                    .color(color::TEXT_MUTED),
             ]
             .align_x(iced::Alignment::Center)
-            .spacing(8),
+            .spacing(spacing::SM),
         )
         .width(Length::Fixed(cover_size))
         .height(Length::Fixed(cover_size))
         .center_x(Length::Fixed(cover_size))
         .center_y(Length::Fixed(cover_size))
         .style(|_| container::Style {
-            background: Some(iced::Background::Color([0.15, 0.15, 0.18].into())),
+            background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
             border: iced::Border {
-                color: [0.25, 0.25, 0.28].into(),
+                color: color::BORDER_SUBTLE,
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: 8.0.into(),
             },
             ..Default::default()
         })
         .into()
     };
 
-    // Track info with cover source indicator
-    let cover_source_text = if let Some(ref cover) = s.cover_art.current {
-        let source = match cover.source {
-            crate::cover::CoverSource::Embedded => "embedded",
-            crate::cover::CoverSource::Sidecar(_) => "sidecar",
-            crate::cover::CoverSource::Cached(_) => "cached",
-            crate::cover::CoverSource::Remote => "remote",
+    // Track info section (right of cover art)
+    let track_info_section = if state.current_track.is_some() {
+        // Format info line (e.g., "FLAC • 44.1kHz • 16bit")
+        let format_info = state.format_info();
+
+        // Cover source indicator
+        let cover_source = if let Some(ref cover) = s.cover_art.current {
+            match cover.source {
+                crate::cover::CoverSource::Embedded => "Embedded",
+                crate::cover::CoverSource::Sidecar(_) => "Folder art",
+                crate::cover::CoverSource::Cached(_) => "Cached",
+                crate::cover::CoverSource::Remote => "Remote",
+            }
+        } else {
+            ""
         };
-        text(format!("Cover: {}", source))
-            .size(10)
-            .color([0.4, 0.4, 0.45])
+
+        column![
+            // Track title (hero size)
+            text(track_name)
+                .size(typography::SIZE_HERO)
+                .color(color::TEXT_PRIMARY),
+            Space::with_height(spacing::XS),
+            // Artist
+            text(artist_name)
+                .size(typography::SIZE_TITLE)
+                .color(color::TEXT_SECONDARY),
+            // Album
+            text(album_name)
+                .size(typography::SIZE_HEADING)
+                .color(color::TEXT_MUTED),
+            Space::with_height(spacing::LG),
+            // Format info with lossless badge
+            row![
+                text(format_info)
+                    .size(typography::SIZE_SMALL)
+                    .color(color::TEXT_MUTED),
+            ]
+            .spacing(spacing::SM),
+            // Cover source
+            text(cover_source)
+                .size(typography::SIZE_TINY)
+                .color(color::TEXT_MUTED),
+        ]
+        .spacing(spacing::XS)
     } else {
-        text("").size(10)
+        column![
+            text("No Track Playing")
+                .size(typography::SIZE_HERO)
+                .color(color::TEXT_MUTED),
+            Space::with_height(spacing::SM),
+            text("Select a track from the library")
+                .size(typography::SIZE_BODY)
+                .color(color::TEXT_MUTED),
+        ]
+        .spacing(spacing::XS)
     };
 
-    let track_display = if state.current_track.is_some() {
-        // Get the file path for display
-        let file_path_text = state
-            .current_track
-            .as_ref()
-            .map(|p| {
-                // Show just the filename, or relative path if short enough
-                let display = p
-                    .file_name()
-                    .map(|f| f.to_string_lossy().to_string())
-                    .unwrap_or_else(|| p.display().to_string());
-                text(format!("📁 {}", display))
-                    .size(11)
-                    .color([0.4, 0.4, 0.45])
-            })
-            .unwrap_or_else(|| text("").size(11));
-
-        container(
-            row![
-                cover_widget,
-                Space::with_width(20),
-                column![
-                    text(track_name).size(32),
-                    text(artist_name).size(20).color([0.7, 0.7, 0.7]),
-                    text(album_name).size(16).color([0.5, 0.5, 0.5]),
-                    Space::with_height(8),
-                    text(state.format_info()).size(14).color([0.5, 0.5, 0.5]),
-                    cover_source_text,
-                    file_path_text,
-                ]
-                .spacing(5),
-            ]
-            .align_y(iced::Alignment::Start),
-        )
-        .padding(10)
-    } else {
-        container(
-            row![
-                cover_widget,
-                Space::with_width(20),
-                column![
-                    text("No Track Playing").size(32).color([0.4, 0.4, 0.4]),
-                    text("Select a track from the library to start playing")
-                        .size(14)
-                        .color([0.4, 0.4, 0.4]),
-                ]
-                .spacing(5),
-            ]
-            .align_y(iced::Alignment::Start),
-        )
-        .padding(10)
-    };
-
-    // Visualization mode selector - styled buttons
-    let viz_buttons = row![
-        viz_mode_button(
-            "▊ Spectrum",
-            VisualizationMode::Spectrum,
-            s.visualization_mode
-        ),
-        viz_mode_button(
-            "〜 Waveform",
-            VisualizationMode::Waveform,
-            s.visualization_mode
-        ),
-        viz_mode_button(
-            "▌ VU Meter",
-            VisualizationMode::VuMeter,
-            s.visualization_mode
-        ),
-        viz_mode_button("○ Off", VisualizationMode::Off, s.visualization_mode),
+    // Cover + Info row
+    let track_display = row![
+        cover_widget,
+        Space::with_width(spacing::XL),
+        track_info_section,
     ]
-    .spacing(8);
-
-    // Large visualization canvas
-    let viz_height = 200.0;
-    let viz_canvas = visualization_view(s.visualization_mode, &s.visualization, viz_height);
+    .align_y(iced::Alignment::Start);
 
     // Queue display with controls
     let queue_section = {
@@ -380,84 +604,57 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
         // Track position indicator (e.g., "Track 3 of 25")
         let position_text = if let Some(idx) = current_idx {
             text(format!("Track {} of {}", idx + 1, queue_len))
-                .size(12)
-                .color([0.6, 0.6, 0.6])
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_SECONDARY)
         } else {
             text(format!("{} tracks", queue_len))
-                .size(12)
-                .color([0.5, 0.5, 0.5])
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_MUTED)
         };
 
         // Shuffle button with active state
-        let shuffle_btn = {
-            let (fg, bg) = if shuffle_on {
-                ([0.3, 0.8, 0.5], [0.15, 0.25, 0.18])
-            } else {
-                ([0.5, 0.5, 0.5], [0.15, 0.15, 0.18])
-            };
-            button(text("🔀").size(14).color(fg))
-                .padding([4, 8])
-                .style(move |_, _| button::Style {
-                    background: Some(iced::Background::Color(bg.into())),
-                    text_color: fg.into(),
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .on_press(Message::QueueToggleShuffle)
+        let shuffle_style = if shuffle_on {
+            theme::button_active
+        } else {
+            theme::button_ghost
         };
+        let shuffle_btn = button(icon_sized(icons::SHUFFLE, typography::SIZE_SMALL))
+            .padding([spacing::XS, spacing::SM])
+            .style(shuffle_style)
+            .on_press(Message::QueueToggleShuffle);
 
         // Repeat button with mode indicator
-        let repeat_text = match repeat_mode {
-            crate::player::RepeatMode::Off => "🔁",
-            crate::player::RepeatMode::All => "🔁",
-            crate::player::RepeatMode::One => "🔂",
+        let repeat_icon = match repeat_mode {
+            crate::player::RepeatMode::One => icons::REPEAT_ONE,
+            _ => icons::REPEAT,
         };
         let repeat_active = repeat_mode != crate::player::RepeatMode::Off;
-        let repeat_btn = {
-            let (fg, bg) = if repeat_active {
-                ([0.3, 0.7, 0.9], [0.15, 0.2, 0.25])
-            } else {
-                ([0.5, 0.5, 0.5], [0.15, 0.15, 0.18])
-            };
-            button(text(repeat_text).size(14).color(fg))
-                .padding([4, 8])
-                .style(move |_, _| button::Style {
-                    background: Some(iced::Background::Color(bg.into())),
-                    text_color: fg.into(),
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .on_press(Message::QueueCycleRepeat)
+        let repeat_style = if repeat_active {
+            theme::button_active
+        } else {
+            theme::button_ghost
         };
+        let repeat_btn = button(icon_sized(repeat_icon, typography::SIZE_SMALL))
+            .padding([spacing::XS, spacing::SM])
+            .style(repeat_style)
+            .on_press(Message::QueueCycleRepeat);
 
         // Clear button
-        let clear_btn = button(text("✕").size(12).color([0.6, 0.4, 0.4]))
-            .padding([4, 8])
-            .style(|_, _| button::Style {
-                background: Some(iced::Background::Color([0.2, 0.15, 0.15].into())),
-                text_color: [0.8, 0.5, 0.5].into(),
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            })
+        let clear_btn = button(icon_sized(icons::XMARK, typography::SIZE_SMALL))
+            .padding([spacing::XS, spacing::SM])
+            .style(theme::button_ghost)
             .on_press(Message::QueueClear);
 
         let queue_header = row![
-            text("Play Queue").size(16),
-            Space::with_width(8),
+            text("Queue")
+                .size(typography::SIZE_HEADING)
+                .color(color::TEXT_PRIMARY),
+            Space::with_width(spacing::MD),
             shuffle_btn,
             repeat_btn,
             Space::with_width(Length::Fill),
             position_text,
-            Space::with_width(8),
+            Space::with_width(spacing::SM),
             clear_btn,
         ]
         .align_y(iced::Alignment::Center);
@@ -471,16 +668,16 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                 .map(|(i, item)| {
                     let is_current = player.queue().current_index() == Some(i);
                     let bg = if is_current {
-                        [0.2, 0.3, 0.4]
+                        color::PRIMARY_PRESSED
                     } else if i % 2 == 0 {
-                        [0.12, 0.12, 0.15]
+                        color::SURFACE
                     } else {
-                        [0.1, 0.1, 0.13]
+                        color::BASE
                     };
                     let fg = if is_current {
-                        [0.4, 0.8, 1.0]
+                        color::TEXT_PRIMARY
                     } else {
-                        [0.7, 0.7, 0.7]
+                        color::TEXT_SECONDARY
                     };
 
                     let display_text = if let Some(track) = s.track_info_by_path(&item.path) {
@@ -493,41 +690,42 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     };
 
                     // Index number with current indicator
-                    let index_text = if is_current {
-                        text("▶").size(10).color(fg)
+                    let index_widget: Element<Message> = if is_current {
+                        icon_sized(icons::PLAY, typography::SIZE_TINY)
+                            .color(color::PRIMARY)
+                            .into()
                     } else {
-                        text(format!("{}", i + 1)).size(10).color([0.4, 0.4, 0.4])
+                        text(format!("{}", i + 1))
+                            .size(typography::SIZE_TINY)
+                            .color(color::TEXT_MUTED)
+                            .into()
                     };
 
                     // Remove button for this item
-                    let remove_btn = button(text("×").size(12).color([0.5, 0.4, 0.4]))
-                        .padding([2, 6])
-                        .style(|_, _| button::Style {
-                            background: Some(iced::Background::Color([0.0, 0.0, 0.0, 0.0].into())),
-                            text_color: [0.6, 0.4, 0.4].into(),
-                            ..Default::default()
-                        })
+                    let remove_btn = button(icon_sized(icons::XMARK, typography::SIZE_TINY))
+                        .padding([spacing::XS, spacing::SM])
+                        .style(theme::button_ghost)
                         .on_press(Message::QueueRemove(i));
 
                     // Make the row clickable to jump to track
                     let track_btn = button(
                         row![
-                            container(index_text).width(Length::Fixed(24.0)),
-                            text(display_text).size(12).color(fg),
+                            container(index_widget).width(Length::Fixed(24.0)),
+                            text(display_text).size(typography::SIZE_SMALL).color(fg),
                             Space::with_width(Length::Fill),
                         ]
                         .align_y(iced::Alignment::Center),
                     )
                     .width(Length::Fill)
-                    .padding([4, 8])
+                    .padding([spacing::XS, spacing::SM])
                     .style(move |_, _| button::Style {
-                        background: Some(iced::Background::Color(bg.into())),
-                        text_color: fg.into(),
+                        background: Some(iced::Background::Color(bg)),
+                        text_color: fg,
                         ..Default::default()
                     })
                     .on_press(Message::QueueJumpTo(i));
 
-                    row![track_btn, remove_btn]
+                    row![track_btn, remove_btn, Space::with_width(spacing::SM)]
                         .align_y(iced::Alignment::Center)
                         .into()
                 })
@@ -536,11 +734,11 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
             if items.is_empty() {
                 column![
                     container(
-                        text("Queue is empty - add tracks from the Library")
-                            .size(12)
-                            .color([0.4, 0.4, 0.4])
+                        text("Queue is empty — add tracks from the Library")
+                            .size(typography::SIZE_SMALL)
+                            .color(color::TEXT_MUTED)
                     )
-                    .padding(20)
+                    .padding(spacing::XL)
                     .center_x(Length::Fill)
                 ]
             } else {
@@ -549,64 +747,27 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
         } else {
             column![
                 text("Player not initialized")
-                    .size(12)
-                    .color([0.6, 0.3, 0.3])
+                    .size(typography::SIZE_SMALL)
+                    .color(color::ERROR)
             ]
         };
 
         column![
             queue_header,
-            Space::with_height(8),
+            Space::with_height(spacing::SM),
             scrollable(queue_list).height(Length::Fill),
         ]
+        .height(Length::Fill)
     };
 
+    // Simple layout: cover+info at top, queue takes remaining space
     column![
         track_display,
-        Space::with_height(15),
-        viz_buttons,
-        Space::with_height(10),
-        viz_canvas,
-        Space::with_height(20),
+        Space::with_height(spacing::XL),
         queue_section,
     ]
     .spacing(0)
-    .into()
-}
-
-fn viz_mode_button(
-    label: &str,
-    mode: crate::ui::state::VisualizationMode,
-    current: crate::ui::state::VisualizationMode,
-) -> Element<'_, Message> {
-    let style = if mode == current {
-        button::primary
-    } else {
-        button::secondary
-    };
-    button(text(label).size(12))
-        .padding([8, 16])
-        .style(style)
-        .on_press(Message::PlayerVisualizationModeChanged(mode))
-        .into()
-}
-
-/// Settings pane with file organization and track identification
-fn settings_pane(s: &LoadedState) -> Element<'_, Message> {
-    use super::library::{enrichment_section, organize_section};
-
-    let dest_path = s.organize_destination.display().to_string();
-
-    column![
-        text("Settings").size(28),
-        Space::with_height(20),
-        // Organize Files section
-        text("File Organization").size(20),
-        organize_section(s, dest_path),
-        Space::with_height(20),
-        // Track Identification section
-        enrichment_section(s),
-    ]
-    .spacing(10)
+    .padding(spacing::LG)
+    .height(Length::Fill)
     .into()
 }
