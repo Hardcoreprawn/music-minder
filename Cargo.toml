@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+bitflags = "2.9"             # Bitflags for quality flags
 # Only include chrono features we actually use (Utc::now, to_rfc3339)
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 clap = { version = "4.5.53", features = ["derive", "env"] }

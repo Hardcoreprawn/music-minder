@@ -2980,6 +2980,7 @@ version = "0.1.4"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitflags 2.10.0",
  "chrono",
  "clap",
  "cpal",
