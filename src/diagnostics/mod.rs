@@ -145,6 +145,28 @@ impl DiagnosticReport {
     pub fn generate() -> Self {
         let mut checks = Vec::new();
 
+        // Build mode check - warn if running debug build
+        #[cfg(debug_assertions)]
+        checks.push(DiagnosticCheck {
+            name: "Build Mode".to_string(),
+            category: "System".to_string(),
+            status: CheckStatus::Warning,
+            value: "Debug build (not optimized)".to_string(),
+            recommendation: Some(
+                "Run with 'cargo run --release' for accurate benchmarks and best performance"
+                    .to_string(),
+            ),
+        });
+
+        #[cfg(not(debug_assertions))]
+        checks.push(DiagnosticCheck {
+            name: "Build Mode".to_string(),
+            category: "System".to_string(),
+            status: CheckStatus::Pass,
+            value: "Release build (optimized)".to_string(),
+            recommendation: None,
+        });
+
         // SIMD capabilities (for audio processing acceleration)
         let simd_level = crate::player::simd::current_simd_level();
         checks.push(DiagnosticCheck {

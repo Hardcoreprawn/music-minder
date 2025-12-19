@@ -44,6 +44,7 @@ fn main() -> anyhow::Result<()> {
     // No command specified, launch the GUI
     application("Music Minder", MusicMinder::update, MusicMinder::view)
         .subscription(MusicMinder::subscription)
+        .font(ui::icons::ICON_FONT_BYTES)
         .run_with(MusicMinder::new)
         .map_err(|e| anyhow::anyhow!("GUI Error: {}", e))
 }

@@ -51,4 +51,36 @@ pub struct Track {
     pub duration: Option<i64>,
     /// Track number on album
     pub track_number: Option<i64>,
+    /// Quality score (0-100, None if never assessed)
+    pub quality_score: Option<i64>,
+    /// Quality flags as bitfield (see QualityFlags)
+    pub quality_flags: Option<i64>,
+    /// When quality was last assessed (ISO 8601)
+    pub quality_checked_at: Option<String>,
+    /// AcoustID match confidence (0.0-1.0)
+    pub acoustid_confidence: Option<f64>,
+    /// MusicBrainz recording ID
+    pub musicbrainz_recording_id: Option<String>,
+}
+
+impl Track {
+    /// Check if this track has been quality-assessed.
+    pub fn is_quality_checked(&self) -> bool {
+        self.quality_score.is_some()
+    }
+
+    /// Check if this track needs attention based on quality score.
+    pub fn needs_attention(&self) -> bool {
+        match self.quality_score {
+            None => true,
+            Some(score) => score < 70,
+        }
+    }
+
+    /// Get quality flags as the typed bitflags.
+    pub fn quality_flags(&self) -> crate::health::QualityFlags {
+        self.quality_flags
+            .map(crate::health::QualityFlags::from_bits_i64)
+            .unwrap_or_default()
+    }
 }

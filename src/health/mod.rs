@@ -9,6 +9,9 @@
 //! - [`HealthStatus`]: Health states (Ok, Error, NoMatch, LowConfidence)
 //! - [`ErrorType`]: Categorized error types
 //! - [`FileHealth`]: Complete health record for a file
+//! - [`QualityFlags`]: Metadata quality indicators
+//! - [`TrackQuality`]: Quality assessment for enrichment
+//! - [`VerificationResult`]: Fingerprint vs metadata verification
 //! - Database operations for persisting health data
 //! - File hashing for change detection
 //!
@@ -27,8 +30,11 @@
 //! ```
 
 mod db;
+mod gardener;
 mod hash;
+mod quality;
 mod types;
+mod verification;
 
 // Re-export types
 pub use types::{ErrorType, FileHealth, HealthStatus};
@@ -40,4 +46,18 @@ pub use hash::compute_file_hash;
 pub use db::{
     HealthSummary, delete_health, get_by_status, get_errors, get_health, get_summary,
     has_file_changed, upsert_health,
+};
+
+// Re-export quality assessment
+pub use quality::{QualityFlags, QualityTier, TrackQuality, assess_quality};
+
+// Re-export gardener
+pub use gardener::{
+    GardenerCommand, GardenerConfig, GardenerEvent, QualityGardener, assess_track_quality,
+};
+
+// Re-export verification
+pub use verification::{
+    ExistingMetadata, FingerprintMatch, ReleaseInfo, ReleaseType, VerificationIssue,
+    VerificationResult, VerificationStatus, verify_metadata,
 };
