@@ -9,6 +9,9 @@ use std::path::PathBuf;
 /// All possible messages that can be sent in the application
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// No-op message (for callbacks that don't need to update state)
+    Noop,
+
     // Initialization
     DbInitialized(Result<SqlitePool, String>),
     FontLoaded,
@@ -63,6 +66,22 @@ pub enum Message {
     EnrichmentWriteTagsPressed,
     EnrichmentWriteTagsResult(Result<usize, String>),
 
+    // Enrich pane messages (batch operations)
+    EnrichAddFromLibrary,             // Open library selection
+    EnrichAddTracks(Vec<usize>),      // Add tracks by index
+    EnrichRemoveTrack(usize),         // Remove track from selection
+    EnrichClearTracks,                // Clear all selected tracks
+    EnrichTrackChecked(usize, bool),  // Toggle track checkbox
+    EnrichFillOnlyToggled(bool),      // Toggle fill-only option
+    EnrichFetchCoverArtToggled(bool), // Toggle fetch cover art option
+    EnrichBatchIdentify,              // Start batch identification
+    EnrichBatchIdentifyResult(usize, Result<enrichment::TrackIdentification, String>), // Single track result
+    EnrichBatchComplete,       // All tracks processed
+    EnrichReviewResult(usize), // Open result for review
+    EnrichWriteResult(usize),  // Write single result
+    EnrichWriteAllConfirmed,   // Write all confirmed results
+    EnrichExportReport,        // Export results to file
+
     // Player messages
     PlayerPlay,
     PlayerPause,
@@ -96,6 +115,7 @@ pub enum Message {
     // Diagnostics messages
     DiagnosticsRunPressed,
     DiagnosticsComplete(diagnostics::DiagnosticReport),
+    DiagnosticsToggleCheck(String), // Toggle expanded state of a check by name
 
     // Cover art messages (background, non-blocking)
     CoverArtResolved(PathBuf, Result<LoadedCoverArt, String>),
@@ -106,4 +126,16 @@ pub enum Message {
     WatcherStopped,
     LibraryFileChanged(PathBuf), // A file in the library changed, may need refresh
     RescanLibrary,               // Force a full library rescan
+
+    // Quality gardener messages
+    GardenerStarted,
+    GardenerStopped,
+    QueueQualityCheck(i64),        // Queue a track for quality checking by ID
+    QualityCheckComplete(i64, u8), // Track ID and quality score
+
+    // Sidebar messages
+    ToggleSidebar, // Toggle sidebar collapsed/expanded state
+
+    // Library pane messages
+    ToggleOrganizeSection, // Toggle organize section collapsed/expanded
 }

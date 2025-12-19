@@ -29,6 +29,7 @@ pub enum ActivePane {
     #[default]
     Library,
     NowPlaying,
+    Enrich,
     Settings,
     Diagnostics,
 }
@@ -41,6 +42,17 @@ pub enum VisualizationMode {
     Waveform,
     VuMeter,
     Off,
+}
+
+impl std::fmt::Display for VisualizationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VisualizationMode::Spectrum => write!(f, "Spectrum"),
+            VisualizationMode::Waveform => write!(f, "Waveform"),
+            VisualizationMode::VuMeter => write!(f, "VU Meter"),
+            VisualizationMode::Off => write!(f, "Off"),
+        }
+    }
 }
 
 /// Column to sort the library by
@@ -113,6 +125,9 @@ pub struct LoadedState {
     // Enrichment state
     pub enrichment: EnrichmentState,
 
+    // Enrichment pane state (batch operations)
+    pub enrichment_pane: EnrichmentPaneState,
+
     // Player state
     pub player: Option<player::Player>,
     pub player_state: player::PlayerState,
@@ -134,9 +149,34 @@ pub struct LoadedState {
     // Diagnostics state
     pub diagnostics: Option<diagnostics::DiagnosticReport>,
     pub diagnostics_loading: bool,
+    pub diagnostics_started_tick: u32,
+    /// Pending result waiting for animation to complete
+    pub diagnostics_pending: Option<diagnostics::DiagnosticReport>,
+    /// Which diagnostic checks are expanded (by check name)
+    pub diagnostics_expanded: std::collections::HashSet<String>,
+
+    /// High resolution timer guard - requests 1ms timer while app runs
+    /// This improves audio scheduling precision on Windows
+    #[cfg(windows)]
+    /// High resolution timer for precise timing (reserved for future use)
+    #[allow(dead_code)]
+    pub high_res_timer: Option<diagnostics::HighResolutionTimer>,
+
+    // Animation tick counter (incremented by PlayerTick at 60fps)
+    // Used for spinner animations and other subtle UI animations
+    pub animation_tick: u32,
 
     // Background file watcher state
     pub watcher_state: WatcherState,
+
+    // Background quality gardener state
+    pub gardener_state: GardenerState,
+
+    // Sidebar state
+    pub sidebar_collapsed: bool,
+
+    // Organize section collapsed state
+    pub organize_collapsed: bool,
 }
 
 impl LoadedState {
@@ -195,6 +235,85 @@ pub struct EnrichmentState {
     pub fpcalc_available: bool,
 }
 
+/// State for the enrichment pane (batch operations)
+#[derive(Default)]
+pub struct EnrichmentPaneState {
+    /// AcoustID API key (shared with EnrichmentState)
+    pub api_key: String,
+    /// Whether fpcalc is available
+    pub fpcalc_available: bool,
+    /// Rate limit status for display
+    pub rate_limit_status: RateLimitStatus,
+
+    /// Track indices selected for enrichment (indices into LoadedState.tracks)
+    pub selected_tracks: Vec<usize>,
+    /// Which tracks in selected_tracks are checked for processing
+    pub checked_tracks: std::collections::HashSet<usize>,
+
+    /// Options
+    pub fill_only: bool,
+    pub fetch_cover_art: bool,
+
+    /// Whether batch identification is in progress
+    pub is_identifying: bool,
+    /// Results of identification
+    pub results: Vec<EnrichmentResult>,
+}
+
+impl EnrichmentPaneState {
+    /// Check if there are confirmed results ready to write
+    pub fn has_confirmed_results(&self) -> bool {
+        self.results
+            .iter()
+            .any(|r| r.confirmed && r.status == ResultStatus::Success)
+    }
+}
+
+/// Rate limit status for display
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum RateLimitStatus {
+    #[default]
+    Ok,
+    Warning,
+    Limited,
+}
+
+/// Result status for enrichment
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ResultStatus {
+    #[default]
+    Pending,
+    Success,
+    Warning,
+    Error,
+}
+
+/// A single enrichment result
+#[derive(Debug, Clone, Default)]
+pub struct EnrichmentResult {
+    /// Track index in selected_tracks
+    pub track_index: usize,
+    /// Status of this result
+    pub status: ResultStatus,
+    /// Identified title (if found)
+    pub title: Option<String>,
+    /// Identified artist (if found)
+    pub artist: Option<String>,
+    /// Identified album (if found)
+    pub album: Option<String>,
+    /// Match confidence (0.0 - 1.0)
+    pub confidence: Option<f32>,
+    /// List of fields that would change
+    pub changes: Vec<String>,
+    /// Error message (if status is Error)
+    pub error: Option<String>,
+    /// Whether this result is confirmed for writing
+    pub confirmed: bool,
+    /// Full identification result for writing
+    pub identification: Option<crate::enrichment::TrackIdentification>,
+}
+
 /// State for cover art display.
 ///
 /// Cover art is resolved in the background to never block playback.
@@ -248,4 +367,17 @@ pub struct WatcherState {
     pub pending_changes: usize,
     /// Last error (if any)
     pub last_error: Option<String>,
+}
+
+/// State for the background quality gardener.
+#[derive(Default)]
+pub struct GardenerState {
+    /// Whether the gardener is running
+    pub active: bool,
+    /// Command sender for triggering quality checks
+    pub command_tx: Option<tokio::sync::mpsc::Sender<crate::health::GardenerCommand>>,
+    /// Tracks assessed in current session
+    pub tracks_assessed: usize,
+    /// Tracks needing attention
+    pub tracks_needing_attention: usize,
 }
