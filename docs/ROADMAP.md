@@ -275,13 +275,69 @@ Remove or wire up unused code identified in review:
 
 ---
 
-## Phase 8: GUI Enrichment & Batch Operations
+## Phase 8: GUI Enrichment & Batch Operations ✅
 
-- [ ] **Enrichment tab in UI**: Select tracks, identify, preview changes
-- [ ] **Batch progress**: Progress bar for multi-file enrichment
-- [ ] **Write tags button**: Apply metadata changes to files
-- [ ] **Cover art preview**: Show fetched cover before applying
-- [ ] **Conflict resolution**: Handle multiple matches, let user choose
+- [x] **Enrichment tab in UI**: Select tracks, identify, preview changes
+- [x] **Batch progress**: Progress bar for multi-file enrichment
+- [x] **Write tags button**: Apply metadata changes to files
+- [ ] **Cover art preview**: Show fetched cover before applying *(deferred to cover art refactor)*
+- [ ] **Conflict resolution**: Handle multiple matches, let user choose *(future enhancement)*
+
+**Implementation Notes (Phase 8):**
+
+- Enrich pane created in `src/ui/views/enrich/` with 4 submodules
+- Batch handlers in `src/ui/update/enrichment.rs` with `handle_enrich_pane()`
+- Sequential processing with 500ms delay between tracks for rate limiting
+- Auto-confirms high-confidence matches (≥70%), manual review for lower scores
+- "Fill Only" option to preserve existing tags
+- Results stored with full `TrackIdentification` for metadata writing
+- Export report logs to tracing output
+
+---
+
+## Phase 8.5: Library Gardener (Metadata Quality Nurturing) ✅
+
+A background "gardener" that tends to your music library over time, identifying files
+that could benefit from enrichment without being intrusive.
+
+- [x] **Quality assessment types**: `QualityFlags` bitflags, `TrackQuality` struct
+- [x] **Quality scorer**: Evaluates metadata completeness (missing artist/album/year, filename-as-title, generic placeholders)
+- [x] **Database schema**: Added `quality_score`, `quality_flags`, `quality_checked_at` to tracks
+- [x] **Background gardener**: `QualityGardener` processes tracks gradually during idle time
+- [x] **UI indicators**: Quality badge (★●◐○?) in track list with tooltip showing issues
+- [x] **Verification system**: Compare metadata against fingerprint results to detect mislabeled files
+- [x] **Alternative matches storage**: DB tables for candidate matches and releases
+- [x] **Watcher integration**: Auto-queue quality checks when files are added/modified
+- [x] **Verification flags**: `TITLE_MISMATCH`, `ARTIST_MISMATCH`, `ALBUM_MISMATCH`, `POSSIBLY_MISLABELED`, `VERIFIED`, `MULTI_ALBUM`
+
+**Quality Scoring:**
+
+| Score | Tier | Meaning |
+|-------|------|---------|
+| 90-100 | ★ Excellent | Fully tagged, high confidence |
+| 70-89 | ● Good | Minor gaps but usable |
+| 50-69 | ◐ Fair | Significant metadata missing |
+| 0-49 | ○ Poor | Needs attention |
+| null | ? | Not yet analyzed |
+
+**Quality Flags (Metadata):**
+
+- `MISSING_ARTIST`, `MISSING_ALBUM`, `MISSING_YEAR`, `MISSING_TRACK_NUM`
+- `TITLE_IS_FILENAME` - Title matches filename
+- `GENERIC_METADATA` - "Unknown Artist", "Track 01", etc.
+- `NO_MUSICBRAINZ_ID` - No verified ID
+- `LOW_CONFIDENCE` - Fingerprint match <70%
+- `NEVER_CHECKED` - Not yet analyzed
+
+**Quality Flags (Verification):**
+
+- `TITLE_MISMATCH` - Title doesn't match fingerprint result
+- `ARTIST_MISMATCH` - Artist doesn't match fingerprint result
+- `ALBUM_MISMATCH` - Album differs (may be compilation)
+- `POSSIBLY_MISLABELED` - Significant mismatch, needs review
+- `VERIFIED` - Metadata confirmed against fingerprint
+- `AMBIGUOUS_MATCH` - Multiple good matches exist
+- `MULTI_ALBUM` - Recording appears on multiple albums
 
 ---
 
@@ -293,40 +349,103 @@ Remove or wire up unused code identified in review:
 - [ ] **Crossfade**: Smooth transitions between tracks (configurable 0-12s)
 - [ ] **Playlist management**: Save/load playlists (.m3u8 format)
 
-## Phase 10: UI Polish (Winamp Aesthetic)
+## Phase 10: UI Polish & UX Excellence
 
-Capture that iconic late-90s/early-2000s look with modern rendering.
+**Design philosophy**: Winamp's *spirit* (fast, fun, focused on audio) with a *modern* premium aesthetic. No retro skeuomorphism—instead, clean lines, thoughtful spacing, and small delightful surprises.
 
-### Visual Design
+**Reference**: See `ENRICHMENT_UI_DESIGN.md` for detailed specs.
 
-- [ ] **Dark theme default**: Deep grays, not pure black
-- [ ] **Accent color**: Classic Winamp green (#00FF00) or customizable
-- [ ] **Beveled edges**: Subtle 3D effect on panels (like classic skins)
-- [ ] **LED-style displays**: Time display with that digital clock look
-- [ ] **Compact mode**: Tiny player bar (like Winamp's windowshade mode)
+### 10.1 Design System Foundation ✅
 
-### Controls
+- [x] **Theme constants file**: Colors, spacing, typography in `src/ui/theme.rs`
+- [x] **Dark theme default**: Deep grays (#121215 base, #1a1a1f surfaces)
+- [x] **Accent color**: Indigo primary (#6366f1)
+- [x] **Consistent spacing**: 4px base unit system (XS/SM/MD/LG/XL scale)
+- [x] **Typography scale**: Clear hierarchy (Hero → Tiny)
+- [x] **Button variants**: Primary, Secondary, Ghost styles
 
-- [ ] **Icon-based transport**: Proper play/pause/stop/prev/next icons
-- [ ] **Scrubber bar**: Rounded progress bar with position indicator
-- [ ] **Volume slider**: Classic horizontal slider with notches
-- [ ] **Balance control**: (optional) L/R balance like original Winamp
+### 10.2 Player Bar ✅
 
-### Visualization
+- [x] **72px bottom bar**: Fixed height, always visible
+- [x] **Mini cover art**: 48x48 with rounded corners, clipped
+- [x] **Track info**: Title + "Artist • Album" stacked
+- [x] **Transport controls**: Prev/Play-Pause/Next with styled buttons
+- [x] **Flexible seek bar**: Stretches to fill available space
+- [x] **Volume section**: Icon (mute/low/high) + slider
+- [x] **Device picker**: Dynamic icon (headphones/speaker) + dropdown, fixed width
+- [x] **Shuffle/Repeat**: Icon buttons in player bar
 
-- [ ] **Visualization window**: Dedicated viz area in Now Playing
-- [ ] **Multiple viz modes**: Spectrum bars, oscilloscope, VU meters
-- [ ] **Smoothing options**: Expose `set_smoothing()` in settings
-- [ ] **Color schemes**: Classic green, fire, rainbow presets
-- [ ] **Fullscreen viz**: Press V to go fullscreen visualization
+### 10.3 Now Playing Pane ✅
 
-### Polish
+- [x] **Cover art display**: Large cover with track info beside it
+- [x] **Queue section**: Scrollable list with current track highlighted
+- [x] **Queue controls**: Shuffle, repeat, clear in header
+- [x] **Track position**: "Track X of Y" indicator
+- [x] **Remove from queue**: X button per track (with scrollbar spacing)
 
-- [ ] **Hover states**: Visual feedback on all clickables
-- [ ] **Click feedback**: Brief flash/depression on buttons
-- [ ] **Smooth scrolling**: Buttery library scrolling
-- [ ] **Loading states**: Subtle spinners, never frozen UI
-- [ ] **Tooltips**: Helpful hints on hover
+### 10.4 Sidebar Polish ✅
+
+- [x] **Styled nav items**: Icon + label, active state with Primary bg
+- [x] **Hover states**: Surface-2 background on hover
+- [x] **Status section**: "● Watching" indicator, track count stats
+- [x] **Dividers**: Subtle separators between sections
+- [x] **Collapsible mode**: 60px icon-only mode (toggle button)
+
+### 10.5 Library Pane Refresh ✅
+
+- [x] **Prominent search bar**: Styled input with search icon, always visible
+- [x] **Filter chips**: Pill-shaped toggles (FLAC, MP3, Lossless)
+- [x] **Track count display**: "3,428 tracks (showing 1,247)" when filtered
+- [x] **Sort dropdown**: Replace column header clicks with clean dropdown
+- [x] **Row hover states**: Subtle background change
+- [x] **Format badges**: FLAC (green), MP3 (muted) inline badges
+- [x] **Collapsible Organize section**: Hide by default, expand when needed
+
+### 10.6 Settings Pane Cleanup ✅
+
+- [x] **Organized sections**: Audio, Library, Enrichment, Appearance, About
+- [x] **Section dividers**: Clear visual separation
+- [x] **Input styling**: Consistent text inputs, dropdowns
+- [x] **Toggle switches**: Styled boolean settings (status indicators)
+- [x] **Version/tagline**: "Music Minder v0.1.4" with whimsical tagline
+
+### 10.7 Enrich Pane (New) ✅
+
+- [x] **Status indicators**: fpcalc ready, API key configured, rate limit status
+- [x] **Track selection list**: Checkboxes, remove buttons, selection count
+- [x] **Options section**: Fill-only vs overwrite, fetch cover art toggle
+- [x] **Progress display**: Determinate bar with "2/4" count
+- [x] **Results list**: Success/warning/error states with confidence scores
+- [x] **Batch actions**: "Write All Confirmed", "Export Report"
+
+### 10.8 Context Panel (Future)
+
+- [ ] **Slide-in panel**: 320px from right edge
+- [ ] **Selection summary**: "2 tracks selected"
+- [ ] **Quick actions**: Identify, Write Tags, Play Next
+- [ ] **Before/After preview**: Show metadata changes
+- [ ] **Close button**: X to dismiss
+
+### 10.9 Feedback & Polish
+
+- [ ] **Toast notifications**: Non-blocking success/error messages
+- [ ] **Confirmation dialogs**: Destructive action warnings
+- [ ] **Empty states**: Helpful messages for empty library/queue/search
+- [ ] **Loading states**: Spinners for async operations
+- [ ] **Error states**: Friendly messages with recovery suggestions
+
+### 10.10 Interaction Polish
+
+- [ ] **Hover states**: All interactive elements respond
+- [ ] **Focus indicators**: Keyboard navigation support
+- [ ] **Smooth transitions**: 100-200ms for state changes
+- [ ] **Playing indicator**: Gentle pulse on current track (subtle)
+
+### 10.11 Delightful Touches
+
+- [x] **Volume goes to 11**: Keep the Spinal Tap reference
+- [ ] **Startup tagline**: Random "It really whips..." in console
+- [ ] **Easter egg**: Hidden classic green theme unlock
 
 ## Backlog
 
@@ -398,3 +517,44 @@ All three entry points now use this single method:
 - `play_file()` → clear, add, `jump_to(0)`, `load_and_play_current()`
 - `skip_forward()` → `queue.skip_forward()`, `load_and_play_current()`
 - `previous()` → `queue.previous()` (or seek if >3s), `load_and_play_current()`
+
+---
+
+## Technical Debt: Background Service Initialization Pattern
+
+**Status**: 🔄 Partial (Gardener uses new pattern, Watcher/Diagnostics use old)
+
+### The Problem
+
+Background services (watcher, gardener, diagnostics) use inconsistent initialization patterns:
+
+1. **Watcher**: Uses Iced subscription pattern, complex stream-based lifecycle
+2. **Gardener**: Starts during app init, stores `command_tx` in state (simpler)
+3. **Diagnostics**: Ad-hoc, manual lifecycle management
+
+### The Solution
+
+Standardize on the Gardener pattern:
+
+```rust
+// During app initialization
+let gardener = QualityGardener::new(pool.clone());
+let gardener_tx = gardener.command_sender();
+gardener.start();
+
+// Store in state
+state.gardener_state.command_tx = Some(gardener_tx);
+```
+
+### Refactoring Tasks
+
+- [ ] **Watcher**: Refactor from subscription to init-time start pattern
+  - Move `FileWatcher::new_async()` to `init_db_and_services()`
+  - Store `watcher` handle and event receiver in state
+  - Use simple `Task::stream` to poll events (not `iced::Subscription`)
+- [ ] **Diagnostics**: Add background diagnostics service
+  - Periodic system checks (audio device changes, CPU load)
+  - Command channel for on-demand full diagnosis
+- [ ] **Unified service manager**: Consider `ServiceManager` struct
+  - Single place to start/stop all background services
+  - Graceful shutdown coordination
