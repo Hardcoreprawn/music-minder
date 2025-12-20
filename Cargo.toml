@@ -52,7 +52,7 @@ async-trait = "0.1.89"
 [target.'cfg(windows)'.dependencies]
 # Note: windows-sys 0.61+ uses raw-dylib linking via windows-link crate.
 # Updating from 0.52 for security/bug fixes. WNDCLASSEXW now requires Win32_Graphics_Gdi.
-windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Foundation", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console"] }
 
 [dev-dependencies]
 proptest = "1.9.0"
