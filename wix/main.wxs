@@ -119,24 +119,9 @@
             <ComponentRef Id="MusicMinderExe"/>
             <ComponentRef Id="License"/>
             <ComponentRef Id="Readme"/>
-            
-            <Feature
-                Id="StartMenuShortcut"
-                Title="Start Menu Shortcut"
-                Description="Add a shortcut to the Start Menu."
-                Level="1"
-                AllowAdvertise="no">
-                <ComponentRef Id="ApplicationShortcut"/>
-            </Feature>
-            
-            <Feature
-                Id="DesktopShortcutFeature"
-                Title="Desktop Shortcut"
-                Description="Add a shortcut to the Desktop."
-                Level="1"
-                AllowAdvertise="no">
-                <ComponentRef Id="DesktopShortcut"/>
-            </Feature>
+            <!-- Shortcuts must be in the same feature as the executable they reference -->
+            <ComponentRef Id="ApplicationShortcut"/>
+            <ComponentRef Id="DesktopShortcut"/>
         </Feature>
 
         <SetProperty Id="ARPINSTALLLOCATION" Value="[APPLICATIONFOLDER]" After="CostFinalize"/>
