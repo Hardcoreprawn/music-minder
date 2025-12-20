@@ -71,9 +71,7 @@ jobs:
         run: cargo install cargo-wix
         
       - name: Build MSI installer
-        env:
-          VERSION: ${{ needs.release-please.outputs.version || inputs.version }}
-        run: cargo wix --no-build --nocapture -C "-dVersion=$env:VERSION"
+        run: cargo wix --no-build --nocapture
           
       - name: Prepare artifacts
         run: |
