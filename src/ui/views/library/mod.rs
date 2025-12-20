@@ -11,9 +11,10 @@ mod organize;
 mod search;
 mod track_list;
 
-use iced::widget::{Space, button, column, text, text_input};
+use iced::widget::{Space, button, column, container, row, text, text_input};
 use iced::{Element, Length};
 
+use crate::ui::icons::spinner_frame;
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
 use crate::ui::theme::{self, color, spacing, typography};
@@ -38,6 +39,8 @@ pub fn library_pane(s: &LoadedState) -> Element<'_, Message> {
         Space::with_height(spacing::MD),
         // Scan controls
         scan_controls(s, scan_path),
+        // Scan progress indicator (only shown when scanning)
+        scan_progress(s),
         Space::with_height(spacing::MD),
         // Search and filters section
         search::search_and_filters(s),
@@ -85,5 +88,66 @@ fn scan_controls(state: &LoadedState, path_display: String) -> Element<'_, Messa
             .style(theme::button_primary),
     ]
     .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Renders the scan progress indicator (only visible during scanning)
+fn scan_progress(state: &LoadedState) -> Element<'_, Message> {
+    if !state.is_scanning {
+        return Space::with_height(0).into();
+    }
+
+    // Animated spinner character
+    let spinner_char = spinner_frame(state.animation_tick);
+
+    // Progress info
+    let progress_text = if state.scan_count == 0 {
+        "Starting scan...".to_string()
+    } else {
+        format!("Found {} audio files...", state.scan_count)
+    };
+
+    // Status message (shows last file processed)
+    let status_detail = if state.status_message.contains("Last:") {
+        // Extract just the filename part
+        state.status_message.clone()
+    } else {
+        state.status_message.clone()
+    };
+
+    container(
+        row![
+            // Spinner in fixed-width container to prevent jitter
+            container(
+                text(spinner_char)
+                    .size(typography::SIZE_BODY)
+                    .color(color::PRIMARY)
+            )
+            .width(Length::Fixed(20.0))
+            .center_x(Length::Fixed(20.0)),
+            Space::with_width(spacing::SM),
+            // Progress count
+            text(progress_text)
+                .size(typography::SIZE_BODY)
+                .color(color::TEXT_PRIMARY),
+            Space::with_width(spacing::LG),
+            // Status detail (truncated if too long)
+            text(status_detail)
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_MUTED),
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([spacing::SM, spacing::MD])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
+        border: iced::Border {
+            color: color::BORDER_SUBTLE,
+            width: 1.0,
+            radius: 4.0.into(),
+        },
+        ..Default::default()
+    })
     .into()
 }
