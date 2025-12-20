@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#bg)"/>
+  <!-- Musical note - main body -->
+  <ellipse cx="80" cy="180" rx="32" ry="28" fill="white"/>
+  <ellipse cx="176" cy="156" rx="32" ry="28" fill="white"/>
+  <!-- Note stems -->
+  <rect x="104" y="68" width="12" height="112" fill="white"/>
+  <rect x="200" y="44" width="12" height="112" fill="white"/>
+  <!-- Connecting beam -->
+  <polygon points="104,68 212,44 212,60 104,84" fill="white"/>
+</svg>
