@@ -493,22 +493,28 @@ mod tests {
     #[test]
     fn test_verify_mismatch() {
         let existing = ExistingMetadata {
-            title: Some("Wrong Song".to_string()),
-            artist: Some("Wrong Artist".to_string()),
+            // Use completely different strings to trigger critical mismatch (similarity < 0.5)
+            title: Some("ABCDEFGHIJ".to_string()),
+            artist: Some("ZYXWVUTSRQ".to_string()),
             ..Default::default()
         };
 
         let matches = vec![FingerprintMatch {
             confidence: 0.95,
             recording_id: "abc-123".to_string(),
-            title: "Correct Song".to_string(),
-            artist: "Correct Artist".to_string(),
+            title: "1234567890".to_string(),
+            artist: "0987654321".to_string(),
             releases: vec![],
             best_release: None,
         }];
 
         let result = verify_metadata(&existing, &matches);
-        assert_eq!(result.status, VerificationStatus::Mismatch);
+        assert_eq!(
+            result.status,
+            VerificationStatus::Mismatch,
+            "Expected Mismatch status when title/artist have low similarity. Issues: {:?}",
+            result.issues
+        );
         assert!(!result.issues.is_empty());
     }
 }

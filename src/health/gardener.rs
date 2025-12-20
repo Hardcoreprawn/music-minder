@@ -548,7 +548,8 @@ mod tests {
         let track = TrackWithMetadata {
             id: 1,
             title: "Bohemian Rhapsody".to_string(),
-            path: "/music/queen/bohemian_rhapsody.mp3".to_string(),
+            // Use filename that doesn't match title to avoid TITLE_IS_FILENAME penalty
+            path: "/music/queen/11_a_night_at_the_opera.mp3".to_string(),
             duration: Some(354),
             track_number: Some(11),
             artist_name: "Queen".to_string(),
@@ -560,8 +561,13 @@ mod tests {
 
         let quality = assess_track_quality(&track);
         // Should have good quality since all metadata is present
-        // Only missing MusicBrainz ID and fingerprint confidence
-        assert!(quality.score >= 70);
+        // Only missing MusicBrainz ID (-10) and never checked (-10) = 80
+        assert!(
+            quality.score >= 70,
+            "Expected score >= 70, got {} with flags {:?}",
+            quality.score,
+            quality.flags
+        );
         assert!(quality.flags.contains(QualityFlags::NO_MUSICBRAINZ_ID));
         assert!(quality.flags.contains(QualityFlags::NEVER_CHECKED));
     }
