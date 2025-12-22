@@ -265,13 +265,27 @@ Winamp's global hotkeys were legendary. Start with in-app, then go global.
 
 Remove or wire up unused code identified in review:
 
+**Queue/Player API:**
+
 - [x] Wire up `PlayQueue::cycle_repeat()` to UI button
 - [x] Wire up `PlayQueue::set_shuffle()` to UI toggle
 - [x] Wire up `PlayQueue::remove()` to queue panel
 - [ ] Wire up `PlayQueue::reorder()` to queue panel (needs drag-drop)
-- [ ] Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`
-- [ ] Remove or use `AudioDecoder::metadata()` (decide: file vs DB)
-- [ ] Consolidate duplicate `format_duration()` functions
+- [x] ~~Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`~~ → Marked as future API with `#[allow(dead_code)]`
+- [x] ~~Remove or use `AudioDecoder::metadata()`~~ → Now used for fallback metadata (plays before DB sync)
+
+**Duplicate Functions:**
+
+- [x] Consolidate 3× `format_duration()` variants → `format_duration()` and `format_duration_secs()` in `player::state`
+- [x] Extract `AUDIO_EXTENSIONS` constant, consolidate 3× `is_audio_file()` → `scanner::AUDIO_EXTENSIONS` and `scanner::is_audio_file()`
+- [x] Move `is_lossless()` to shared utility → `ui::views::helpers::is_lossless()`
+- [x] Move `format_from_path()` to shared utility → `ui::views::helpers::format_from_path()`
+
+**Dead Code Audit:**
+
+- [x] ~~Review 10× `#[allow(dead_code)]` annotations~~ → Reviewed; intentional items documented, unused removed
+- [x] Remove `_truncate_with_ellipsis` and `_MAX_DEVICE_NAME_LEN` from player.rs
+- [x] Implement shuffle order logic (queue.rs) - Fisher-Yates on indices
 
 ---
 
@@ -910,9 +924,14 @@ Items marked complete at the phase level but with outstanding sub-tasks. These a
 **7.6 Code Cleanup:**
 
 - [ ] Wire up `PlayQueue::reorder()` *(needs drag-drop)*
-- [ ] Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`
-- [x] ~~Remove or use `AudioDecoder::metadata()`~~ → Now used for fallback metadata
-- [ ] Consolidate duplicate `format_duration()` functions
+- [x] ~~Visualizer methods~~ → Marked as future API
+- [x] ~~AudioDecoder::metadata()~~ → Now used for fallback
+- [x] Consolidated `format_duration()` variants
+- [x] Extracted `AUDIO_EXTENSIONS` constant
+- [x] Moved `is_lossless()`/`format_from_path()` to helpers
+- [x] Audited `#[allow(dead_code)]` annotations
+- [x] Removed `_truncate_with_ellipsis`, `_MAX_DEVICE_NAME_LEN`
+- [x] Implemented shuffle order logic (Fisher-Yates in `queue.rs`)
 
 ### From Phase 10: UI Polish
 
@@ -949,6 +968,7 @@ Items marked complete at the phase level but with outstanding sub-tasks. These a
 - [ ] **Watcher refactor**: Migrate from Iced subscription to init-time start pattern
 - [ ] **Diagnostics service**: Background service with periodic checks
 - [ ] **Unified service manager**: Single ServiceManager for all background services
+- [ ] **DB schema**: Make `duration` NOT NULL DEFAULT 0 (currently Option<i64> for legacy reasons)
 
 ---
 
@@ -963,7 +983,11 @@ Ranked by impact vs effort for deciding what to tackle next.
 | ~~Keyboard: Space for play/pause~~ | ~~Low~~ | ✅ Done |
 | ~~Keyboard: ←/→ for prev/next~~ | ~~Low~~ | ✅ Done |
 | Startup tagline | Low | Fun, adds personality |
-| Consolidate `format_duration()` | Low | Code cleanup |
+| ~~Consolidate `format_duration()`~~ | ~~Low~~ | ✅ Done |
+| ~~Extract `AUDIO_EXTENSIONS`~~ | ~~Low~~ | ✅ Done |
+| ~~Move `is_lossless()`/`format_from_path()`~~ | ~~Low~~ | ✅ Done |
+| ~~Remove unused prefixed fns~~ | ~~Low~~ | ✅ Done |
+| ~~Implement shuffle logic~~ | ~~Low~~ | ✅ Done |
 | Toast notifications | Medium | Useful for all actions |
 
 ### Medium Effort, High Value

@@ -337,7 +337,12 @@ impl PlayerState {
 
 /// Format a duration as MM:SS or HH:MM:SS.
 pub fn format_duration(d: Duration) -> String {
-    let secs = d.as_secs();
+    format_duration_secs(d.as_secs_f32())
+}
+
+/// Format seconds (as f32) as MM:SS or HH:MM:SS.
+pub fn format_duration_secs(secs: f32) -> String {
+    let secs = secs as u64;
     let hours = secs / 3600;
     let mins = (secs % 3600) / 60;
     let secs = secs % 60;

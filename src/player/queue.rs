@@ -1,6 +1,7 @@
 //! Play queue management.
 
 use super::state::TrackInfo;
+use rand::seq::SliceRandom;
 use std::path::PathBuf;
 
 /// A single item in the play queue.
@@ -49,6 +50,10 @@ pub struct PlayQueue {
     position: i32,
     /// Shuffle mode enabled
     shuffle: bool,
+    /// Shuffled indices (maps shuffle position → item index)
+    shuffle_order: Vec<usize>,
+    /// Current position in shuffle_order when shuffling
+    shuffle_position: i32,
     /// Repeat mode
     repeat: RepeatMode,
 }
@@ -59,6 +64,8 @@ impl Default for PlayQueue {
             items: Vec::new(),
             position: -1, // Not started
             shuffle: false,
+            shuffle_order: Vec::new(),
+            shuffle_position: -1,
             repeat: RepeatMode::Off,
         }
     }
@@ -93,7 +100,28 @@ impl PlayQueue {
 
     /// Add an item to the end of the queue.
     pub fn add(&mut self, item: QueueItem) {
+        let new_index = self.items.len();
         self.items.push(item);
+        // Add new item to shuffle order (at random position if shuffling)
+        if self.shuffle {
+            if self.shuffle_order.is_empty() {
+                self.shuffle_order.push(new_index);
+            } else {
+                // Insert at random position after current
+                let insert_after = if self.shuffle_position < 0 {
+                    0
+                } else {
+                    self.shuffle_position as usize + 1
+                };
+                let insert_pos = if insert_after >= self.shuffle_order.len() {
+                    self.shuffle_order.len()
+                } else {
+                    let mut rng = rand::rng();
+                    rand::Rng::random_range(&mut rng, insert_after..=self.shuffle_order.len())
+                };
+                self.shuffle_order.insert(insert_pos, new_index);
+            }
+        }
     }
 
     /// Add an item after the current position.
@@ -110,6 +138,8 @@ impl PlayQueue {
     pub fn clear(&mut self) {
         self.items.clear();
         self.position = -1;
+        self.shuffle_order.clear();
+        self.shuffle_position = -1;
     }
 
     /// Remove an item at index.
@@ -119,6 +149,21 @@ impl PlayQueue {
             // Adjust position if needed
             if index as i32 <= self.position {
                 self.position = (self.position - 1).max(-1);
+            }
+            // Update shuffle order: remove this index and adjust all indices > removed
+            if self.shuffle {
+                if let Some(shuffle_idx) = self.shuffle_order.iter().position(|&i| i == index) {
+                    self.shuffle_order.remove(shuffle_idx);
+                    if (shuffle_idx as i32) <= self.shuffle_position {
+                        self.shuffle_position = (self.shuffle_position - 1).max(-1);
+                    }
+                }
+                // Decrement all indices greater than the removed one
+                for idx in &mut self.shuffle_order {
+                    if *idx > index {
+                        *idx -= 1;
+                    }
+                }
             }
             Some(item)
         } else {
@@ -178,6 +223,10 @@ impl PlayQueue {
             return None;
         }
 
+        if self.shuffle && !self.shuffle_order.is_empty() {
+            return self.skip_forward_shuffle();
+        }
+
         match self.repeat {
             RepeatMode::One => {
                 // Stay on current track
@@ -203,10 +252,46 @@ impl PlayQueue {
         self.current()
     }
 
+    /// Skip forward in shuffle mode.
+    fn skip_forward_shuffle(&mut self) -> Option<&QueueItem> {
+        match self.repeat {
+            RepeatMode::One => {
+                // Stay on current track
+                if self.shuffle_position < 0 {
+                    self.shuffle_position = 0;
+                    self.position = self.shuffle_order[0] as i32;
+                }
+            }
+            RepeatMode::All => {
+                self.shuffle_position += 1;
+                if self.shuffle_position as usize >= self.shuffle_order.len() {
+                    // Reshuffle for next loop
+                    self.generate_shuffle_order();
+                    self.shuffle_position = 0;
+                }
+                self.position = self.shuffle_order[self.shuffle_position as usize] as i32;
+            }
+            RepeatMode::Off => {
+                self.shuffle_position += 1;
+                if self.shuffle_position as usize >= self.shuffle_order.len() {
+                    self.shuffle_position = self.shuffle_order.len() as i32 - 1;
+                    return None; // End of shuffle
+                }
+                self.position = self.shuffle_order[self.shuffle_position as usize] as i32;
+            }
+        }
+
+        self.current()
+    }
+
     /// Go to previous track and return it.
     pub fn previous(&mut self) -> Option<&QueueItem> {
         if self.items.is_empty() {
             return None;
+        }
+
+        if self.shuffle && !self.shuffle_order.is_empty() {
+            return self.previous_shuffle();
         }
 
         match self.repeat {
@@ -234,10 +319,47 @@ impl PlayQueue {
         self.current()
     }
 
+    /// Go to previous track in shuffle mode.
+    fn previous_shuffle(&mut self) -> Option<&QueueItem> {
+        match self.repeat {
+            RepeatMode::One => {
+                // Stay on current track
+                if self.shuffle_position < 0 {
+                    self.shuffle_position = 0;
+                    self.position = self.shuffle_order[0] as i32;
+                }
+            }
+            RepeatMode::All => {
+                self.shuffle_position -= 1;
+                if self.shuffle_position < 0 {
+                    self.shuffle_position = self.shuffle_order.len() as i32 - 1;
+                }
+                self.position = self.shuffle_order[self.shuffle_position as usize] as i32;
+            }
+            RepeatMode::Off => {
+                self.shuffle_position -= 1;
+                if self.shuffle_position < 0 {
+                    self.shuffle_position = 0;
+                    return None; // Start of shuffle
+                }
+                self.position = self.shuffle_order[self.shuffle_position as usize] as i32;
+            }
+        }
+
+        self.current()
+    }
+
     /// Jump to a specific position.
     pub fn jump_to(&mut self, index: usize) -> Option<&QueueItem> {
         if index < self.items.len() {
             self.position = index as i32;
+            // Update shuffle position to match
+            if self.shuffle
+                && !self.shuffle_order.is_empty()
+                && let Some(shuffle_pos) = self.shuffle_order.iter().position(|&i| i == index)
+            {
+                self.shuffle_position = shuffle_pos as i32;
+            }
             self.current()
         } else {
             None
@@ -247,7 +369,43 @@ impl PlayQueue {
     /// Set shuffle mode.
     pub fn set_shuffle(&mut self, enabled: bool) {
         self.shuffle = enabled;
-        // TODO: Implement shuffle order
+        if enabled {
+            self.generate_shuffle_order();
+        } else {
+            self.shuffle_order.clear();
+            self.shuffle_position = -1;
+        }
+    }
+
+    /// Generate a new shuffle order, keeping current track first if playing.
+    fn generate_shuffle_order(&mut self) {
+        let len = self.items.len();
+        if len == 0 {
+            self.shuffle_order.clear();
+            self.shuffle_position = -1;
+            return;
+        }
+
+        // Create indices
+        let mut indices: Vec<usize> = (0..len).collect();
+
+        // Shuffle using Fisher-Yates
+        let mut rng = rand::rng();
+        indices.shuffle(&mut rng);
+
+        // If we're currently playing, move that track to front of shuffle
+        if self.position >= 0 {
+            let current_idx = self.position as usize;
+            if let Some(pos) = indices.iter().position(|&i| i == current_idx) {
+                indices.remove(pos);
+                indices.insert(0, current_idx);
+            }
+            self.shuffle_position = 0;
+        } else {
+            self.shuffle_position = -1;
+        }
+
+        self.shuffle_order = indices;
     }
 
     /// Get shuffle mode.
@@ -345,5 +503,113 @@ mod tests {
         assert_eq!(queue.items()[0].path, PathBuf::from("a.mp3"));
         assert_eq!(queue.items()[1].path, PathBuf::from("b.mp3"));
         assert_eq!(queue.items()[2].path, PathBuf::from("c.mp3"));
+    }
+
+    #[test]
+    fn test_shuffle_visits_all_tracks() {
+        let mut queue = PlayQueue::new();
+        for i in 0..10 {
+            queue.add(make_item(&format!("{}.mp3", i)));
+        }
+        queue.set_shuffle(true);
+
+        // Collect all tracks visited in shuffle order
+        let mut visited = std::collections::HashSet::new();
+        for _ in 0..10 {
+            let item = queue.skip_forward();
+            if let Some(item) = item {
+                visited.insert(item.path.clone());
+            }
+        }
+
+        // Should have visited all 10 tracks
+        assert_eq!(visited.len(), 10);
+    }
+
+    #[test]
+    fn test_shuffle_keeps_current_first() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+
+        // Start playing track 1 (b.mp3)
+        queue.skip_forward(); // a
+        queue.skip_forward(); // b
+        assert_eq!(queue.current_index(), Some(1));
+
+        // Enable shuffle - current track should stay current
+        queue.set_shuffle(true);
+        assert_eq!(queue.current_index(), Some(1));
+        assert_eq!(queue.shuffle_order[0], 1); // Current track is first in shuffle
+    }
+
+    #[test]
+    fn test_shuffle_previous_works() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.set_shuffle(true);
+
+        // Navigate forward twice
+        let first = queue.skip_forward().unwrap().path.clone();
+        let second = queue.skip_forward().unwrap().path.clone();
+
+        // Go back
+        let back = queue.previous().unwrap().path.clone();
+        assert_eq!(back, first);
+
+        // Forward again should return to second
+        let again = queue.skip_forward().unwrap().path.clone();
+        assert_eq!(again, second);
+    }
+
+    #[test]
+    fn test_shuffle_disable_clears_order() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.set_shuffle(true);
+        assert!(!queue.shuffle_order.is_empty());
+
+        queue.set_shuffle(false);
+        assert!(queue.shuffle_order.is_empty());
+        assert!(!queue.shuffle());
+    }
+
+    #[test]
+    fn test_shuffle_with_repeat_all() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.set_shuffle(true);
+        queue.set_repeat(RepeatMode::All);
+
+        // Play through entire queue
+        queue.skip_forward();
+        queue.skip_forward();
+
+        // Third skip should wrap and reshuffle
+        let third = queue.skip_forward();
+        assert!(third.is_some()); // Should still return a track
+    }
+
+    #[test]
+    fn test_jump_to_updates_shuffle_position() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.set_shuffle(true);
+        queue.skip_forward(); // Start playing
+
+        // Jump to specific track
+        queue.jump_to(2);
+        assert_eq!(queue.current_index(), Some(2));
+
+        // Shuffle position should be updated to match
+        let shuffle_pos = queue.shuffle_position as usize;
+        assert_eq!(queue.shuffle_order[shuffle_pos], 2);
     }
 }
