@@ -2,12 +2,11 @@
 //!
 //! Handles search query changes, column sorting, and format filtering.
 
-use std::path::Path;
-
 use iced::Task;
 
 use super::super::messages::Message;
 use super::super::state::{LoadedState, SortColumn};
+use crate::ui::views::helpers::{format_from_path, is_lossless};
 
 /// Handle search and filter messages
 pub fn handle_search_filter(s: &mut LoadedState, message: Message) -> Task<Message> {
@@ -140,29 +139,4 @@ fn apply_filters_and_sort(s: &mut LoadedState) {
 
     // Reset scroll position when filters change
     s.scroll_offset = 0.0;
-}
-
-/// Extract format from file extension
-fn format_from_path(path: &str) -> &'static str {
-    if let Some(ext) = Path::new(path).extension() {
-        match ext.to_string_lossy().to_lowercase().as_str() {
-            "flac" => "FLAC",
-            "wav" => "WAV",
-            "mp3" => "MP3",
-            "m4a" | "aac" => "AAC",
-            "ogg" | "oga" => "OGG",
-            "opus" => "OPUS",
-            "wv" => "WV",
-            "ape" => "APE",
-            "aiff" | "aif" => "AIFF",
-            _ => "?",
-        }
-    } else {
-        "?"
-    }
-}
-
-/// Check if a format is lossless
-fn is_lossless(format: &str) -> bool {
-    matches!(format, "FLAC" | "WAV" | "WV" | "APE" | "AIFF")
 }

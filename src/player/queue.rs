@@ -189,6 +189,79 @@ impl PlayQueue {
         }
     }
 
+    /// Move an item up one position. Returns the new index if moved.
+    ///
+    /// If shuffle is enabled, this reorders the shuffle sequence instead.
+    pub fn move_up(&mut self, index: usize) -> Option<usize> {
+        if index == 0 {
+            return None; // Already at top
+        }
+
+        if self.shuffle && !self.shuffle_order.is_empty() {
+            self.reorder_shuffle(index, index - 1)
+        } else if index < self.items.len() {
+            self.reorder(index, index - 1);
+            Some(index - 1)
+        } else {
+            None
+        }
+    }
+
+    /// Move an item down one position. Returns the new index if moved.
+    ///
+    /// If shuffle is enabled, this reorders the shuffle sequence instead.
+    pub fn move_down(&mut self, index: usize) -> Option<usize> {
+        let max_index = if self.shuffle && !self.shuffle_order.is_empty() {
+            self.shuffle_order.len().saturating_sub(1)
+        } else {
+            self.items.len().saturating_sub(1)
+        };
+
+        if index >= max_index {
+            return None; // Already at bottom
+        }
+
+        if self.shuffle && !self.shuffle_order.is_empty() {
+            self.reorder_shuffle(index, index + 1)
+        } else {
+            self.reorder(index, index + 1);
+            Some(index + 1)
+        }
+    }
+
+    /// Reorder within the shuffle sequence.
+    ///
+    /// When shuffle is enabled, the user sees tracks in shuffle order.
+    /// This method reorders the shuffle_order array so the visual order changes.
+    /// The underlying items array is not modified.
+    ///
+    /// `from` and `to` are indices into shuffle_order, not items.
+    pub fn reorder_shuffle(&mut self, from: usize, to: usize) -> Option<usize> {
+        if !self.shuffle || self.shuffle_order.is_empty() {
+            return None;
+        }
+
+        if from >= self.shuffle_order.len() || to >= self.shuffle_order.len() || from == to {
+            return None;
+        }
+
+        // Swap positions in shuffle_order
+        let item_idx = self.shuffle_order.remove(from);
+        self.shuffle_order.insert(to, item_idx);
+
+        // Adjust shuffle_position if needed
+        let pos = self.shuffle_position as usize;
+        if from == pos {
+            self.shuffle_position = to as i32;
+        } else if from < pos && to >= pos {
+            self.shuffle_position -= 1;
+        } else if from > pos && to <= pos {
+            self.shuffle_position += 1;
+        }
+
+        Some(to)
+    }
+
     /// Get all items in the queue.
     pub fn items(&self) -> &[QueueItem] {
         &self.items
@@ -611,5 +684,82 @@ mod tests {
         // Shuffle position should be updated to match
         let shuffle_pos = queue.shuffle_position as usize;
         assert_eq!(queue.shuffle_order[shuffle_pos], 2);
+    }
+
+    #[test]
+    fn test_move_up() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+
+        // Move item at index 1 up to index 0
+        let new_idx = queue.move_up(1);
+        assert_eq!(new_idx, Some(0));
+        assert_eq!(queue.items()[0].path, PathBuf::from("b.mp3"));
+        assert_eq!(queue.items()[1].path, PathBuf::from("a.mp3"));
+
+        // Move at index 0 should return None
+        assert_eq!(queue.move_up(0), None);
+    }
+
+    #[test]
+    fn test_move_down() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+
+        // Move item at index 0 down to index 1
+        let new_idx = queue.move_down(0);
+        assert_eq!(new_idx, Some(1));
+        assert_eq!(queue.items()[0].path, PathBuf::from("b.mp3"));
+        assert_eq!(queue.items()[1].path, PathBuf::from("a.mp3"));
+
+        // Move at last index should return None
+        assert_eq!(queue.move_down(2), None);
+    }
+
+    #[test]
+    fn test_move_preserves_current_playing() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.skip_forward(); // Playing a (index 0)
+        queue.skip_forward(); // Playing b (index 1)
+        assert_eq!(queue.current_index(), Some(1));
+
+        // Move the currently playing track up
+        queue.move_up(1);
+        // Current index should follow the item
+        assert_eq!(queue.current_index(), Some(0));
+        assert_eq!(queue.current().unwrap().path, PathBuf::from("b.mp3"));
+    }
+
+    #[test]
+    fn test_move_in_shuffle_mode() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.set_shuffle(true);
+
+        // Get the original shuffle order
+        let orig_first = queue.shuffle_order[0];
+        let orig_second = queue.shuffle_order[1];
+
+        // Move shuffle position 1 up to 0
+        let new_idx = queue.move_up(1);
+        assert_eq!(new_idx, Some(0));
+
+        // The shuffle order should be swapped
+        assert_eq!(queue.shuffle_order[0], orig_second);
+        assert_eq!(queue.shuffle_order[1], orig_first);
+
+        // The underlying items should NOT be changed
+        assert_eq!(queue.items()[0].path, PathBuf::from("a.mp3"));
+        assert_eq!(queue.items()[1].path, PathBuf::from("b.mp3"));
+        assert_eq!(queue.items()[2].path, PathBuf::from("c.mp3"));
     }
 }

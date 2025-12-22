@@ -135,6 +135,28 @@ pub fn handle_selection(s: &mut LoadedState, message: Message) -> Task<Message> 
             }
         }
 
+        Message::QueueMoveUp => {
+            // Move selected queue item up one position
+            if let Some(idx) = s.queue_selection
+                && let Some(player) = &mut s.player
+                && let Some(new_idx) = player.queue_mut().move_up(idx)
+            {
+                s.queue_selection = Some(new_idx);
+                tracing::info!(target: "ui::selection", "Moved queue item {} -> {}", idx, new_idx);
+            }
+        }
+
+        Message::QueueMoveDown => {
+            // Move selected queue item down one position
+            if let Some(idx) = s.queue_selection
+                && let Some(player) = &mut s.player
+                && let Some(new_idx) = player.queue_mut().move_down(idx)
+            {
+                s.queue_selection = Some(new_idx);
+                tracing::info!(target: "ui::selection", "Moved queue item {} -> {}", idx, new_idx);
+            }
+        }
+
         _ => {}
     }
 

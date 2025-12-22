@@ -1,18 +1,17 @@
 //! Track list table with virtualization, headers, and row rendering.
 
-use std::path::Path;
-
 use iced::widget::{Space, button, column, container, row, scrollable, text, tooltip};
 use iced::{Element, Length};
 
 use crate::db::TrackWithMetadata;
 #[allow(unused_imports)]
 use crate::health::QualityFlags;
+use crate::player::format_duration_secs;
 use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::{LoadedState, SortColumn, virtualization as virt};
 use crate::ui::theme::{self, color, radius, spacing, typography};
-use crate::ui::views::helpers::calc_visible_range;
+use crate::ui::views::helpers::{calc_visible_range, format_from_path, is_lossless};
 
 /// Renders virtualized track list with play buttons
 pub fn track_list(state: &LoadedState) -> Element<'_, Message> {
@@ -251,7 +250,7 @@ fn track_row(
     };
 
     let year_str = t.year.map(|y| y.to_string()).unwrap_or_default();
-    let duration_str = format_duration(t.duration);
+    let duration_str = format_duration_secs(t.duration.unwrap_or(0) as f32);
 
     // Row background based on selection and alternating
     // Priority: keyboard selection > enrichment selection > alternating
@@ -452,41 +451,4 @@ fn quality_badge(t: &TrackWithMetadata) -> Element<'_, Message> {
         ..Default::default()
     })
     .into()
-}
-
-/// Format duration as mm:ss
-fn format_duration(seconds: Option<i64>) -> String {
-    match seconds {
-        Some(s) => {
-            let mins = s / 60;
-            let secs = s % 60;
-            format!("{}:{:02}", mins, secs)
-        }
-        None => "-:--".to_string(),
-    }
-}
-
-/// Extract format from file extension
-fn format_from_path(path: &str) -> &'static str {
-    if let Some(ext) = Path::new(path).extension() {
-        match ext.to_string_lossy().to_lowercase().as_str() {
-            "flac" => "FLAC",
-            "wav" => "WAV",
-            "mp3" => "MP3",
-            "m4a" | "aac" => "AAC",
-            "ogg" | "oga" => "OGG",
-            "opus" => "OPUS",
-            "wv" => "WV",
-            "ape" => "APE",
-            "aiff" | "aif" => "AIFF",
-            _ => "?",
-        }
-    } else {
-        "?"
-    }
-}
-
-/// Check if format is lossless
-fn is_lossless(format: &str) -> bool {
-    matches!(format, "FLAC" | "WAV" | "AIFF" | "APE" | "WV")
 }

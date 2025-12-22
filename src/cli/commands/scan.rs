@@ -10,7 +10,7 @@ use crate::db;
 use crate::library;
 use crate::scanner;
 
-use super::is_audio_file;
+use crate::scanner::is_audio_file;
 
 /// Scan a directory for music files
 pub fn cmd_scan(rt: &Runtime, path: &PathBuf) -> anyhow::Result<()> {

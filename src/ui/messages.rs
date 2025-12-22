@@ -150,6 +150,8 @@ pub enum Message {
     QueueSelectPrevious,       // Move queue selection up
     QueueSelectNext,           // Move queue selection down
     QueueSelectIndex(usize),   // Select specific queue index
+    QueueMoveUp,               // Move selected queue item up (Alt+Up)
+    QueueMoveDown,             // Move selected queue item down (Alt+Down)
     PlaySelected,              // Play the selected track (Enter key)
     RemoveSelectedFromQueue,   // Remove selected from queue (Delete key)
 }

@@ -1,5 +1,7 @@
 //! Helper functions shared across view components.
 
+use std::path::Path;
+
 use iced::widget::button;
 
 use crate::ui::messages::Message;
@@ -36,4 +38,29 @@ pub fn calc_visible_range(
         start as f32 * row_h,
         total.saturating_sub(end) as f32 * row_h,
     )
+}
+
+/// Extract audio format label from file path extension.
+pub fn format_from_path(path: &str) -> &'static str {
+    if let Some(ext) = Path::new(path).extension() {
+        match ext.to_string_lossy().to_lowercase().as_str() {
+            "flac" => "FLAC",
+            "wav" => "WAV",
+            "mp3" => "MP3",
+            "m4a" | "aac" => "AAC",
+            "ogg" | "oga" => "OGG",
+            "opus" => "OPUS",
+            "wv" => "WV",
+            "ape" => "APE",
+            "aiff" | "aif" => "AIFF",
+            _ => "?",
+        }
+    } else {
+        "?"
+    }
+}
+
+/// Check if an audio format is lossless.
+pub fn is_lossless(format: &str) -> bool {
+    matches!(format, "FLAC" | "WAV" | "AIFF" | "APE" | "WV")
 }

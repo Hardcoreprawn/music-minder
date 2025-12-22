@@ -40,6 +40,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc as tokio_mpsc;
 
+// Re-use the shared is_audio_file from parent module
+use super::is_audio_file;
+
 /// Events emitted by the file watcher.
 #[derive(Debug, Clone)]
 pub enum WatchEvent {
@@ -191,7 +194,7 @@ impl FileWatcher {
                             notify::EventKind::Remove(RemoveKind::File) => {
                                 // For removed files, we can't check extension anymore
                                 // so we check if it looks like an audio path
-                                if looks_like_audio_path(path) {
+                                if is_audio_file(path) {
                                     tracing::debug!(target: "scanner::watcher", path = %path.display(), "File removed");
                                     Some(WatchEvent::Removed(path.clone()))
                                 } else {
@@ -255,7 +258,7 @@ impl FileWatcher {
                                 }
                             }
                             notify::EventKind::Remove(RemoveKind::File) => {
-                                if looks_like_audio_path(path) {
+                                if is_audio_file(path) {
                                     tracing::debug!(target: "scanner::watcher", path = %path.display(), "File removed");
                                     Some(WatchEvent::Removed(path.clone()))
                                 } else {
@@ -287,24 +290,6 @@ impl Drop for FileWatcher {
         self.running.store(false, Ordering::Relaxed);
         tracing::debug!(target: "scanner::watcher", "File watcher stopped");
     }
-}
-
-/// Check if a path is an audio file by extension.
-fn is_audio_file(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| {
-            matches!(
-                e.to_lowercase().as_str(),
-                "mp3" | "flac" | "ogg" | "wav" | "m4a"
-            )
-        })
-        .unwrap_or(false)
-}
-
-/// Check if a path looks like it could be an audio file (for deleted files).
-fn looks_like_audio_path(path: &std::path::Path) -> bool {
-    is_audio_file(path)
 }
 
 /// Errors that can occur during file watching.

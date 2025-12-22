@@ -217,18 +217,25 @@ impl Visualizer {
         bands
     }
 
+    // === Future visualization settings API ===
+    // These methods are reserved for future visualization settings UI.
+    // They allow runtime adjustment of visualizer parameters.
+
     /// Set the number of frequency bands.
+    #[allow(dead_code)]
     pub fn set_bands(&mut self, bands: usize) {
         self.num_bands = bands.clamp(8, 128);
         self.prev_spectrum = vec![0.0; self.num_bands];
     }
 
     /// Set smoothing factor (0.0 = instant, 0.9 = very smooth).
+    #[allow(dead_code)]
     pub fn set_smoothing(&mut self, smoothing: f32) {
         self.smoothing = smoothing.clamp(0.0, 0.99);
     }
 
     /// Reset the visualizer state.
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.buffer_pos = 0;
         self.input_buffer.fill(0.0);

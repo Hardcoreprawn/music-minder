@@ -312,11 +312,11 @@ Move selected queue item up/down with keyboard shortcuts.
 
 **Tasks:**
 
-- [ ] Add `selected_queue_index: Option<usize>` to queue panel state
-- [ ] Handle `Alt+↑` / `Alt+↓` in keyboard handler
-- [ ] Add `PlayQueue::move_up(index)` / `move_down(index)` methods
-- [ ] Add `PlayQueue::reorder_shuffle(from, to)` for shuffle mode
-- [ ] Visual selection highlight in queue panel
+- [x] Add `selected_queue_index: Option<usize>` to queue panel state (already existed as `queue_selection`)
+- [x] Handle `Alt+↑` / `Alt+↓` in keyboard handler (context-sensitive: queue focused → reorder, else → volume)
+- [x] Add `PlayQueue::move_up(index)` / `move_down(index)` methods
+- [x] Add `PlayQueue::reorder_shuffle(from, to)` for shuffle mode
+- [x] Visual selection highlight in queue panel (already existed)
 
 #### 7.7.2: Drag Handle UI
 

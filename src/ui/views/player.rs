@@ -3,7 +3,7 @@
 use iced::widget::{Space, button, column, container, image, pick_list, row, slider, text};
 use iced::{Border, Element, Length};
 
-use crate::player::PlaybackStatus;
+use crate::player::{PlaybackStatus, format_duration_secs};
 use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
@@ -11,35 +11,6 @@ use crate::ui::theme::{self, color, layout, spacing, typography};
 
 /// Maximum volume level (because this one goes to 11)
 const MAX_VOLUME: f32 = 11.0;
-
-/// Maximum characters for device name display (for future use)
-#[allow(dead_code)]
-const _MAX_DEVICE_NAME_LEN: usize = 20;
-
-/// Truncate a string with ellipsis if too long (for future use)
-#[allow(dead_code)]
-fn _truncate_with_ellipsis(s: &str, max_len: usize) -> String {
-    if s.chars().count() <= max_len {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max_len - 1).collect();
-        format!("{}…", truncated)
-    }
-}
-
-/// Format seconds as MM:SS or HH:MM:SS
-fn format_duration_secs(secs: f32) -> String {
-    let secs = secs as u64;
-    let hours = secs / 3600;
-    let mins = (secs % 3600) / 60;
-    let secs = secs % 60;
-
-    if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, mins, secs)
-    } else {
-        format!("{}:{:02}", mins, secs)
-    }
-}
 
 /// Player controls bar (always visible at bottom)
 pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {

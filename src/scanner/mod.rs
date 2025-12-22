@@ -8,9 +8,20 @@ mod watcher;
 pub use watcher::{FileWatcher, WatchError, WatchEvent};
 
 use futures::stream::Stream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 use walkdir::WalkDir;
+
+/// Supported audio file extensions (lowercase).
+pub const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav", "m4a"];
+
+/// Check if a path has a supported audio file extension.
+pub fn is_audio_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| AUDIO_EXTENSIONS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
 
 /// Scans the given root directory recursively for audio files.
 ///
@@ -24,17 +35,11 @@ pub fn scan(root: PathBuf) -> impl Stream<Item = PathBuf> {
         for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
             if entry.file_type().is_file() {
                 let path = entry.path();
-                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    let ext = ext.to_lowercase();
-                    match ext.as_str() {
-                        "mp3" | "flac" | "ogg" | "wav" | "m4a" => {
-                            // Send the path to the channel. If the receiver is dropped,
-                            // blocking_send will return an error, and we stop scanning.
-                            if tx.blocking_send(path.to_path_buf()).is_err() {
-                                break;
-                            }
-                        }
-                        _ => {}
+                if is_audio_file(path) {
+                    // Send the path to the channel. If the receiver is dropped,
+                    // blocking_send will return an error, and we stop scanning.
+                    if tx.blocking_send(path.to_path_buf()).is_err() {
+                        break;
                     }
                 }
             }

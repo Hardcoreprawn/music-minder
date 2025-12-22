@@ -16,6 +16,9 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
+// Shared audio file detection
+use crate::scanner::is_audio_file;
+
 pub use enrich::{cmd_check_tools, cmd_enrich, cmd_identify, cmd_write_tags};
 pub use health::{cmd_check, cmd_diagnose, cmd_quality};
 pub use organize::cmd_organize;
@@ -322,13 +325,4 @@ pub(crate) fn collect_audio_files(path: &PathBuf, recursive: bool) -> Vec<PathBu
     } else {
         vec![path.clone()]
     }
-}
-
-/// Check if a path has an audio file extension
-pub(crate) fn is_audio_file(path: &std::path::Path) -> bool {
-    let ext = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_lowercase());
-    matches!(ext.as_deref(), Some("mp3" | "flac" | "ogg" | "m4a" | "wav"))
 }

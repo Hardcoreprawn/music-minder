@@ -74,8 +74,11 @@ pub fn handle_keyboard(
         // Up Arrow: Move selection up (or volume up with modifier)
         keyboard::Key::Named(key::Named::ArrowUp) => {
             if modifiers.alt() {
-                // Alt+Up: Volume up
-                if let Some(player) = &s.player {
+                // Alt+Up: Move queue item up (if queue focused) OR volume up
+                if s.active_pane == ActivePane::NowPlaying && s.focused_list == FocusedList::Queue {
+                    tracing::debug!(target: "ui::keyboard", "Alt+Up pressed - moving queue item up");
+                    return Task::done(Message::QueueMoveUp);
+                } else if let Some(player) = &s.player {
                     let current = player.volume();
                     let new_vol = (current + 0.05).min(1.1);
                     tracing::debug!(target: "ui::keyboard", "Alt+Up pressed - volume {:.0}%", new_vol * 100.0);
@@ -110,8 +113,11 @@ pub fn handle_keyboard(
         // Down Arrow: Move selection down (or volume down with modifier)
         keyboard::Key::Named(key::Named::ArrowDown) => {
             if modifiers.alt() {
-                // Alt+Down: Volume down
-                if let Some(player) = &s.player {
+                // Alt+Down: Move queue item down (if queue focused) OR volume down
+                if s.active_pane == ActivePane::NowPlaying && s.focused_list == FocusedList::Queue {
+                    tracing::debug!(target: "ui::keyboard", "Alt+Down pressed - moving queue item down");
+                    return Task::done(Message::QueueMoveDown);
+                } else if let Some(player) = &s.player {
                     let current = player.volume();
                     let new_vol = (current - 0.05).max(0.0);
                     tracing::debug!(target: "ui::keyboard", "Alt+Down pressed - volume {:.0}%", new_vol * 100.0);

@@ -10,7 +10,7 @@
 
 mod diagnostics_view;
 mod enrich;
-mod helpers;
+pub mod helpers;
 mod layout;
 mod library;
 mod player;
