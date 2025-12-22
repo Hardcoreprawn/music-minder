@@ -139,6 +139,8 @@ pub struct LoadedState {
     // Player state
     pub player: Option<player::Player>,
     pub player_state: player::PlayerState,
+    /// Metadata read from file tags (fallback when track not in DB)
+    pub file_metadata: Option<player::TrackInfo>,
     pub visualization: player::SpectrumData,
     pub visualization_mode: VisualizationMode,
     pub auto_queue_enabled: bool,
@@ -225,6 +227,53 @@ impl LoadedState {
         self.tracks
             .iter()
             .find(|t| t.path.to_lowercase() == current_lower)
+    }
+
+    /// Get display info for the current track using fallback chain.
+    ///
+    /// Priority: 1. Database metadata → 2. File tags → 3. Filename
+    ///
+    /// Returns (title, artist, album) with best available info.
+    pub fn current_track_display(&self) -> Option<(String, String, String)> {
+        let current_path = self.player_state.current_track.as_ref()?;
+
+        // 1. Try database first (most complete metadata)
+        if let Some(track) = self.current_track_info() {
+            return Some((
+                track.title.clone(),
+                track.artist_name.clone(),
+                track.album_name.clone(),
+            ));
+        }
+
+        // 2. Try file tags (from decoder)
+        if let Some(ref file_meta) = self.file_metadata {
+            let has_any_metadata = file_meta.title.is_some()
+                || file_meta.artist.is_some()
+                || file_meta.album.is_some();
+
+            if has_any_metadata {
+                // Build display with fallbacks within file metadata
+                let title = file_meta.title.clone().unwrap_or_else(|| {
+                    current_path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "Unknown".to_string())
+                });
+                let artist = file_meta.artist.clone().unwrap_or_default();
+                let album = file_meta.album.clone().unwrap_or_default();
+
+                return Some((title, artist, album));
+            }
+        }
+
+        // 3. Fall back to filename
+        let title = current_path
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        Some((title, String::new(), String::new()))
     }
 
     /// Find track metadata by path string

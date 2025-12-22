@@ -89,25 +89,20 @@ pub fn player_controls(s: &LoadedState) -> Element<'_, Message> {
     };
 
     // Track info - stacked: Title on top, "Artist • Album" below
-    let (title, artist_album) = if let Some(track) = s.current_track_info() {
-        let artist_album_str = if !track.album_name.is_empty() {
-            format!("{} • {}", track.artist_name, track.album_name)
+    // Uses fallback chain: DB → file tags → filename
+    let (title, artist_album) =
+        if let Some((track_title, artist, album)) = s.current_track_display() {
+            let artist_album_str = if !album.is_empty() {
+                format!("{} • {}", artist, album)
+            } else if !artist.is_empty() {
+                artist
+            } else {
+                String::new()
+            };
+            (track_title, artist_album_str)
         } else {
-            track.artist_name.clone()
+            ("No track playing".to_string(), String::new())
         };
-        (track.title.clone(), artist_album_str)
-    } else if state.current_track.is_some() {
-        // Fallback to filename if not in library
-        let name = state
-            .current_track
-            .as_ref()
-            .and_then(|p| p.file_stem())
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
-        (name, String::new())
-    } else {
-        ("No track playing".to_string(), String::new())
-    };
 
     let track_info_col = column![
         text(title)

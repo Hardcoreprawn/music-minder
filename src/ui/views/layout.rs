@@ -443,22 +443,13 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
 
     let state = &s.player_state;
 
-    // Current track info - use metadata if available
-    let (track_name, artist_name, album_name) = if let Some(track) = s.current_track_info() {
-        (
-            track.title.clone(),
-            track.artist_name.clone(),
-            track.album_name.clone(),
-        )
-    } else if let Some(ref path) = state.current_track {
-        let name = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
-        (name, String::new(), String::new())
-    } else {
-        ("No Track Playing".to_string(), String::new(), String::new())
-    };
+    // Current track info - use fallback chain: DB → file tags → filename
+    let (track_name, artist_name, album_name) =
+        if let Some((title, artist, album)) = s.current_track_display() {
+            (title, artist, album)
+        } else {
+            ("No Track Playing".to_string(), String::new(), String::new())
+        };
 
     // Cover art display (300x300 per design doc)
     let cover_size = layout::COVER_ART_LARGE as f32;

@@ -254,12 +254,12 @@ Winamp's global hotkeys were legendary. Start with in-app, then go global.
 - [x] **Escape**: Clear search / close panels
 - [ ] **Global hotkeys** (future): Control playback from any app
 
-### 7.5 Now Playing Enhancements (Medium Priority)
+### 7.5 Now Playing Enhancements (Medium Priority) ✅
 
 - [x] **Queue count display**: "Track 3 of 25" indicator
 - [x] **Track info panel**: Format, bitrate, file path display
-- [ ] **Read metadata from file**: Use decoder metadata when DB miss (needs audio thread event)
-- [ ] **Metadata fallback chain**: Currently: DB → filename. Goal: DB → file tags → filename
+- [x] **Read metadata from file**: Decoder reads tags and sends via `TrackLoaded` event
+- [x] **Metadata fallback chain**: DB → file tags → filename (via `current_track_display()`)
 
 ### 7.6 Code Cleanup (Low Priority)
 
@@ -900,16 +900,18 @@ Items marked complete at the phase level but with outstanding sub-tasks. These a
 - [x] **Escape**: Clear search / close panels
 - [ ] **Global hotkeys**: Control playback from any app *(future)*
 
-**7.5 Now Playing Enhancements:**
+**7.5 Now Playing Enhancements** *(complete)*:
 
-- [ ] **Read metadata from file**: Use decoder metadata when DB miss *(needs audio thread event)*
-- [ ] **Metadata fallback chain**: DB → file tags → filename *(currently: DB → filename)*
+- [x] **Queue count display**: "Track 3 of 25" indicator
+- [x] **Track info panel**: Format, bitrate, file path display
+- [x] **Read metadata from file**: Decoder reads tags via `TrackLoaded` event
+- [x] **Metadata fallback chain**: DB → file tags → filename
 
 **7.6 Code Cleanup:**
 
 - [ ] Wire up `PlayQueue::reorder()` *(needs drag-drop)*
 - [ ] Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`
-- [ ] Remove or use `AudioDecoder::metadata()` *(decide: file vs DB)*
+- [x] ~~Remove or use `AudioDecoder::metadata()`~~ → Now used for fallback metadata
 - [ ] Consolidate duplicate `format_duration()` functions
 
 ### From Phase 10: UI Polish
@@ -979,7 +981,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 |------|--------|-------|
 | Queue drag-drop reorder | Hard | Needs custom widget |
 | Context panel | Hard | New UI surface |
-| Metadata fallback chain | Medium | Audio thread changes |
+| ~~Metadata fallback chain~~ | ~~Medium~~ | ✅ Done |
 | Cover art preview (8.25.2) | Medium | Async + caching |
 
 ### Lower Priority / Future

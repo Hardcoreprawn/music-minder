@@ -430,6 +430,7 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
             channels,
             bits_per_sample,
             quality,
+            file_metadata,
         } => {
             tracing::debug!(target: "ui::events", "Received TrackLoaded: {:?}", path.file_name());
             s.player_state.current_track = Some(path.clone());
@@ -439,6 +440,9 @@ fn handle_player_event(event: PlayerEvent, _player: &Player, s: &mut LoadedState
             s.player_state.channels = channels;
             s.player_state.bits_per_sample = bits_per_sample;
             s.player_state.quality = quality;
+
+            // Store file metadata for fallback when track not in DB
+            s.file_metadata = Some(file_metadata);
 
             // Sync metadata to OS media controls
             sync_metadata(s);
@@ -600,10 +604,21 @@ fn update_smtc_playback_state(s: &LoadedState) {
 }
 
 /// Update OS media controls with current track metadata.
+/// Uses fallback chain: DB → file tags → filename
 fn sync_metadata(s: &LoadedState) {
     if let Some(ref mc) = s.media_controls {
+        // Try database first
         if let Some(track_info) = s.current_track_info() {
             send_track_to_smtc(mc, track_info);
+        } else if let Some((title, artist, album)) = s.current_track_display() {
+            // Fall back to file metadata or filename
+            let duration = s.player_state.duration;
+            let meta = player::MediaControlsMetadata::with_title(&title)
+                .artist(&artist)
+                .album(&album)
+                .duration(duration);
+            tracing::info!("Sending SMTC metadata (from file): {} - {}", artist, title);
+            mc.set_metadata(meta);
         } else if let Some(ref path) = s.player_state.current_track {
             tracing::warn!(
                 "No track info found for path: {:?}, tracks loaded: {}",

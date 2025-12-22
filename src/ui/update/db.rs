@@ -92,6 +92,7 @@ pub fn handle_db_init(
                 },
                 player: player_instance,
                 player_state,
+                file_metadata: None,
                 visualization: player::SpectrumData::default(),
                 visualization_mode: VisualizationMode::Spectrum,
                 auto_queue_enabled: true,

@@ -71,6 +71,7 @@ pub use queue::{PlayQueue, QueueItem, RepeatMode};
 pub use resampler::Resampler;
 pub use state::{
     AudioQuality, AudioSharedState, PlaybackStatus, PlayerCommand, PlayerEvent, PlayerState,
+    TrackInfo,
 };
 pub use visualization::{SpectrumData, VisualizationMode, Visualizer};
 

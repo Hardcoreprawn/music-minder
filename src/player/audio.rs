@@ -671,11 +671,15 @@ impl AudioThreadContext {
         audio_shared.start_flush();
 
         match AudioDecoder::open(&path) {
-            Ok(dec) => {
+            Ok(mut dec) => {
                 let source_rate = dec.sample_rate();
                 let source_channels = dec.channels();
                 let duration = dec.duration();
                 let bits_per_sample = dec.format_info.bit_depth;
+
+                // Read file metadata before moving decoder
+                // This provides fallback info when track is not in DB
+                let file_metadata = dec.metadata();
 
                 // Create resampler if sample rates differ
                 let resampler =
@@ -740,6 +744,7 @@ impl AudioThreadContext {
                     channels: source_channels,
                     bits_per_sample,
                     quality,
+                    file_metadata,
                 });
                 self.emit(PlayerEvent::StatusChanged(PlaybackStatus::Playing));
             }

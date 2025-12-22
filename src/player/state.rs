@@ -386,6 +386,8 @@ pub enum PlayerEvent {
         channels: u16,
         bits_per_sample: u16,
         quality: AudioQuality,
+        /// Metadata read directly from file tags (fallback when not in DB)
+        file_metadata: TrackInfo,
     },
     /// Position updated (sent periodically during playback)
     PositionChanged(Duration),
