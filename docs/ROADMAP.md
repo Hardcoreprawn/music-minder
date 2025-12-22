@@ -240,18 +240,18 @@ Never interrupt playback. Keep the library fresh automatically.
 - [x] **Shuffle toggle**: Shuffle on/off button
 - [x] **Play next**: Right-click → "Play Next" (add_next exists)
 
-### 7.4 Keyboard Shortcuts (Medium Priority)
+### 7.4 Keyboard Shortcuts (Medium Priority) ✅
 
 Winamp's global hotkeys were legendary. Start with in-app, then go global.
 
-- [ ] **Space**: Play/pause toggle
-- [ ] **←/→**: Previous/next track
-- [ ] **Shift+←/→**: Seek backward/forward 5s
-- [ ] **↑/↓**: Volume up/down
-- [ ] **Ctrl+F**: Focus search box
-- [ ] **Enter**: Play selected track
-- [ ] **Delete**: Remove selected from queue
-- [ ] **Escape**: Clear search / close panels
+- [x] **Space**: Play/pause toggle
+- [x] **←/→**: Previous/next track
+- [x] **Shift+←/→**: Seek backward/forward 5s
+- [x] **↑/↓**: Navigate selection (Alt+↑/↓ for volume)
+- [x] **Ctrl+F**: Focus search box (clears search)
+- [x] **Enter**: Play selected track
+- [x] **Delete**: Remove selected from queue
+- [x] **Escape**: Clear search / close panels
 - [ ] **Global hotkeys** (future): Control playback from any app
 
 ### 7.5 Now Playing Enhancements (Medium Priority)
@@ -280,8 +280,6 @@ Remove or wire up unused code identified in review:
 - [x] **Enrichment tab in UI**: Select tracks, identify, preview changes
 - [x] **Batch progress**: Progress bar for multi-file enrichment
 - [x] **Write tags button**: Apply metadata changes to files
-- [ ] **Cover art preview**: Show fetched cover before applying *(deferred to cover art refactor)*
-- [ ] **Conflict resolution**: Handle multiple matches, let user choose *(future enhancement)*
 
 **Implementation Notes (Phase 8):**
 
@@ -294,6 +292,195 @@ Remove or wire up unused code identified in review:
 - Export report logs to tracing output
 
 ---
+
+## Phase 8.25: Match Review & Cover Art Preview
+
+**Philosophy**: High-confidence matches auto-apply (current behavior), but give users easy escape hatches when the auto-pick is wrong—without drowning them in choices.
+
+### 8.25.1: Alternative Matches (Low-Effort Corrections)
+
+When identification returns multiple candidates, keep the top 3-4 alternatives available for quick switching.
+
+**Current State:**
+
+- AcoustID returns multiple recordings per fingerprint (same song on different albums)
+- `to_identifications()` in adapter.rs already expands recordings to multiple `TrackIdentification` objects
+- Service picks "best" via `calculate_match_score()` (confidence + metadata hints)
+- Alternatives are discarded
+
+**Goal:** Keep alternatives, surface them when user clicks "Review"
+
+**Data Model Changes:**
+
+```rust
+// In EnrichmentResult (state.rs)
+pub struct EnrichmentResult {
+    // ... existing fields ...
+    
+    /// The chosen identification (best match)
+    pub identification: Option<TrackIdentification>,
+    
+    /// Alternative matches (top 2-3, for quick switching)
+    /// Sorted by score, excludes the chosen one
+    pub alternatives: Vec<TrackIdentification>,
+    
+    /// If true, show expanded view with alternatives
+    pub show_alternatives: bool,
+}
+```
+
+**Service Changes:**
+
+```rust
+// New return type that preserves alternatives
+pub struct IdentificationWithAlternatives {
+    pub best: TrackIdentification,
+    pub alternatives: Vec<TrackIdentification>, // Top 3, filtered
+}
+
+// In EnrichmentService
+pub async fn identify_track_with_alternatives(
+    &self,
+    path: &Path,
+) -> Result<IdentificationWithAlternatives, EnrichmentError>
+```
+
+**UI Flow:**
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ ✓ Back in Black                              92%  [Review]  │
+│   Artist: AC/DC  •  Album: Back in Black (1980)             │
+└─────────────────────────────────────────────────────────────┘
+                           ↓ Click Review
+┌─────────────────────────────────────────────────────────────┐
+│ ✓ Back in Black                              92%  [Collapse]│
+│   Artist: AC/DC  •  Album: Back in Black (1980)    ◉ USE    │
+├─────────────────────────────────────────────────────────────┤
+│   Also found on:                                            │
+│   ○ AC/DC Live (1992)                             88%       │
+│   ○ Who Made Who (1986)                           85%       │
+│   ○ [Search manually...]                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Tasks:**
+
+- [ ] Add `alternatives: Vec<TrackIdentification>` to `EnrichmentResult`
+- [ ] Add `show_alternatives: bool` to `EnrichmentResult`  
+- [ ] Create `identify_track_with_alternatives()` that returns best + top 3
+- [ ] Filter alternatives: skip if score < 0.5, skip duplicates, max 3
+- [ ] UI: Expand/collapse alternatives on "Review" click
+- [ ] UI: Radio buttons to switch selection
+- [ ] Message: `EnrichSwitchAlternative(result_index, alt_index)`
+- [ ] "Search manually" link → future manual search feature
+
+### 8.25.2: Cover Art Preview
+
+Show cover art thumbnail during review, before writing tags.
+
+**Current State:**
+
+- Cover art is fetched on-demand via `get_cover_art(release_id)`
+- Requires MusicBrainz release ID (from `identification.track.release_id`)
+- Not shown during enrichment preview
+
+**Goal:** Fetch and display cover thumbnail when user reviews a result
+
+**Approach:** Lazy loading - don't fetch covers for all results, only when user expands to review.
+
+**Data Model Changes:**
+
+```rust
+// In EnrichmentResult
+pub struct EnrichmentResult {
+    // ... existing fields ...
+    
+    /// Cover art for the chosen identification (lazy loaded)
+    pub cover_art: Option<CoverArtPreview>,
+    
+    /// Cover loading state
+    pub cover_loading: bool,
+}
+
+pub struct CoverArtPreview {
+    pub thumbnail: Vec<u8>,  // Small size (250px)
+    pub release_id: String,  // For cache key
+}
+```
+
+**UI Flow:**
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ ┌──────┐  ✓ Back in Black                    92%  [Collapse]│
+│ │      │    Artist: AC/DC                                   │
+│ │ 🖼️  │    Album: Back in Black (1980)           ◉ USE     │
+│ │      │                                                    │
+│ └──────┘  Also found on:                                    │
+│           ○ AC/DC Live (1992)                   88%         │
+│           ○ Who Made Who (1986)                 85%         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Tasks:**
+
+- [ ] Add `cover_art: Option<CoverArtPreview>` to `EnrichmentResult`
+- [ ] Add `cover_loading: bool` to `EnrichmentResult`
+- [ ] On "Review" expand, trigger cover fetch if `release_id` exists
+- [ ] Message: `EnrichCoverArtLoaded(result_index, Result<CoverArtPreview, String>)`
+- [ ] UI: Show 64x64 thumbnail in expanded review section
+- [ ] Show placeholder/spinner while loading
+- [ ] Cache covers by release_id (reuse existing cover cache)
+
+### 8.25.3: Manual Search (For Edge Cases)
+
+For rare editions, wrong matches, or obscure tracks - let user search manually.
+
+**Approach:** Simple MusicBrainz recording search, not full fingerprinting.
+
+**UI Flow:**
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Search MusicBrainz:                                         │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ back in black ac/dc                                     │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                              [Search]       │
+├─────────────────────────────────────────────────────────────┤
+│ Results:                                                    │
+│ ○ Back in Black - AC/DC - Back in Black (1980)      [Use]  │
+│ ○ Back in Black - AC/DC - Live at Donington (1992)  [Use]  │
+│ ○ Back in Black - AC/DC - Iron Man 2 OST (2010)     [Use]  │
+│                                     [Load More] [Cancel]    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Tasks:**
+
+- [ ] Add MusicBrainz search endpoint to `MusicBrainzClient`
+- [ ] Message: `EnrichManualSearchOpen(result_index)`
+- [ ] Message: `EnrichManualSearchQuery(String)`
+- [ ] Message: `EnrichManualSearchSelect(result_index, recording_id)`
+- [ ] UI: Modal or inline search panel
+- [ ] Pre-populate search with existing title/artist from result
+- [ ] Rate limit: 1 req/sec to MusicBrainz
+
+### Implementation Priority
+
+| Feature | Complexity | Value | Order |
+|---------|------------|-------|-------|
+| Alternative matches (data) | Low | High | 1st |
+| Alternative matches (UI) | Medium | High | 2nd |
+| Cover art preview | Medium | Medium | 3rd |
+| Manual search | Medium | Medium | 4th |
+
+**Phase 8.25 can be tackled incrementally:**
+
+1. First, just preserve alternatives in data model + show in results
+2. Then add cover preview when reviewing  
+3. Manual search is a "power user" escape hatch, lowest priority
 
 ## Phase 8.5: Library Gardener (Metadata Quality Nurturing) ✅
 
@@ -481,6 +668,136 @@ that could benefit from enrichment without being intrusive.
 - [ ] Scrobbling (Last.fm / ListenBrainz)
 - [ ] Discord Rich Presence
 
+---
+
+## Phase 11: Streaming Service Integration (Future)
+
+**Vision**: Bridge your legacy library with modern streaming—use your actual music taste (not just streaming history) to drive discovery, and always play the best quality source available.
+
+### The Problem We're Solving
+
+1. **"Spotify doesn't know my taste"**: 20 years of curated MP3s/FLACs represent real preferences, but streaming services only know what you've streamed
+2. **"My old MP3s are 128kbps garbage"**: Some legacy files are worse than streaming quality
+3. **"AI DJ is lame"**: Spotify's DJX optimizes for engagement, not genuine discovery based on your actual collection
+4. **"Discovery feels disconnected"**: Recommendations don't account for what you already own and love
+
+### Phase 11.1: Local Library as Taste Profile (Foundation)
+
+Build the intelligence layer that understands your musical taste from your library.
+
+- [ ] **Taste analysis engine**: Analyze library for genre/mood/era distribution
+- [ ] **Audio feature extraction**: Tempo, energy, danceability, key (local analysis or via API)
+- [ ] **Artist graph**: Build relationship map from your library (shared albums, collaborations)
+- [ ] **Listening weight**: Track play counts/skips to weight preferences
+- [ ] **Taste vector**: Generate embeddings representing your musical identity
+
+### Phase 11.2: Spotify Discovery Integration
+
+Use Spotify's API to find music you'll love based on your *actual* library.
+
+- [ ] **Spotify OAuth flow**: Connect account via PKCE flow
+- [ ] **Library matching**: Match local tracks to Spotify IDs (via ISRC, MusicBrainz, fuzzy search)
+- [ ] **Audio features fetch**: Get Spotify's audio features for matched tracks
+- [ ] **Recommendation engine**: Query Spotify recs seeded by your library's taste profile
+- [ ] **Discovery queue**: "New music you might like" based on library analysis
+- [ ] **"I own this" indicator**: Show which recommendations you already have locally
+- [ ] **Wishlist**: Save discoveries for later acquisition
+
+### Phase 11.3: Quality-Based Source Routing
+
+Always play the best available version of a track.
+
+- [ ] **Quality comparison**: Compare local quality vs Spotify lossless
+  - Local FLAC 24-bit > Spotify Lossless > Local FLAC 16-bit > Spotify Lossless > Local 320kbps > Local 128kbps
+- [ ] **Source indicator**: Show "Playing: Local FLAC" or "Playing: Spotify" in UI
+- [ ] **Auto-upgrade**: Option to prefer Spotify when local < streaming quality
+- [ ] **Manual override**: "Always play local" / "Always play Spotify" per-track
+- [ ] **Quality report**: "47 tracks in your library have better versions on Spotify"
+
+### Phase 11.4: Hybrid Playback (Experimental)
+
+Seamless switching between local and Spotify playback.
+
+- [ ] **Spotify Connect control**: Send playback commands to Spotify app/device
+- [ ] **Queue handoff**: When queue transitions Local→Spotify, hand off gracefully
+- [ ] **Crossfade bridge**: Use 1-2s crossfade to mask player switches
+- [ ] **Unified queue view**: Single queue showing both local and Spotify tracks
+- [ ] **Playback mode toggle**: "Local Only" / "Spotify Only" / "Hybrid (Best Quality)"
+
+**Known Limitations:**
+
+- No true gapless across player boundary
+- Requires Spotify Premium for playback control
+- Two "now playing" states to synchronize
+- Media controls may behave unexpectedly during handoff
+
+### Phase 11.5: AI DJ (Better Than DJX)
+
+A DJ that actually knows your taste because it's trained on your real library.
+
+- [ ] **Library-seeded generation**: Build playlists from "70% owned, 30% discovery"
+- [ ] **Mood/energy flow**: Sequence tracks for energy arc (build up, peak, cool down)
+- [ ] **Time-aware**: Morning chill, afternoon energy, evening wind-down
+- [ ] **Context-aware**: "More like this" based on current track
+- [ ] **Avoid overplay**: Don't repeat recent plays, diversify within taste
+- [ ] **Explanation**: "Playing this because you have 12 albums by similar artists"
+- [ ] **Feedback loop**: Thumbs up/down to refine taste model
+
+### Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                      Music Minder                           │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
+│  │ Local Library │    │ Spotify API  │    │   AI DJ       │ │
+│  │ + MusicBrainz │◄──►│ + Features   │◄──►│ Taste Model   │ │
+│  │ + Quality DB  │    │ + Recs       │    │ + Sequencing  │ │
+│  └──────┬───────┘    └──────┬───────┘    └───────┬───────┘ │
+│         │                   │                    │         │
+│         ▼                   ▼                    ▼         │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │              Unified Playback Router                    ││
+│  │  • Compare quality scores (local vs streaming)          ││
+│  │  • Route to local player OR Spotify Connect             ││
+│  │  • Crossfade handoff at source boundaries               ││
+│  │  • Single queue abstraction                             ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Alternative Services
+
+Spotify isn't the only option—architecture should be service-agnostic:
+
+| Service | API Quality | Lossless | Notes |
+|---------|-------------|----------|-------|
+| **Spotify** | Excellent | Yes (2025) | Largest catalog, best recs API |
+| **Tidal** | Good | Yes (MQA/FLAC) | Audiophile-focused |
+| **Qobuz** | Good | Yes (Hi-Res) | Best quality, smaller catalog |
+| **YouTube Music** | Decent | No | Huge catalog including obscure |
+| **ListenBrainz** | Open | N/A | Open-source recs, no playback |
+
+### Implementation Priority
+
+| Feature | Difficulty | Value | Priority |
+|---------|------------|-------|----------|
+| Taste analysis from library | Medium | High | 1st |
+| Spotify OAuth + matching | Medium | High | 2nd |
+| Recommendations API | Easy | Very High | 3rd |
+| Quality comparison | Easy | High | 4th |
+| Source routing (manual) | Medium | High | 5th |
+| Hybrid playback | Hard | Medium | 6th |
+| AI DJ | Hard | Very High | 7th |
+| Gapless handoff | Very Hard | Low | Later |
+
+### Open Questions
+
+- [ ] **Spotify TOS**: Is quality-based routing (avoiding Spotify playback) acceptable?
+- [ ] **Offline taste model**: Can we do audio feature extraction locally (no API)?
+- [ ] **Plugin architecture**: Should streaming services be plugins?
+- [ ] **ListenBrainz integration**: Use open-source recs as Spotify alternative?
+
 ### Advanced
 
 - [ ] Waveform seek preview
@@ -558,3 +875,118 @@ state.gardener_state.command_tx = Some(gardener_tx);
 - [ ] **Unified service manager**: Consider `ServiceManager` struct
   - Single place to start/stop all background services
   - Graceful shutdown coordination
+
+---
+
+## Deferred & Incomplete Items
+
+Items marked complete at the phase level but with outstanding sub-tasks. These are tracked here for visibility and prioritization.
+
+### From Phase 7: Library UX & Queue Management
+
+**7.3 Queue Management:**
+
+- [ ] **Reorder queue**: Drag-and-drop to rearrange *(needs custom Iced widget)*
+
+**7.4 Keyboard Shortcuts** *(complete)*:
+
+- [x] **Space**: Play/pause toggle
+- [x] **←/→**: Previous/next track  
+- [x] **Shift+←/→**: Seek backward/forward 5s
+- [x] **↑/↓**: Navigate selection (Alt+↑/↓ for volume)
+- [x] **Ctrl+F**: Focus search box (clears search)
+- [x] **Enter**: Play selected track
+- [x] **Delete**: Remove selected from queue
+- [x] **Escape**: Clear search / close panels
+- [ ] **Global hotkeys**: Control playback from any app *(future)*
+
+**7.5 Now Playing Enhancements:**
+
+- [ ] **Read metadata from file**: Use decoder metadata when DB miss *(needs audio thread event)*
+- [ ] **Metadata fallback chain**: DB → file tags → filename *(currently: DB → filename)*
+
+**7.6 Code Cleanup:**
+
+- [ ] Wire up `PlayQueue::reorder()` *(needs drag-drop)*
+- [ ] Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`
+- [ ] Remove or use `AudioDecoder::metadata()` *(decide: file vs DB)*
+- [ ] Consolidate duplicate `format_duration()` functions
+
+### From Phase 10: UI Polish
+
+**10.8 Context Panel:**
+
+- [ ] **Slide-in panel**: 320px from right edge
+- [ ] **Selection summary**: "2 tracks selected"
+- [ ] **Quick actions**: Identify, Write Tags, Play Next
+- [ ] **Before/After preview**: Show metadata changes
+- [ ] **Close button**: X to dismiss
+
+**10.9 Feedback & Polish:**
+
+- [ ] **Toast notifications**: Non-blocking success/error messages
+- [ ] **Confirmation dialogs**: Destructive action warnings
+- [ ] **Empty states**: Helpful messages for empty library/queue/search
+- [ ] **Loading states**: Spinners for async operations
+- [ ] **Error states**: Friendly messages with recovery suggestions
+
+**10.10 Interaction Polish:**
+
+- [ ] **Hover states**: All interactive elements respond
+- [ ] **Focus indicators**: Keyboard navigation support
+- [ ] **Smooth transitions**: 100-200ms for state changes
+- [ ] **Playing indicator**: Gentle pulse on current track
+
+**10.11 Delightful Touches:**
+
+- [ ] **Startup tagline**: Random "It really whips..." in console
+- [ ] **Easter egg**: Hidden classic green theme unlock
+
+### Technical Debt (Partial)
+
+- [ ] **Watcher refactor**: Migrate from Iced subscription to init-time start pattern
+- [ ] **Diagnostics service**: Background service with periodic checks
+- [ ] **Unified service manager**: Single ServiceManager for all background services
+
+---
+
+## Priority Matrix: Incomplete Items
+
+Ranked by impact vs effort for deciding what to tackle next.
+
+### Quick Wins (Low Effort, High Impact)
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| ~~Keyboard: Space for play/pause~~ | ~~Low~~ | ✅ Done |
+| ~~Keyboard: ←/→ for prev/next~~ | ~~Low~~ | ✅ Done |
+| Startup tagline | Low | Fun, adds personality |
+| Consolidate `format_duration()` | Low | Code cleanup |
+| Toast notifications | Medium | Useful for all actions |
+
+### Medium Effort, High Value
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| ~~All keyboard shortcuts~~ | ~~Medium~~ | ✅ Done (8/9 - global hotkeys deferred) |
+| Empty states | Medium | Better UX for new users |
+| Loading/error states | Medium | Polish across app |
+| Alternative matches (8.25.1) | Medium | Already scoped above |
+
+### Harder But Important
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| Queue drag-drop reorder | Hard | Needs custom widget |
+| Context panel | Hard | New UI surface |
+| Metadata fallback chain | Medium | Audio thread changes |
+| Cover art preview (8.25.2) | Medium | Async + caching |
+
+### Lower Priority / Future
+
+| Item | Effort | Notes |
+|------|--------|-------|
+| Global hotkeys | Hard | Platform-specific |
+| Visualizer API cleanup | Low | Only if we extend viz |
+| Service manager unification | Medium | Architectural cleanup |
+| Easter egg theme | Low | Fun but not urgent |
