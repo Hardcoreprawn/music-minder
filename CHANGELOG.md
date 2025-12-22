@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.6](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.5...music-minder-v0.1.6) (2025-12-22)
+
+
+### ✨ Features
+
+* Add application icon ([a77f722](https://github.com/Hardcoreprawn/music-minder/commit/a77f722f9491f7d3c1a056ef93fd9fc5a9784c1a))
+* **ui:** Add scan progress indicator with file count ([6d2c7fa](https://github.com/Hardcoreprawn/music-minder/commit/6d2c7faf6d2c74d2a79a3d216184fb76185fd92a))
+
+
+### 🐛 Bug Fixes
+
+* **ci:** Add manual workflow dispatch for installer builds ([16b9ba0](https://github.com/Hardcoreprawn/music-minder/commit/16b9ba0b7d243d5ef8a577be8908d6a0b454037b))
+* **ci:** Remove duplicate Version variable in WiX build ([96af6db](https://github.com/Hardcoreprawn/music-minder/commit/96af6db716f7992966e5859feaf2cf1920db9377))
+* **ci:** Use correct release-please component output names ([2cbc016](https://github.com/Hardcoreprawn/music-minder/commit/2cbc0164e462a3e54c6273df392bcee0cf0488c2))
+* Display app icon in window title bar ([671aff2](https://github.com/Hardcoreprawn/music-minder/commit/671aff28f48fe1444bef1b542081ed56615bb852))
+* **windows:** Hide console window when launching GUI ([69218cc](https://github.com/Hardcoreprawn/music-minder/commit/69218cc9e2ddcaa097d8f2d70949ed1ec15c92f8))
+* **wix:** Move shortcuts to same feature as main executable ([0f66bd7](https://github.com/Hardcoreprawn/music-minder/commit/0f66bd751a62532024701a6ce5c4dafb5d219eaf))
+
 ## [0.1.5](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.4...music-minder-v0.1.5) (2025-12-20)
 
 
