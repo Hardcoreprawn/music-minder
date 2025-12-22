@@ -702,6 +702,12 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                             .into()
                     };
 
+                    // Drag handle (grip icon) - for future drag-and-drop
+                    let grip_handle: Element<Message> =
+                        icon_sized(icons::GRIP_VERTICAL, typography::SIZE_TINY)
+                            .color(color::TEXT_MUTED)
+                            .into();
+
                     // Remove button for this item
                     let remove_btn = button(icon_sized(icons::XMARK, typography::SIZE_TINY))
                         .padding([spacing::XS, spacing::SM])
@@ -732,9 +738,19 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     })
                     .on_press(Message::QueueSelectIndex(i));
 
-                    row![track_btn, remove_btn, Space::with_width(spacing::SM)]
-                        .align_y(iced::Alignment::Center)
-                        .into()
+                    // Wrap grip handle in a container for consistent sizing
+                    let grip_container = container(grip_handle)
+                        .width(Length::Fixed(16.0))
+                        .center_y(Length::Fill);
+
+                    row![
+                        grip_container,
+                        track_btn,
+                        remove_btn,
+                        Space::with_width(spacing::SM)
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .into()
                 })
                 .collect();
 

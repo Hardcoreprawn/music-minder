@@ -335,8 +335,9 @@ Add a grip handle to queue items for drag initiation.
 
 **Tasks:**
 
-- [ ] Add grip icon `⠿` (Unicode: U+2807) to left of queue items
-- [ ] Style: `Text::Muted` color, `Grab` cursor on hover
+- [x] Add grip icon (Font Awesome `GRIP_VERTICAL` U+F58E) to left of queue items
+- [x] Style: `TEXT_MUTED` color
+- [ ] `Grab` cursor on hover (requires MouseArea or custom widget)
 - [ ] Only the handle responds to drag events (not full row)
 
 #### 7.7.3: Drag-and-Drop Reordering

@@ -192,6 +192,9 @@ pub const CHEVRON_LEFT: char = '\u{f053}';
 /// Arrow rotate right - fa-arrow-rotate-right (U+F01E)
 pub const ARROW_ROTATE: char = '\u{f01e}';
 
+/// Grip vertical - fa-grip-vertical (U+F58E) - for drag handles
+pub const GRIP_VERTICAL: char = '\u{f58e}';
+
 // ============================================================================
 // Diagnostic/System Icons
 // ============================================================================
