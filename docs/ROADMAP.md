@@ -234,7 +234,7 @@ Never interrupt playback. Keep the library fresh automatically.
 - [x] **Current track highlight**: Visual indicator of what's playing
 - [x] **Click to jump**: Click any queued track to play it immediately
 - [x] **Remove from queue**: X button to remove tracks
-- [ ] **Reorder queue**: Drag-and-drop to rearrange (deferred - needs custom widget)
+- [ ] **Reorder queue**: Drag-and-drop to rearrange → see **7.7 Queue Reordering**
 - [x] **Clear queue**: Button to clear entire queue
 - [x] **Repeat modes**: Off / All / One with visual toggle
 - [x] **Shuffle toggle**: Shuffle on/off button
@@ -270,7 +270,7 @@ Remove or wire up unused code identified in review:
 - [x] Wire up `PlayQueue::cycle_repeat()` to UI button
 - [x] Wire up `PlayQueue::set_shuffle()` to UI toggle
 - [x] Wire up `PlayQueue::remove()` to queue panel
-- [ ] Wire up `PlayQueue::reorder()` to queue panel (needs drag-drop)
+- [ ] Wire up `PlayQueue::reorder()` to queue panel → see **7.7 Queue Reordering**
 - [x] ~~Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`~~ → Marked as future API with `#[allow(dead_code)]`
 - [x] ~~Remove or use `AudioDecoder::metadata()`~~ → Now used for fallback metadata (plays before DB sync)
 
@@ -286,6 +286,196 @@ Remove or wire up unused code identified in review:
 - [x] ~~Review 10× `#[allow(dead_code)]` annotations~~ → Reviewed; intentional items documented, unused removed
 - [x] Remove `_truncate_with_ellipsis` and `_MAX_DEVICE_NAME_LEN` from player.rs
 - [x] Implement shuffle order logic (queue.rs) - Fisher-Yates on indices
+
+### 7.7 Queue Reordering (Medium Priority)
+
+Allow users to reorder the play queue via keyboard shortcuts and drag-and-drop.
+
+**Philosophy**: Keyboard-first (quick win, accessible), then drag-drop as polish.
+
+#### 7.7.1: Keyboard Reordering (Quick Win)
+
+Move selected queue item up/down with keyboard shortcuts.
+
+**Shortcuts:**
+
+- `Alt+↑` — Move selected track up one position
+- `Alt+↓` — Move selected track down one position
+
+**Behavior:**
+
+- Works on the currently selected queue item
+- If shuffle is ON, reorders `shuffle_order[]` (what user sees)
+- If shuffle is OFF, reorders underlying `items[]`
+- Selection follows the moved item
+- Currently playing track can be moved (position indicator follows)
+
+**Tasks:**
+
+- [ ] Add `selected_queue_index: Option<usize>` to queue panel state
+- [ ] Handle `Alt+↑` / `Alt+↓` in keyboard handler
+- [ ] Add `PlayQueue::move_up(index)` / `move_down(index)` methods
+- [ ] Add `PlayQueue::reorder_shuffle(from, to)` for shuffle mode
+- [ ] Visual selection highlight in queue panel
+
+#### 7.7.2: Drag Handle UI
+
+Add a grip handle to queue items for drag initiation.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  ⠿  1. Back in Black           AC/DC           4:15    ✕   │
+│  ⠿  2. Highway to Hell         AC/DC           3:28    ✕   │
+│  ⠿  3. Thunderstruck           AC/DC           4:52    ✕   │
+└─────────────────────────────────────────────────────────────┘
+     ↑ Drag handle (only this initiates drag)
+```
+
+**Rationale**: Separates "click to play" from "drag to reorder" — no deadband ambiguity.
+
+**Tasks:**
+
+- [ ] Add grip icon `⠿` (Unicode: U+2807) to left of queue items
+- [ ] Style: `Text::Muted` color, `Grab` cursor on hover
+- [ ] Only the handle responds to drag events (not full row)
+
+#### 7.7.3: Drag-and-Drop Reordering
+
+Full mouse-based reordering with visual feedback.
+
+**State Model:**
+
+```rust
+struct QueueDragState {
+    /// Item being dragged (index + start position)
+    dragging: Option<DragInfo>,
+    /// Current drop target index (for insertion line)
+    drop_target: Option<usize>,
+    /// Scroll velocity for edge auto-scroll (-1, 0, +1)
+    auto_scroll: i8,
+}
+
+struct DragInfo {
+    index: usize,           // Original position in queue
+    origin_y: f32,          // Y position at drag start
+    current_y: f32,         // Current cursor Y position
+    is_shuffle_mode: bool,  // Snapshot of shuffle state at drag start
+}
+```
+
+**Messages:**
+
+```rust
+enum Message {
+    // Drag lifecycle
+    QueueDragStart { index: usize, y: f32 },
+    QueueDragMove { y: f32 },
+    QueueDragEnd,
+    QueueDragCancel,
+    
+    // Auto-scroll tick (fired by subscription while dragging at edge)
+    QueueAutoScrollTick,
+}
+```
+
+**Visual Feedback:**
+
+| State | Visual |
+|-------|--------|
+| Hovering handle | Cursor: `Grab` |
+| Dragging | Cursor: `Grabbing`, source item dimmed (50% opacity) |
+| Over drop zone | Insertion line (2px accent color) between items |
+| At edge (auto-scroll) | Subtle gradient fade at top/bottom edge |
+
+**Drop Target Calculation:**
+
+```text
+┌─────────────────────┐ ← y=0
+│  Item 0 (40px)      │
+├─────────────────────┤ ← y=40  → drop at 1
+│  Item 1 (40px)      │
+├─────────────────────┤ ← y=80  → drop at 2
+│  Item 2 (40px)      │
+├─────────────────────┤ ← y=120 → drop at 3
+│  Item 3 (40px)      │
+└─────────────────────┘ ← y=160
+
+drop_index = ((cursor_y - list_top + scroll_offset) / item_height).floor()
+```
+
+**Auto-Scroll at Edges:**
+
+When cursor is within 40px of top/bottom edge during drag:
+
+```rust
+const SCROLL_ZONE_HEIGHT: f32 = 40.0;
+const SCROLL_SPEED: f32 = 100.0; // pixels per second
+
+fn calculate_auto_scroll(cursor_y: f32, list_bounds: Rectangle) -> i8 {
+    if cursor_y < list_bounds.y + SCROLL_ZONE_HEIGHT {
+        -1  // Scroll up
+    } else if cursor_y > list_bounds.y + list_bounds.height - SCROLL_ZONE_HEIGHT {
+        1   // Scroll down
+    } else {
+        0   // No scroll
+    }
+}
+```
+
+- Use `iced::time::every(Duration::from_millis(16))` subscription while `auto_scroll != 0`
+- Each tick adjusts `scroll_offset` by `SCROLL_SPEED * 0.016`
+- Clamp to valid scroll range
+
+**Tasks:**
+
+- [ ] Add `QueueDragState` to `UiState`
+- [ ] Wrap drag handle in `MouseArea` with `on_press`, `on_move`, `on_release`
+- [ ] Calculate `drop_target` from cursor Y + scroll offset
+- [ ] Render insertion line at `drop_target` position
+- [ ] Dim source item during drag (reduce opacity)
+- [ ] Change cursor to `Grabbing` during drag
+- [ ] Implement auto-scroll subscription at edges
+- [ ] Handle `Escape` key to cancel drag
+- [ ] Handle window focus loss → cancel drag
+- [ ] Call `queue.reorder(from, to)` or `queue.reorder_shuffle(from, to)` on drop
+
+**Edge Cases:**
+
+| Case | Behavior |
+|------|----------|
+| Drop on same position | No-op, no reorder call |
+| Single-item queue | Drag handle hidden or disabled |
+| Currently playing track dragged | Allowed, current index follows |
+| Shuffle mode ON | Reorder `shuffle_order[]`, not `items[]` |
+| Scroll while dragging | Drop target updates with scroll |
+| Escape during drag | Cancel, restore original state |
+| Focus lost during drag | Cancel drag |
+| Right-click during drag | Cancel drag |
+
+#### Implementation Order
+
+| Step | Task | Time Est. |
+|------|------|-----------|
+| 1 | Keyboard reordering (`Alt+↑/↓`) | 30 min |
+| 2 | Queue selection state + highlight | 15 min |
+| 3 | Drag handle UI (grip icon) | 15 min |
+| 4 | Basic drag state + messages | 30 min |
+| 5 | Drop target calculation + insertion line | 30 min |
+| 6 | Visual feedback (dimming, cursor) | 15 min |
+| 7 | Auto-scroll at edges | 45 min |
+| 8 | Edge cases (cancel, focus, shuffle) | 30 min |
+| **Total** | | **~3.5 hours** |
+
+**Files to Modify:**
+
+| File | Changes |
+|------|---------|
+| `src/ui/state.rs` | Add `QueueDragState`, `selected_queue_index` |
+| `src/ui/messages.rs` | Add drag messages |
+| `src/ui/views/now_playing.rs` | Drag handle, visual feedback, insertion line |
+| `src/ui/update/mod.rs` | Handle drag messages, keyboard shortcuts |
+| `src/ui/streams.rs` | Auto-scroll subscription |
+| `src/player/queue.rs` | Add `reorder_shuffle()`, `move_up()`, `move_down()` |
 
 ---
 
@@ -1003,7 +1193,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 
 | Item | Effort | Notes |
 |------|--------|-------|
-| Queue drag-drop reorder | Hard | Needs custom widget |
+| Queue reordering (7.7) | Medium | Scoped in 7.7 - keyboard + drag-drop |
 | Context panel | Hard | New UI surface |
 | ~~Metadata fallback chain~~ | ~~Medium~~ | ✅ Done |
 | Cover art preview (8.25.2) | Medium | Async + caching |
