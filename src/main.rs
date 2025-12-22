@@ -6,10 +6,7 @@
 
 // Hide console window on Windows when running as GUI
 // CLI commands will attach to the parent console or allocate one
-#![cfg_attr(
-    all(target_os = "windows", not(debug_assertions)),
-    windows_subsystem = "windows"
-)]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 pub mod cli;
 pub mod cover;
@@ -30,8 +27,12 @@ pub mod ui;
 
 use clap::Parser;
 use iced::application;
+use iced::window;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use ui::MusicMinder;
+
+/// Embedded app icon (32x32 RGBA PNG)
+const APP_ICON: &[u8] = include_bytes!("../assets/icon-32.png");
 
 fn main() -> anyhow::Result<()> {
     let args = cli::Cli::parse();
@@ -54,12 +55,27 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Load window icon from embedded PNG
+    let icon = load_icon(APP_ICON);
+
     // No command specified, launch the GUI
     application("Music Minder", MusicMinder::update, MusicMinder::view)
         .subscription(MusicMinder::subscription)
         .font(ui::icons::ICON_FONT_BYTES)
+        .window(window::Settings {
+            icon,
+            ..Default::default()
+        })
         .run_with(MusicMinder::new)
         .map_err(|e| anyhow::anyhow!("GUI Error: {}", e))
+}
+
+/// Load a PNG icon from bytes into an iced window icon
+fn load_icon(png_bytes: &[u8]) -> Option<window::Icon> {
+    // Decode PNG using iced's image feature
+    let image = image::load_from_memory(png_bytes).ok()?.into_rgba8();
+    let (width, height) = image.dimensions();
+    window::icon::from_rgba(image.into_raw(), width, height).ok()
 }
 
 /// Attach to parent console on Windows for CLI output.
