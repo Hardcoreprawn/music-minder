@@ -1,133 +1,20 @@
-name: Release
+name: Release Please
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g., 0.1.5)'
-        required: true
-        type: string
-      tag_name:
-        description: 'Tag name (e.g., music-minder-v0.1.5)'
-        required: true
-        type: string
 
 permissions:
   contents: write
   pull-requests: write
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   release-please:
     name: Release Please
-    # Only run if CI succeeded (skip for manual dispatch)
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs['music-minder--release_created'] }}
-      tag_name: ${{ steps.release.outputs['music-minder--tag_name'] }}
-      version: ${{ steps.release.outputs['music-minder--version'] }}
     steps:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4
-        id: release
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/release-please-manifest.json
 
-  build-windows:
-    name: Build Windows Installer
-    needs: release-please
-    if: ${{ always() && (needs.release-please.outputs.release_created || github.event_name == 'workflow_dispatch') }}
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
-        
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
-        with:
-          cache-on-failure: true
-        
-      - name: Build Release
-        run: cargo build --release
-        
-      - name: Install WiX Toolset
-        run: |
-          choco install wixtoolset -y
-          
-      - name: Add WiX to PATH
-        run: |
-          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          
-      - name: Install cargo-wix
-        run: cargo install cargo-wix
-        
-      - name: Build MSI installer
-        run: cargo wix --no-build --nocapture
-          
-      - name: Prepare artifacts
-        run: |
-          mkdir dist
-          copy target\release\music-minder.exe dist\
-          copy target\wix\*.msi dist\
-          copy README.md dist\
-          copy LICENSE dist\
-          
-      - name: Upload MSI installer
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: music-minder-windows-x64-installer
-          path: dist/*.msi
-          
-      - name: Upload portable exe
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: music-minder-windows-x64-portable
-          path: |
-            dist/music-minder.exe
-            dist/README.md
-            dist/LICENSE
-
-  upload-release:
-    name: Upload Release Assets
-    needs: [release-please, build-windows]
-    if: ${{ always() && (needs.release-please.outputs.release_created || github.event_name == 'workflow_dispatch') && needs.build-windows.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      VERSION: ${{ needs.release-please.outputs.version || inputs.version }}
-      TAG_NAME: ${{ needs.release-please.outputs.tag_name || inputs.tag_name }}
-    steps:
-      - name: Download Windows installer
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: music-minder-windows-x64-installer
-          path: installer
-          
-      - name: Download Windows portable
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: music-minder-windows-x64-portable
-          path: portable
-
-      - name: Create archives
-        run: |
-          cd portable && zip -r ../music-minder-${{ env.VERSION }}-windows-x64-portable.zip . && cd ..
-          mv installer/*.msi music-minder-${{ env.VERSION }}-windows-x64.msi
-
-      - name: Upload to Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          files: |
-            music-minder-${{ env.VERSION }}-windows-x64.msi
-            music-minder-${{ env.VERSION }}-windows-x64-portable.zip
