@@ -42,7 +42,10 @@ pub fn track_list(state: &LoadedState) -> Element<'_, Message> {
         virt::TRACK_ROW_HEIGHT,
     );
 
-    let selected = state.enrichment.selected_track;
+    // Enrichment selection (for batch operations)
+    let enrichment_selected = state.enrichment.selected_track;
+    // Keyboard navigation selection (visual_idx is index into display list)
+    let keyboard_selection = state.library_selection;
 
     // Build track rows based on whether we're filtering or not
     let items: Vec<Element<Message>> =
@@ -52,19 +55,36 @@ pub fn track_list(state: &LoadedState) -> Element<'_, Message> {
                 .iter()
                 .enumerate()
                 .map(|(i, t)| {
-                    let idx = start + i;
-                    let is_selected = selected == Some(idx);
-                    track_row(t, idx, is_selected)
+                    let idx = start + i; // actual track index
+                    let visual_idx = idx; // visual index (same when not filtering)
+                    let is_enrichment_selected = enrichment_selected == Some(idx);
+                    let is_keyboard_selected = keyboard_selection == Some(visual_idx);
+                    track_row(
+                        t,
+                        idx,
+                        is_enrichment_selected,
+                        is_keyboard_selected,
+                        visual_idx,
+                    )
                 })
                 .collect()
         } else {
             // Filtering active - use filtered indices
             display_indices[start..end]
                 .iter()
-                .map(|&idx| {
-                    let is_selected = selected == Some(idx);
+                .enumerate()
+                .map(|(i, &idx)| {
+                    let visual_idx = start + i; // index in displayed list
+                    let is_enrichment_selected = enrichment_selected == Some(idx);
+                    let is_keyboard_selected = keyboard_selection == Some(visual_idx);
                     if let Some(t) = state.tracks.get(idx) {
-                        track_row(t, idx, is_selected)
+                        track_row(
+                            t,
+                            idx,
+                            is_enrichment_selected,
+                            is_keyboard_selected,
+                            visual_idx,
+                        )
                     } else {
                         Space::with_height(Length::Fixed(virt::TRACK_ROW_HEIGHT)).into()
                     }
@@ -209,7 +229,17 @@ fn header_btn_style(_theme: &iced::Theme, status: button::Status) -> button::Sty
 }
 
 /// Renders a single track row with hover states and format badges
-fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_, Message> {
+///
+/// - `is_enrichment_selected`: Track is selected for enrichment operations
+/// - `is_keyboard_selected`: Track is selected via keyboard navigation (visual focus)
+/// - `visual_idx`: Index in the displayed list (for keyboard navigation selection)
+fn track_row(
+    t: &TrackWithMetadata,
+    idx: usize,
+    is_enrichment_selected: bool,
+    is_keyboard_selected: bool,
+    visual_idx: usize,
+) -> Element<'_, Message> {
     let format_str = format_from_path(&t.path);
     let lossless = is_lossless(format_str);
 
@@ -224,29 +254,46 @@ fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_
     let duration_str = format_duration(t.duration);
 
     // Row background based on selection and alternating
-    let base_bg = if is_selected {
+    // Priority: keyboard selection > enrichment selection > alternating
+    let base_bg = if is_keyboard_selected {
+        color::PRIMARY // Bright highlight for keyboard focus
+    } else if is_enrichment_selected {
         color::PRIMARY_PRESSED
-    } else if idx.is_multiple_of(2) {
+    } else if visual_idx.is_multiple_of(2) {
         color::BASE
     } else {
         color::SURFACE
     };
 
-    let text_color = if is_selected {
+    let text_color = if is_keyboard_selected || is_enrichment_selected {
         color::TEXT_PRIMARY
     } else {
         color::TEXT_SECONDARY
     };
-    let muted_color = if is_selected {
+    let muted_color = if is_keyboard_selected || is_enrichment_selected {
         color::TEXT_SECONDARY
     } else {
         color::TEXT_MUTED
+    };
+
+    // Left border indicator for keyboard selection
+    let selection_indicator = if is_keyboard_selected {
+        container(Space::with_width(3))
+            .height(Length::Fixed(virt::TRACK_ROW_HEIGHT))
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color(color::PRIMARY)),
+                ..Default::default()
+            })
+    } else {
+        container(Space::with_width(3)) // Same width placeholder to keep alignment
     };
 
     // Quality indicator
     let quality_indicator = quality_badge(t);
 
     let row_content = row![
+        // Selection indicator (left edge highlight)
+        selection_indicator,
         // Play button
         button(icon_sized(icons::PLAY, typography::SIZE_TINY).color(color::TEXT_MUTED))
             .padding([spacing::XS, spacing::SM])
@@ -324,6 +371,7 @@ fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_
     .align_y(iced::Alignment::Center);
 
     // Wrap in button for hover effect and selection
+    // Click selects the track for keyboard navigation
     button(
         container(row_content)
             .height(Length::Fixed(virt::TRACK_ROW_HEIGHT))
@@ -344,7 +392,7 @@ fn track_row(t: &TrackWithMetadata, idx: usize, is_selected: bool) -> Element<'_
     })
     .padding(0)
     .width(Length::Fill)
-    .on_press(Message::EnrichmentTrackSelected(idx))
+    .on_press(Message::LibrarySelectIndex(visual_idx))
     .into()
 }
 

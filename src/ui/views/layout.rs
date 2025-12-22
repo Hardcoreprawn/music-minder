@@ -659,6 +659,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
         ]
         .align_y(iced::Alignment::Center);
 
+        let queue_selection = s.queue_selection;
         let queue_list = if let Some(ref player) = s.player {
             let items: Vec<Element<Message>> = player
                 .queue()
@@ -667,14 +668,19 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                 .enumerate()
                 .map(|(i, item)| {
                     let is_current = player.queue().current_index() == Some(i);
-                    let bg = if is_current {
+                    let is_selected = queue_selection == Some(i);
+
+                    // Priority: keyboard selection > current playing > alternating
+                    let bg = if is_selected {
+                        color::PRIMARY // Bright for keyboard focus
+                    } else if is_current {
                         color::PRIMARY_PRESSED
                     } else if i % 2 == 0 {
                         color::SURFACE
                     } else {
                         color::BASE
                     };
-                    let fg = if is_current {
+                    let fg = if is_selected || is_current {
                         color::TEXT_PRIMARY
                     } else {
                         color::TEXT_SECONDARY
@@ -689,9 +695,13 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                             .unwrap_or_else(|| "Unknown".to_string())
                     };
 
-                    // Index number with current indicator
+                    // Index number with current/selection indicator
                     let index_widget: Element<Message> = if is_current {
                         icon_sized(icons::PLAY, typography::SIZE_TINY)
+                            .color(color::PRIMARY)
+                            .into()
+                    } else if is_selected {
+                        icon_sized(icons::CHEVRON_RIGHT, typography::SIZE_TINY)
                             .color(color::PRIMARY)
                             .into()
                     } else {
@@ -707,7 +717,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                         .style(theme::button_ghost)
                         .on_press(Message::QueueRemove(i));
 
-                    // Make the row clickable to jump to track
+                    // Make the row clickable to select and set keyboard focus
                     let track_btn = button(
                         row![
                             container(index_widget).width(Length::Fixed(24.0)),
@@ -718,12 +728,18 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     )
                     .width(Length::Fill)
                     .padding([spacing::XS, spacing::SM])
-                    .style(move |_, _| button::Style {
-                        background: Some(iced::Background::Color(bg)),
-                        text_color: fg,
-                        ..Default::default()
+                    .style(move |_, status| {
+                        let row_bg = match status {
+                            button::Status::Hovered if !is_selected => color::SURFACE_HOVER,
+                            _ => bg,
+                        };
+                        button::Style {
+                            background: Some(iced::Background::Color(row_bg)),
+                            text_color: fg,
+                            ..Default::default()
+                        }
                     })
-                    .on_press(Message::QueueJumpTo(i));
+                    .on_press(Message::QueueSelectIndex(i));
 
                     row![track_btn, remove_btn, Space::with_width(spacing::SM)]
                         .align_y(iced::Alignment::Center)

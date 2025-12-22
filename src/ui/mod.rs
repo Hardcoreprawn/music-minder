@@ -11,7 +11,7 @@ mod update;
 mod views;
 
 use iced::widget::{container, text};
-use iced::{Element, Length, Subscription, Task, time};
+use iced::{Element, Length, Subscription, Task, keyboard, time};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -83,6 +83,11 @@ impl MusicMinder {
         // 60fps (16ms) is a good balance for smooth animations without overwhelming.
         // Audio playback is on a separate thread and unaffected by this rate.
         subscriptions.push(time::every(Duration::from_millis(16)).map(|_| Message::PlayerTick));
+
+        // Keyboard shortcuts - global within the app
+        subscriptions.push(keyboard::on_key_press(|key, modifiers| {
+            Some(Message::KeyPressed(key, modifiers))
+        }));
 
         Subscription::batch(subscriptions)
     }
@@ -280,6 +285,23 @@ impl MusicMinder {
             | Message::FilterByLossless(_)
             | Message::ClearFilters => {
                 return update::handle_search_filter(s, message);
+            }
+
+            // Selection / keyboard navigation messages
+            Message::LibrarySelectPrevious
+            | Message::LibrarySelectNext
+            | Message::LibrarySelectIndex(_)
+            | Message::QueueSelectPrevious
+            | Message::QueueSelectNext
+            | Message::QueueSelectIndex(_)
+            | Message::PlaySelected
+            | Message::RemoveSelectedFromQueue => {
+                return update::handle_selection(s, message);
+            }
+
+            // Keyboard shortcuts
+            Message::KeyPressed(key, modifiers) => {
+                return update::handle_keyboard(s, key.clone(), *modifiers);
             }
 
             _ => {}

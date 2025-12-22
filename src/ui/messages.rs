@@ -2,6 +2,7 @@
 
 use super::state::{ActivePane, LoadedCoverArt, SortColumn, VisualizationMode};
 use crate::{db, diagnostics, enrichment, library, organizer, player, scanner};
+use iced::keyboard;
 use iced::widget::scrollable::Viewport;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
@@ -18,6 +19,9 @@ pub enum Message {
 
     // Navigation
     SwitchPane(ActivePane),
+
+    // Keyboard shortcuts
+    KeyPressed(keyboard::Key, keyboard::Modifiers),
 
     // Scan messages
     PathChanged(String),
@@ -138,4 +142,14 @@ pub enum Message {
 
     // Library pane messages
     ToggleOrganizeSection, // Toggle organize section collapsed/expanded
+
+    // Selection / keyboard navigation messages
+    LibrarySelectPrevious,     // Move library selection up
+    LibrarySelectNext,         // Move library selection down
+    LibrarySelectIndex(usize), // Select specific library index
+    QueueSelectPrevious,       // Move queue selection up
+    QueueSelectNext,           // Move queue selection down
+    QueueSelectIndex(usize),   // Select specific queue index
+    PlaySelected,              // Play the selected track (Enter key)
+    RemoveSelectedFromQueue,   // Remove selected from queue (Delete key)
 }

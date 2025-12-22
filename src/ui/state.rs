@@ -44,6 +44,14 @@ pub enum VisualizationMode {
     Off,
 }
 
+/// Which list currently has keyboard focus for navigation
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FocusedList {
+    #[default]
+    Library,
+    Queue,
+}
+
 impl std::fmt::Display for VisualizationMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -177,6 +185,14 @@ pub struct LoadedState {
 
     // Organize section collapsed state
     pub organize_collapsed: bool,
+
+    // Selection tracking for keyboard navigation
+    /// Which list has keyboard focus (Library or Queue)
+    pub focused_list: FocusedList,
+    /// Selected index in the library list (into filtered_indices or tracks)
+    pub library_selection: Option<usize>,
+    /// Selected index in the queue list
+    pub queue_selection: Option<usize>,
 }
 
 impl LoadedState {

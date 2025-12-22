@@ -9,14 +9,17 @@
 //! - `diagnostics`: System diagnostics and cover art
 //! - `watcher`: Background file system watching
 //! - `search`: Search and filter functionality
+//! - `keyboard`: Keyboard shortcut handling
 
 mod db;
 mod diagnostics;
 mod enrichment;
+mod keyboard;
 mod organize;
 mod player;
 mod scan;
 mod search;
+mod selection;
 mod watcher;
 
 use iced::Task;
@@ -30,10 +33,12 @@ use super::messages::Message;
 pub use db::handle_db_init;
 pub use diagnostics::handle_diagnostics;
 pub use enrichment::{handle_enrich_pane, handle_enrichment};
+pub use keyboard::handle_keyboard;
 pub use organize::{handle_organize, handle_undo};
 pub use player::handle_player;
 pub use scan::handle_scan;
 pub use search::handle_search_filter;
+pub use selection::handle_selection;
 pub use watcher::handle_watcher;
 
 /// Helper to load tracks from database

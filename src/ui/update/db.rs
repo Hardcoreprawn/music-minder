@@ -8,8 +8,8 @@ use crate::{diagnostics, enrichment, health, organizer, player};
 use super::super::messages::Message;
 use super::super::platform::get_user_music_folder;
 use super::super::state::{
-    ActivePane, AppState, EnrichmentPaneState, EnrichmentState, GardenerState, LoadedState,
-    OrganizeView, SortColumn, VisualizationMode, WatcherState,
+    ActivePane, AppState, EnrichmentPaneState, EnrichmentState, FocusedList, GardenerState,
+    LoadedState, OrganizeView, SortColumn, VisualizationMode, WatcherState,
 };
 use super::load_tracks_task;
 
@@ -138,6 +138,10 @@ pub fn handle_db_init(
                 sidebar_collapsed: false,
                 // Organize section collapsed state
                 organize_collapsed: true, // Collapsed by default per design spec
+                // Selection and focus state for keyboard navigation
+                focused_list: FocusedList::Library,
+                library_selection: None,
+                queue_selection: None,
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])
