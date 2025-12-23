@@ -337,8 +337,8 @@ Add a grip handle to queue items for drag initiation.
 
 - [x] Add grip icon (Font Awesome `GRIP_VERTICAL` U+F58E) to left of queue items
 - [x] Style: `TEXT_MUTED` color
-- [ ] `Grab` cursor on hover (requires MouseArea or custom widget)
-- [ ] Only the handle responds to drag events (not full row)
+- [x] `Grab` cursor on hover (via MouseArea with `interaction()`)
+- [x] Only the handle responds to drag events (not full row)
 
 #### 7.7.3: Drag-and-Drop Reordering
 
@@ -429,16 +429,16 @@ fn calculate_auto_scroll(cursor_y: f32, list_bounds: Rectangle) -> i8 {
 
 **Tasks:**
 
-- [ ] Add `QueueDragState` to `UiState`
-- [ ] Wrap drag handle in `MouseArea` with `on_press`, `on_move`, `on_release`
-- [ ] Calculate `drop_target` from cursor Y + scroll offset
-- [ ] Render insertion line at `drop_target` position
-- [ ] Dim source item during drag (reduce opacity)
-- [ ] Change cursor to `Grabbing` during drag
-- [ ] Implement auto-scroll subscription at edges
-- [ ] Handle `Escape` key to cancel drag
-- [ ] Handle window focus loss → cancel drag
-- [ ] Call `queue.reorder(from, to)` or `queue.reorder_shuffle(from, to)` on drop
+- [x] Add `QueueDragState` to `UiState`
+- [x] Wrap drag handle in `MouseArea` with `on_press`, `on_move`, `on_release`
+- [x] Calculate `drop_target` from cursor Y position delta
+- [x] Render insertion line at `drop_target` position
+- [x] Dim source item during drag (muted colors)
+- [x] Change cursor to `Grabbing` during drag
+- [ ] Implement auto-scroll subscription at edges (future enhancement)
+- [x] Handle `Escape` key to cancel drag
+- [ ] Handle window focus loss → cancel drag (future enhancement)
+- [x] Call `queue.reorder(from, to)` or `queue.reorder_shuffle(from, to)` on drop
 
 **Edge Cases:**
 

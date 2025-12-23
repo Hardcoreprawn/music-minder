@@ -152,6 +152,18 @@ pub enum Message {
     QueueSelectIndex(usize),   // Select specific queue index
     QueueMoveUp,               // Move selected queue item up (Alt+Up)
     QueueMoveDown,             // Move selected queue item down (Alt+Down)
-    PlaySelected,              // Play the selected track (Enter key)
-    RemoveSelectedFromQueue,   // Remove selected from queue (Delete key)
+
+    // Queue drag-and-drop messages
+    QueueDragStart {
+        index: usize,
+        y: f32,
+    }, // Start dragging item at index
+    QueueDragMove {
+        y: f32,
+    }, // Mouse moved while dragging
+    QueueDragEnd,    // Mouse released - complete the drop
+    QueueDragCancel, // Drag cancelled (Escape, focus lost, etc.)
+
+    PlaySelected,            // Play the selected track (Enter key)
+    RemoveSelectedFromQueue, // Remove selected from queue (Delete key)
 }

@@ -296,6 +296,10 @@ impl MusicMinder {
             | Message::QueueSelectIndex(_)
             | Message::QueueMoveUp
             | Message::QueueMoveDown
+            | Message::QueueDragStart { .. }
+            | Message::QueueDragMove { .. }
+            | Message::QueueDragEnd
+            | Message::QueueDragCancel
             | Message::PlaySelected
             | Message::RemoveSelectedFromQueue => {
                 return update::handle_selection(s, message);

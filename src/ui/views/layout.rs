@@ -4,8 +4,8 @@ use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::{ActivePane, LoadedState};
 use crate::ui::theme::{self, color, layout, spacing, typography};
-use iced::widget::{Space, button, column, container, row, scrollable, text, tooltip};
-use iced::{Element, Length};
+use iced::widget::{Space, button, column, container, mouse_area, row, scrollable, text, tooltip};
+use iced::{Element, Length, mouse::Interaction};
 
 use super::diagnostics_view::diagnostics_pane;
 use super::enrich::enrich_pane;
@@ -661,8 +661,23 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     let is_current = player.queue().current_index() == Some(i);
                     let is_selected = queue_selection == Some(i);
 
+                    // Check if this item is being dragged (for visual feedback)
+                    let is_being_dragged = s
+                        .queue_drag
+                        .dragging
+                        .as_ref()
+                        .map(|d| d.index == i)
+                        .unwrap_or(false);
+
+                    // Check if this is the drop target position
+                    let is_drop_target =
+                        s.queue_drag.dragging.is_some() && s.queue_drag.drop_target == Some(i);
+
                     // Priority: keyboard selection > current playing > alternating
-                    let bg = if is_selected {
+                    // Dimmed if being dragged
+                    let bg = if is_being_dragged {
+                        color::SURFACE_HOVER // Dimmed appearance for dragged item
+                    } else if is_selected {
                         color::PRIMARY // Bright for keyboard focus
                     } else if is_current {
                         color::PRIMARY_PRESSED
@@ -671,7 +686,9 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     } else {
                         color::BASE
                     };
-                    let fg = if is_selected || is_current {
+                    let fg = if is_being_dragged {
+                        color::TEXT_MUTED // Dimmed text for dragged item
+                    } else if is_selected || is_current {
                         color::TEXT_PRIMARY
                     } else {
                         color::TEXT_SECONDARY
@@ -702,11 +719,21 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                             .into()
                     };
 
-                    // Drag handle (grip icon) - for future drag-and-drop
-                    let grip_handle: Element<Message> =
-                        icon_sized(icons::GRIP_VERTICAL, typography::SIZE_TINY)
-                            .color(color::TEXT_MUTED)
-                            .into();
+                    // Drag handle (grip icon) with mouse area for drag detection
+                    let grip_icon = icon_sized(icons::GRIP_VERTICAL, typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED);
+
+                    // Wrap grip in MouseArea for drag events
+                    let grip_area = mouse_area(grip_icon)
+                        .on_press(Message::QueueDragStart { index: i, y: 0.0 })
+                        .on_release(Message::QueueDragEnd)
+                        .interaction(if is_being_dragged {
+                            Interaction::Grabbing
+                        } else {
+                            Interaction::Grab
+                        });
+
+                    let grip_handle: Element<Message> = grip_area.into();
 
                     // Remove button for this item
                     let remove_btn = button(icon_sized(icons::XMARK, typography::SIZE_TINY))
@@ -743,14 +770,27 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                         .width(Length::Fixed(16.0))
                         .center_y(Length::Fill);
 
-                    row![
+                    let queue_row = row![
                         grip_container,
                         track_btn,
                         remove_btn,
                         Space::with_width(spacing::SM)
                     ]
-                    .align_y(iced::Alignment::Center)
-                    .into()
+                    .align_y(iced::Alignment::Center);
+
+                    // Add drop indicator line above drop target
+                    if is_drop_target {
+                        let drop_line =
+                            container(Space::with_height(2))
+                                .width(Length::Fill)
+                                .style(|_| container::Style {
+                                    background: Some(iced::Background::Color(color::PRIMARY)),
+                                    ..Default::default()
+                                });
+                        column![drop_line, queue_row].spacing(0).into()
+                    } else {
+                        queue_row.into()
+                    }
                 })
                 .collect();
 
@@ -775,10 +815,25 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
             ]
         };
 
+        // Wrap queue list in MouseArea for drag tracking
+        let is_dragging = s.queue_drag.dragging.is_some();
+        let queue_scrollable = scrollable(queue_list).height(Length::Fill);
+
+        // When dragging, track mouse moves and handle release anywhere
+        let queue_with_drag: Element<Message> = if is_dragging {
+            mouse_area(queue_scrollable)
+                .on_move(|point| Message::QueueDragMove { y: point.y })
+                .on_release(Message::QueueDragEnd)
+                .interaction(Interaction::Grabbing)
+                .into()
+        } else {
+            queue_scrollable.into()
+        };
+
         column![
             queue_header,
             Space::with_height(spacing::SM),
-            scrollable(queue_list).height(Length::Fill),
+            queue_with_drag,
         ]
         .height(Length::Fill)
     };

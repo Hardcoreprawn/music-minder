@@ -52,6 +52,30 @@ pub enum FocusedList {
     Queue,
 }
 
+/// State for drag-and-drop reordering in the queue
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)] // Fields will be used when drag-drop is fully implemented
+pub struct QueueDragState {
+    /// Item currently being dragged (if any)
+    pub dragging: Option<DragInfo>,
+    /// Current drop target index (for insertion line visual)
+    pub drop_target: Option<usize>,
+}
+
+/// Information about an item being dragged
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields will be used when drag-drop is fully implemented
+pub struct DragInfo {
+    /// Original index of the dragged item in the queue
+    pub index: usize,
+    /// Y position at drag start (for calculating drag delta)
+    pub origin_y: f32,
+    /// Current cursor Y position
+    pub current_y: f32,
+    /// Snapshot of shuffle state at drag start
+    pub is_shuffle_mode: bool,
+}
+
 impl std::fmt::Display for VisualizationMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -195,6 +219,10 @@ pub struct LoadedState {
     pub library_selection: Option<usize>,
     /// Selected index in the queue list
     pub queue_selection: Option<usize>,
+
+    // Queue drag-and-drop state
+    #[allow(dead_code)] // Will be used when drag-drop UI is fully implemented
+    pub queue_drag: QueueDragState,
 }
 
 impl LoadedState {

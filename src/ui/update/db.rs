@@ -143,6 +143,8 @@ pub fn handle_db_init(
                 focused_list: FocusedList::Library,
                 library_selection: None,
                 queue_selection: None,
+                // Queue drag-and-drop state
+                queue_drag: Default::default(),
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])

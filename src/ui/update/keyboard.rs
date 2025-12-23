@@ -165,11 +165,19 @@ pub fn handle_keyboard(
             }
         }
 
-        // Escape: Clear search / close panels
+        // Escape: Cancel drag / Clear search / close panels
         keyboard::Key::Named(key::Named::Escape) => {
-            if modifiers.is_empty() && !s.search_query.is_empty() {
-                tracing::debug!(target: "ui::keyboard", "Escape pressed - clearing search");
-                return Task::done(Message::SearchQueryChanged(String::new()));
+            if modifiers.is_empty() {
+                // First priority: cancel any active drag
+                if s.queue_drag.dragging.is_some() {
+                    tracing::debug!(target: "ui::keyboard", "Escape pressed - cancelling drag");
+                    return Task::done(Message::QueueDragCancel);
+                }
+                // Second: clear search if active
+                if !s.search_query.is_empty() {
+                    tracing::debug!(target: "ui::keyboard", "Escape pressed - clearing search");
+                    return Task::done(Message::SearchQueryChanged(String::new()));
+                }
             }
             // Future: close other panels
         }

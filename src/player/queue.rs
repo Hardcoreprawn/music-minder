@@ -762,4 +762,80 @@ mod tests {
         assert_eq!(queue.items()[1].path, PathBuf::from("b.mp3"));
         assert_eq!(queue.items()[2].path, PathBuf::from("c.mp3"));
     }
+
+    #[test]
+    fn test_reorder_shuffle_forward() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.add(make_item("d.mp3"));
+        queue.set_shuffle(true);
+
+        // Force a known shuffle order for testing
+        queue.shuffle_order = vec![0, 1, 2, 3];
+
+        // Move shuffle position 0 to position 2
+        let new_idx = queue.reorder_shuffle(0, 2);
+        assert_eq!(new_idx, Some(2));
+
+        // Position 0 (value 0) should now be at position 2
+        // Positions 1,2 should shift down
+        assert_eq!(queue.shuffle_order, vec![1, 2, 0, 3]);
+    }
+
+    #[test]
+    fn test_reorder_shuffle_backward() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.add(make_item("d.mp3"));
+        queue.set_shuffle(true);
+
+        // Force a known shuffle order for testing
+        queue.shuffle_order = vec![0, 1, 2, 3];
+
+        // Move shuffle position 3 to position 1
+        let new_idx = queue.reorder_shuffle(3, 1);
+        assert_eq!(new_idx, Some(1));
+
+        // Position 3 (value 3) should now be at position 1
+        // Positions 1,2 should shift up
+        assert_eq!(queue.shuffle_order, vec![0, 3, 1, 2]);
+    }
+
+    #[test]
+    fn test_reorder_shuffle_same_position() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.set_shuffle(true);
+        queue.shuffle_order = vec![0, 1];
+
+        // Moving to same position should be no-op
+        let new_idx = queue.reorder_shuffle(0, 0);
+        assert_eq!(new_idx, None);
+        assert_eq!(queue.shuffle_order, vec![0, 1]);
+    }
+
+    #[test]
+    fn test_reorder_shuffle_updates_position() {
+        let mut queue = PlayQueue::new();
+        queue.add(make_item("a.mp3"));
+        queue.add(make_item("b.mp3"));
+        queue.add(make_item("c.mp3"));
+        queue.set_shuffle(true);
+        queue.shuffle_order = vec![0, 1, 2];
+
+        // Start playing (sets shuffle_position to 0)
+        queue.skip_forward();
+        assert_eq!(queue.shuffle_position, 0);
+
+        // Move the currently playing item (at shuffle position 0) to position 2
+        queue.reorder_shuffle(0, 2);
+
+        // shuffle_position should follow the item
+        assert_eq!(queue.shuffle_position, 2);
+    }
 }

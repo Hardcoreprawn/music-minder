@@ -6,7 +6,7 @@
 use iced::Task;
 
 use super::super::messages::Message;
-use super::super::state::{ActivePane, FocusedList, LoadedState};
+use super::super::state::{ActivePane, DragInfo, FocusedList, LoadedState};
 
 /// Handle selection-related messages.
 pub fn handle_selection(s: &mut LoadedState, message: Message) -> Task<Message> {
@@ -155,6 +155,77 @@ pub fn handle_selection(s: &mut LoadedState, message: Message) -> Task<Message> 
                 s.queue_selection = Some(new_idx);
                 tracing::info!(target: "ui::selection", "Moved queue item {} -> {}", idx, new_idx);
             }
+        }
+
+        Message::QueueDragStart { index, y } => {
+            // Start dragging a queue item
+            let count = queue_count(s);
+            if index >= count {
+                return Task::none();
+            }
+            let is_shuffle = s
+                .player
+                .as_ref()
+                .map(|p| p.queue().shuffle())
+                .unwrap_or(false);
+            s.queue_drag.dragging = Some(DragInfo {
+                index,
+                origin_y: y,
+                current_y: y,
+                is_shuffle_mode: is_shuffle,
+            });
+            s.queue_drag.drop_target = Some(index);
+            s.queue_selection = Some(index);
+            s.focused_list = FocusedList::Queue;
+            tracing::debug!(target: "ui::selection", "Drag start: index={}, y={:.1}", index, y);
+        }
+
+        Message::QueueDragMove { y } => {
+            // Update drag position and calculate drop target
+            // Get count first to avoid borrow conflict
+            let count = queue_count(s);
+            if let Some(ref mut drag) = s.queue_drag.dragging {
+                drag.current_y = y;
+
+                // Calculate drop target based on cursor position
+                // Each item is ~30px high, calculate which slot we're over
+                let delta = y - drag.origin_y;
+                let items_moved = (delta / 30.0).round() as i32;
+                let new_target =
+                    (drag.index as i32 + items_moved).clamp(0, count as i32 - 1) as usize;
+
+                if s.queue_drag.drop_target != Some(new_target) {
+                    s.queue_drag.drop_target = Some(new_target);
+                    tracing::trace!(target: "ui::selection", "Drag move: y={:.1}, target={}", y, new_target);
+                }
+            }
+        }
+
+        Message::QueueDragEnd => {
+            // Complete the drop - reorder the queue
+            if let Some(drag) = s.queue_drag.dragging.take()
+                && let Some(target) = s.queue_drag.drop_target.take()
+                && drag.index != target
+                && let Some(player) = &mut s.player
+            {
+                // Use shuffle-aware or regular reorder
+                if drag.is_shuffle_mode {
+                    player.queue_mut().reorder_shuffle(drag.index, target);
+                } else {
+                    player.queue_mut().reorder(drag.index, target);
+                }
+                s.queue_selection = Some(target);
+                tracing::info!(target: "ui::selection", "Drag complete: {} -> {}", drag.index, target);
+            }
+            s.queue_drag = Default::default();
+        }
+
+        Message::QueueDragCancel => {
+            // Cancel the drag, restore original state
+            if s.queue_drag.dragging.is_some() {
+                tracing::debug!(target: "ui::selection", "Drag cancelled");
+            }
+            s.queue_drag = Default::default();
         }
 
         _ => {}
