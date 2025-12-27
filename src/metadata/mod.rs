@@ -8,12 +8,15 @@
 //! - Preview metadata changes before writing
 //! - Write enriched metadata from identification services
 //! - Support for MusicBrainz recording IDs
+//! - Embed cover art images
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
+use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::probe::Probe;
-use lofty::tag::{Accessor, ItemKey, Tag, TagExt};
+use lofty::tag::{Accessor, ItemKey, ItemValue, Tag, TagExt, TagItem};
+use std::fs;
 use std::path::Path;
 
 use crate::enrichment::domain::IdentifiedTrack;
@@ -27,6 +30,51 @@ pub struct TrackMetadata {
     pub album: String,
     pub duration: u64,
     pub track_number: Option<u32>,
+}
+
+/// Comprehensive metadata - ALL fields an audio file can hold
+#[derive(Debug, Clone, Default)]
+pub struct FullMetadata {
+    // Basic info
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub album_artist: Option<String>,
+    pub year: Option<u32>,
+    pub genre: Option<String>,
+
+    // Track positioning
+    pub track_number: Option<u32>,
+    pub total_tracks: Option<u32>,
+    pub disc_number: Option<u32>,
+    pub total_discs: Option<u32>,
+
+    // Additional metadata
+    pub composer: Option<String>,
+    pub comment: Option<String>,
+    pub lyrics: Option<String>,
+
+    // MusicBrainz IDs
+    pub musicbrainz_recording_id: Option<String>,
+    pub musicbrainz_artist_id: Option<String>,
+    pub musicbrainz_release_id: Option<String>,
+    pub musicbrainz_release_group_id: Option<String>,
+    pub musicbrainz_track_id: Option<String>,
+
+    // Audio properties
+    pub duration_secs: u64,
+    pub bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub bits_per_sample: Option<u8>,
+
+    // Cover art
+    pub has_cover_art: bool,
+    pub cover_art_size: Option<(u32, u32)>, // width x height if known
+
+    // File info
+    pub format: String,
+    pub file_size: u64,
 }
 
 /// Options for controlling what metadata gets written
@@ -87,6 +135,94 @@ pub fn read(path: &Path) -> Result<TrackMetadata> {
     })
 }
 
+/// Read ALL metadata from an audio file
+pub fn read_full(path: &Path) -> Result<FullMetadata> {
+    let tagged_file = Probe::open(path)
+        .context("Failed to open file for probing")?
+        .read()
+        .context("Failed to read file metadata")?;
+
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
+
+    let properties = tagged_file.properties();
+
+    // Get file size
+    let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+
+    // Determine format from file type
+    let format = format!("{:?}", tagged_file.file_type());
+
+    // Helper to get tag text
+    let get_text = |key: ItemKey| -> Option<String> {
+        tag.and_then(|t| t.get(&key))
+            .and_then(|item| item.value().text())
+            .map(|s| s.to_string())
+    };
+
+    // Check for cover art
+    let (has_cover_art, cover_art_size) = tag
+        .map(|t| {
+            let pics = t.pictures();
+            if pics.is_empty() {
+                (false, None)
+            } else {
+                // Try to get dimensions from first picture
+                // Note: lofty doesn't parse image dimensions, so we'd need image crate
+                (true, None)
+            }
+        })
+        .unwrap_or((false, None));
+
+    Ok(FullMetadata {
+        // Basic info
+        title: tag.and_then(|t| t.title().map(|s| s.to_string())),
+        artist: tag.and_then(|t| t.artist().map(|s| s.to_string())),
+        album: tag.and_then(|t| t.album().map(|s| s.to_string())),
+        album_artist: get_text(ItemKey::AlbumArtist),
+        year: tag.and_then(|t| t.year()),
+        genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),
+
+        // Track positioning
+        track_number: tag.and_then(|t| t.track()),
+        total_tracks: tag.and_then(|t| t.track_total()),
+        disc_number: tag.and_then(|t| t.disk()),
+        total_discs: tag.and_then(|t| t.disk_total()),
+
+        // Additional metadata
+        composer: get_text(ItemKey::Composer),
+        comment: tag.and_then(|t| t.comment().map(|s| s.to_string())),
+        lyrics: get_text(ItemKey::Lyrics),
+
+        // MusicBrainz IDs
+        musicbrainz_recording_id: {
+            let val = get_text(ItemKey::MusicBrainzRecordingId);
+            eprintln!("[DEBUG READ] musicbrainz_recording_id from file: {:?}", val);
+            val
+        },
+        musicbrainz_artist_id: get_text(ItemKey::MusicBrainzArtistId),
+        musicbrainz_release_id: get_text(ItemKey::MusicBrainzReleaseId),
+        musicbrainz_release_group_id: get_text(ItemKey::MusicBrainzReleaseGroupId),
+        musicbrainz_track_id: get_text(ItemKey::MusicBrainzTrackId),
+
+        // Audio properties
+        duration_secs: properties.duration().as_secs(),
+        bitrate: properties.audio_bitrate(),
+        sample_rate: properties.sample_rate(),
+        channels: properties.channels(),
+        bits_per_sample: properties.bit_depth(),
+
+        // Cover art
+        has_cover_art,
+        cover_art_size,
+
+        // File info
+        format,
+        file_size,
+    })
+}
+
 /// Write enrichment data to an audio file's tags
 ///
 /// This updates the file's embedded metadata tags with the identified track info.
@@ -100,6 +236,7 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
 
     // Get the primary tag type for this format, or create one
     let tag_type = tagged_file.primary_tag_type();
+    eprintln!("[DEBUG WRITE] Tag type: {:?}", tag_type);
 
     // Get or create the tag
     let tag = if let Some(tag) = tagged_file.tag_mut(tag_type) {
@@ -149,6 +286,19 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
         fields_updated += 1;
     }
 
+    // Write album artist (use track.album_artist, or fall back to track.artist for consistency)
+    if let Some(ref album_artist) = track.album_artist {
+        let existing = tag
+            .get(&ItemKey::AlbumArtist)
+            .and_then(|i| i.value().text());
+        if !options.only_fill_empty || existing.is_none() {
+            tag.insert_text(ItemKey::AlbumArtist, album_artist.clone());
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("album_artist".to_string());
+        }
+    }
+
     // Write album
     if let Some(ref album) = track.album
         && should_write(tag.album().as_deref(), "album", &mut fields_skipped)
@@ -190,25 +340,131 @@ pub fn write(path: &Path, track: &IdentifiedTrack, options: &WriteOptions2) -> R
         }
     }
 
+    // Write disc number
+    if let Some(disc_num) = track.disc_number {
+        let existing = tag.disk();
+        if !options.only_fill_empty || existing.is_none() {
+            tag.set_disk(disc_num);
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("disc_number".to_string());
+        }
+    }
+
+    // Write total discs
+    if let Some(total_discs) = track.total_discs {
+        let existing = tag.disk_total();
+        if !options.only_fill_empty || existing.is_none() {
+            tag.set_disk_total(total_discs);
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("total_discs".to_string());
+        }
+    }
+
+    // Write genre (use first genre as primary)
+    if !track.genres.is_empty() {
+        let existing = tag.genre();
+        if !options.only_fill_empty || existing.is_none() {
+            // Join multiple genres with semicolon (common convention)
+            let genre_str = track.genres.join("; ");
+            tag.set_genre(genre_str);
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("genre".to_string());
+        }
+    }
+
     // Write MusicBrainz IDs if enabled
     if options.write_musicbrainz_ids {
+        eprintln!("[DEBUG WRITE] Writing MusicBrainz IDs...");
+        eprintln!("[DEBUG WRITE] recording_id = {:?}", track.recording_id);
+        eprintln!("[DEBUG WRITE] artist_id = {:?}", track.artist_id);
+        eprintln!("[DEBUG WRITE] release_id = {:?}", track.release_id);
+        eprintln!(
+            "[DEBUG WRITE] release_group_id = {:?}",
+            track.release_group_id
+        );
+
+        // Helper to insert MusicBrainz ID - use insert_unchecked for ID3v2 since
+        // the standard insert_text may not have valid mappings for these ItemKeys
+        let insert_mb_id = |tag: &mut Tag, key: ItemKey, value: String| {
+            // For ID3v2, MusicBrainz IDs are stored as TXXX frames
+            // insert_unchecked bypasses the mapping check
+            let item = TagItem::new(key, ItemValue::Text(value));
+            tag.insert_unchecked(item);
+        };
+
         if let Some(ref recording_id) = track.recording_id {
-            tag.insert_text(ItemKey::MusicBrainzRecordingId, recording_id.clone());
+            eprintln!(
+                "[DEBUG WRITE] Inserting MusicBrainzRecordingId: {}",
+                recording_id
+            );
+            insert_mb_id(tag, ItemKey::MusicBrainzRecordingId, recording_id.clone());
+            // Verify it was actually inserted
+            let check = tag
+                .get(&ItemKey::MusicBrainzRecordingId)
+                .and_then(|i| i.value().text());
+            eprintln!(
+                "[DEBUG WRITE] After insert_unchecked, tag has recording_id: {:?}",
+                check
+            );
             fields_updated += 1;
         }
         if let Some(ref artist_id) = track.artist_id {
-            tag.insert_text(ItemKey::MusicBrainzArtistId, artist_id.clone());
+            insert_mb_id(tag, ItemKey::MusicBrainzArtistId, artist_id.clone());
             fields_updated += 1;
         }
         if let Some(ref release_id) = track.release_id {
-            tag.insert_text(ItemKey::MusicBrainzReleaseId, release_id.clone());
+            insert_mb_id(tag, ItemKey::MusicBrainzReleaseId, release_id.clone());
+            fields_updated += 1;
+        }
+        if let Some(ref release_group_id) = track.release_group_id {
+            insert_mb_id(
+                tag,
+                ItemKey::MusicBrainzReleaseGroupId,
+                release_group_id.clone(),
+            );
             fields_updated += 1;
         }
     }
 
-    // Save the file
-    tag.save_to_path(path, WriteOptions::default())
-        .context("Failed to write tags to file")?;
+    // ATOMIC WRITE: Write to temp file, verify, then replace original
+    // This prevents corruption if the app crashes or power is lost mid-write
+    let temp_path = path.with_extension("tmp");
+    let backup_path = path.with_extension("bak");
+
+    // Step 1: Write to temp file
+    tagged_file
+        .save_to_path(&temp_path, WriteOptions::default())
+        .context("Failed to write tags to temp file")?;
+
+    // Step 2: Verify the temp file is valid audio
+    if let Err(e) = Probe::open(&temp_path).and_then(|p| p.read()) {
+        // Clean up temp file and fail
+        let _ = fs::remove_file(&temp_path);
+        bail!(
+            "Written file failed validation: {}. Original file unchanged.",
+            e
+        );
+    }
+
+    // Step 3: Rename original to backup
+    if path.exists() {
+        fs::rename(path, &backup_path).context("Failed to create backup of original file")?;
+    }
+
+    // Step 4: Rename temp to original
+    if let Err(e) = fs::rename(&temp_path, path) {
+        // Try to restore backup
+        if backup_path.exists() {
+            let _ = fs::rename(&backup_path, path);
+        }
+        return Err(e).context("Failed to replace original with updated file");
+    }
+
+    // Step 5: Remove backup (success!)
+    let _ = fs::remove_file(&backup_path);
 
     Ok(WriteResult {
         fields_updated,
@@ -281,6 +537,90 @@ pub struct FieldChange {
     pub field: String,
     pub current_value: String,
     pub new_value: String,
+}
+
+/// Write cover art to an audio file's tags
+///
+/// Embeds the provided image data as the front cover.
+/// If `only_if_missing` is true, won't overwrite existing cover art.
+pub fn write_cover_art(
+    path: &Path,
+    image_data: &[u8],
+    mime_type: &str,
+    only_if_missing: bool,
+) -> Result<bool> {
+    // Read the existing file
+    let mut tagged_file = Probe::open(path)
+        .context("Failed to open file for cover art writing")?
+        .read()
+        .context("Failed to read file for cover art writing")?;
+
+    // Get the primary tag type for this format
+    let tag_type = tagged_file.primary_tag_type();
+
+    // Get or create the tag
+    let tag = if let Some(tag) = tagged_file.tag_mut(tag_type) {
+        tag
+    } else {
+        tagged_file.insert_tag(Tag::new(tag_type));
+        tagged_file.tag_mut(tag_type).expect("Just inserted tag")
+    };
+
+    // Check if cover art already exists
+    if only_if_missing {
+        let has_front_cover = tag
+            .pictures()
+            .iter()
+            .any(|p| matches!(p.pic_type(), PictureType::CoverFront | PictureType::Other));
+        if has_front_cover {
+            return Ok(false);
+        }
+    }
+
+    // Remove existing front covers to avoid duplicates
+    tag.remove_picture_type(PictureType::CoverFront);
+
+    // Determine MIME type
+    let mime = match mime_type {
+        "image/png" => MimeType::Png,
+        "image/gif" => MimeType::Gif,
+        "image/bmp" => MimeType::Bmp,
+        "image/tiff" => MimeType::Tiff,
+        _ => MimeType::Jpeg, // Default to JPEG
+    };
+
+    // Create the picture
+    let picture = Picture::new_unchecked(
+        PictureType::CoverFront,
+        Some(mime),
+        None, // No description
+        image_data.to_vec(),
+    );
+
+    // Add the picture
+    tag.push_picture(picture);
+
+    // Save the file
+    tag.save_to_path(path, WriteOptions::default())
+        .context("Failed to write cover art to file")?;
+
+    Ok(true)
+}
+
+/// Check if a file already has embedded cover art
+pub fn has_cover_art(path: &Path) -> Result<bool> {
+    let tagged_file = Probe::open(path)
+        .context("Failed to open file")?
+        .read()
+        .context("Failed to read file")?;
+
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
+
+    let has_cover = tag.map(|t| !t.pictures().is_empty()).unwrap_or(false);
+
+    Ok(has_cover)
 }
 
 #[cfg(test)]
