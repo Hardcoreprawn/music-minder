@@ -3,7 +3,7 @@
 use iced::widget::{Space, column, container, row, text};
 use iced::{Alignment, Element, Length};
 
-use crate::ui::icons;
+use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
 use crate::ui::theme::{color, radius, spacing, typography};
@@ -13,7 +13,7 @@ use super::{section_header, setting_description, setting_label};
 /// Appearance settings section
 pub fn appearance_section(_s: &LoadedState) -> Element<'_, Message> {
     column![
-        section_header(icons::PALETTE, "Appearance"),
+        section_header(icons::SLIDERS, "Appearance"),
         Space::with_height(spacing::SM),
         // Theme selector (placeholder - only dark theme for now)
         setting_row("Theme", "Color scheme for the application", theme_display(),),
@@ -49,9 +49,7 @@ fn setting_row<'a>(
 fn theme_display() -> Element<'static, Message> {
     container(
         row![
-            text(icons::MOON)
-                .size(typography::SIZE_SMALL)
-                .color(color::PRIMARY),
+            icon_sized(icons::MOON, typography::SIZE_SMALL).color(color::PRIMARY),
             Space::with_width(spacing::XS),
             text("Dark")
                 .size(typography::SIZE_BODY)
@@ -76,9 +74,7 @@ fn theme_display() -> Element<'static, Message> {
 fn coming_soon_note() -> Element<'static, Message> {
     container(
         row![
-            text(icons::SPARKLE)
-                .size(typography::SIZE_SMALL)
-                .color(color::TEXT_MUTED),
+            icon_sized(icons::SPARKLE, typography::SIZE_SMALL).color(color::TEXT_MUTED),
             Space::with_width(spacing::SM),
             text("More themes coming soon!")
                 .size(typography::SIZE_SMALL)

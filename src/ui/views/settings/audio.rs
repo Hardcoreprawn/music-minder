@@ -13,7 +13,7 @@ use super::{section_header, setting_description, setting_label};
 /// Audio settings section
 pub fn audio_section(s: &LoadedState) -> Element<'_, Message> {
     column![
-        section_header(icons::SPEAKER_HIGH, "Audio"),
+        section_header(icons::VOLUME_HIGH, "Audio"),
         Space::with_height(spacing::SM),
         // Output device
         setting_row(

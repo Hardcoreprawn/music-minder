@@ -107,35 +107,80 @@ pub const SPEAKER: char = '\u{f028}';
 /// Compact disc - fa-compact-disc (U+F51F)
 pub const DISC: char = '\u{f51f}';
 
+/// Compact disc (alias for easter eggs)
+pub const COMPACT_DISC: char = '\u{f51f}';
+
+/// Record vinyl - fa-record-vinyl (U+F8D9)
+pub const RECORD_VINYL: char = '\u{f8d9}';
+
+/// Radio - fa-radio (U+F8D7)
+pub const RADIO: char = '\u{f8d7}';
+
+/// Guitar - fa-guitar (U+F7A6)
+pub const GUITAR: char = '\u{f7a6}';
+
+/// Drum - fa-drum (U+F569)
+pub const DRUM: char = '\u{f569}';
+
+/// Microphone - fa-microphone (U+F130)
+pub const MICROPHONE: char = '\u{f130}';
+
 /// Music note - fa-music (same as MUSIC but clearer name)
-pub const MUSIC_NOTE: &str = "\u{f001}";
+pub const MUSIC_NOTE: char = '\u{f001}';
 
 /// Speaker high (for audio settings) - same as VOLUME_HIGH
-pub const SPEAKER_HIGH: &str = "\u{f028}";
+pub const SPEAKER_HIGH: char = '\u{f028}';
 
 /// Moon (dark theme) - fa-moon (U+F186)
-pub const MOON: &str = "\u{f186}";
+pub const MOON: char = '\u{f186}';
 
 /// Palette (appearance) - fa-palette (U+F53F)
-pub const PALETTE: &str = "\u{f53f}";
+pub const PALETTE: char = '\u{f53f}';
 
 /// Info circle - fa-circle-info (U+F05A)
-pub const INFO: &str = "\u{f05a}";
+pub const INFO: char = '\u{f05a}';
 
 /// Sparkle/Star - fa-star (U+F005)
-pub const SPARKLE: &str = "\u{f005}";
+pub const SPARKLE: char = '\u{f005}';
+
+/// Star (char version for easter eggs)
+pub const STAR: char = '\u{f005}';
+
+/// Heart - fa-heart (U+F004)
+pub const HEART: char = '\u{f004}';
+
+/// Fire - fa-fire (U+F06D)
+pub const FIRE: char = '\u{f06d}';
+
+/// Rocket - fa-rocket (U+F135)
+pub const ROCKET: char = '\u{f135}';
+
+/// Gift - fa-gift (U+F06B)
+pub const GIFT: char = '\u{f06b}';
+
+/// Hand pointer - fa-hand-pointer (U+F25A)
+pub const HAND_POINTER: char = '\u{f25a}';
+
+/// Face smile - fa-face-smile (U+F118)
+pub const FACE_SMILE: char = '\u{f118}';
+
+/// Face grin - fa-face-grin (U+F580)
+pub const FACE_GRIN: char = '\u{f580}';
+
+/// Wand sparkles (char version for easter eggs)
+pub const WAND_SPARKLES: char = '\u{e2ca}';
 
 /// Database - fa-database (U+F1C0)
-pub const DATABASE: &str = "\u{f1c0}";
+pub const DATABASE: char = '\u{f1c0}';
 
 /// Refresh/Sync - fa-arrows-rotate (U+F021)
-pub const REFRESH: &str = "\u{f021}";
+pub const REFRESH: char = '\u{f021}';
 
 /// Check circle - fa-circle-check (U+F058)  
-pub const CHECK_CIRCLE: &str = "\u{f058}";
+pub const CHECK_CIRCLE: char = '\u{f058}';
 
 /// Warning/Triangle - fa-triangle-exclamation (U+F071)
-pub const WARNING: &str = "\u{f071}";
+pub const WARNING: char = '\u{f071}';
 
 /// Wand/Enrich (string version) - fa-wand-magic-sparkles (U+E2CA)
 pub const WAND_STR: &str = "\u{e2ca}";

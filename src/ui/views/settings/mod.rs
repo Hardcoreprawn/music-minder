@@ -14,8 +14,9 @@ mod enrichment;
 mod library;
 
 use iced::Element;
-use iced::widget::{Space, column, container, scrollable, text};
+use iced::widget::{Space, column, container, row, scrollable, text};
 
+use crate::ui::icons::icon_sized;
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
 use crate::ui::theme::{color, spacing, typography};
@@ -68,11 +69,9 @@ fn section_divider() -> Element<'static, Message> {
 }
 
 /// Section header with icon and title
-pub fn section_header<'a>(icon: &'a str, title: &'a str) -> Element<'a, Message> {
-    iced::widget::row![
-        text(icon)
-            .size(typography::SIZE_BODY)
-            .color(color::TEXT_SECONDARY),
+pub fn section_header(icon: char, title: &str) -> Element<'_, Message> {
+    row![
+        icon_sized(icon, typography::SIZE_HEADING).color(color::TEXT_SECONDARY),
         Space::with_width(spacing::SM),
         text(title)
             .size(typography::SIZE_HEADING)

@@ -1,19 +1,19 @@
 //! Enrichment settings section - AcoustID API key, fpcalc status.
 
-use iced::widget::{Space, column, container, row, text, text_input};
+use iced::widget::{Space, button, column, container, row, text, text_input};
 use iced::{Alignment, Element, Length};
 
-use crate::ui::icons;
+use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
-use crate::ui::theme::{color, radius, spacing, typography};
+use crate::ui::theme::{self, color, radius, spacing, typography};
 
 use super::{section_header, setting_description, setting_label};
 
 /// Enrichment settings section
 pub fn enrichment_section(s: &LoadedState) -> Element<'_, Message> {
     column![
-        section_header(icons::WAND_STR, "Enrichment"),
+        section_header(icons::WAND, "Enrichment"),
         Space::with_height(spacing::SM),
         // fpcalc status
         setting_row(
@@ -73,13 +73,13 @@ fn setting_row_vertical<'a>(
 /// fpcalc availability status
 fn fpcalc_status(s: &LoadedState) -> Element<'_, Message> {
     let (icon, label, color_val) = if s.enrichment.fpcalc_available {
-        (icons::CHECK_CIRCLE, "Installed", color::SUCCESS)
+        (icons::CIRCLE_CHECK, "Installed", color::SUCCESS)
     } else {
-        (icons::WARNING, "Not Found", color::WARNING)
+        (icons::CIRCLE_EXCLAIM, "Not Found", color::WARNING)
     };
 
     row![
-        text(icon).size(typography::SIZE_BODY).color(color_val),
+        icon_sized(icon, typography::SIZE_BODY).color(color_val),
         Space::with_width(spacing::XS),
         text(label).size(typography::SIZE_BODY).color(color_val),
     ]
@@ -87,9 +87,10 @@ fn fpcalc_status(s: &LoadedState) -> Element<'_, Message> {
     .into()
 }
 
-/// API key input field
+/// API key input field with save button
 fn api_key_input(s: &LoadedState) -> Element<'_, Message> {
     let has_key = !s.enrichment.api_key.is_empty();
+    let is_saved = s.enrichment.api_key_saved;
 
     row![
         text_input("Enter your AcoustID API key...", &s.enrichment.api_key)
@@ -99,15 +100,32 @@ fn api_key_input(s: &LoadedState) -> Element<'_, Message> {
             .width(Length::Fill)
             .style(api_key_input_style),
         Space::with_width(spacing::SM),
+        // Save button
+        button(
+            row![
+                icon_sized(icons::FLOPPY, typography::SIZE_SMALL).color(if is_saved {
+                    color::SUCCESS
+                } else {
+                    color::TEXT_PRIMARY
+                }),
+                Space::with_width(spacing::XS),
+                text(if is_saved { "Saved" } else { "Save" }).size(typography::SIZE_SMALL),
+            ]
+            .align_y(Alignment::Center)
+        )
+        .padding([spacing::XS, spacing::SM])
+        .style(if is_saved {
+            theme::button_ghost
+        } else {
+            theme::button_primary
+        })
+        .on_press(Message::EnrichmentApiKeySave),
+        Space::with_width(spacing::SM),
         // Status indicator
         if has_key {
-            text(icons::CHECK_CIRCLE)
-                .size(typography::SIZE_BODY)
-                .color(color::SUCCESS)
+            icon_sized(icons::CIRCLE_CHECK, typography::SIZE_BODY).color(color::SUCCESS)
         } else {
-            text(icons::CIRCLE_STR)
-                .size(typography::SIZE_BODY)
-                .color(color::TEXT_MUTED)
+            icon_sized(icons::CIRCLE, typography::SIZE_BODY).color(color::TEXT_MUTED)
         },
     ]
     .align_y(Alignment::Center)

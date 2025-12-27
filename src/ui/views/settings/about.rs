@@ -3,7 +3,7 @@
 use iced::widget::{Space, column, container, row, text};
 use iced::{Alignment, Element, Length};
 
-use crate::ui::icons;
+use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::theme::{color, radius, spacing, typography};
 
@@ -31,7 +31,7 @@ pub fn about_section() -> Element<'static, Message> {
     let tagline = TAGLINES[tagline_idx];
 
     column![
-        section_header(icons::INFO, "About"),
+        section_header(icons::CIRCLE_INFO, "About"),
         Space::with_height(spacing::SM),
         // App name and version
         app_info_card(tagline),
@@ -49,7 +49,7 @@ fn app_info_card(tagline: &str) -> Element<'_, Message> {
         column![
             // App icon and name
             row![
-                text(icons::MUSIC_NOTE).size(32.0).color(color::PRIMARY),
+                icon_sized(icons::MUSIC, 32).color(color::PRIMARY),
                 Space::with_width(spacing::MD),
                 column![
                     text("Music Minder")
@@ -116,9 +116,7 @@ fn credits_section() -> Element<'static, Message> {
 /// Single credit row
 fn credit_row<'a>(icon: char, name: &'a str, desc: &'a str) -> Element<'a, Message> {
     row![
-        text(icon)
-            .size(typography::SIZE_SMALL)
-            .color(color::TEXT_MUTED),
+        icon_sized(icon, typography::SIZE_SMALL).color(color::TEXT_MUTED),
         Space::with_width(spacing::SM),
         text(name)
             .size(typography::SIZE_SMALL)

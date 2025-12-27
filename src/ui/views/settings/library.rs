@@ -3,7 +3,7 @@
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Alignment, Element, Length};
 
-use crate::ui::icons;
+use crate::ui::icons::{self, icon_sized};
 use crate::ui::messages::Message;
 use crate::ui::state::LoadedState;
 use crate::ui::theme::{color, radius, spacing, typography};
@@ -13,7 +13,7 @@ use super::{section_header, setting_description, setting_label};
 /// Library settings section
 pub fn library_section(s: &LoadedState) -> Element<'_, Message> {
     column![
-        section_header(icons::MUSIC_NOTE, "Library"),
+        section_header(icons::MUSIC, "Library"),
         Space::with_height(spacing::SM),
         // Watch paths display
         setting_row_vertical(
@@ -105,9 +105,7 @@ fn watch_paths_list(s: &LoadedState) -> Element<'_, Message> {
         .map(|path| {
             container(
                 row![
-                    text(icons::FOLDER_STR)
-                        .size(typography::SIZE_SMALL)
-                        .color(color::TEXT_MUTED),
+                    icon_sized(icons::FOLDER, typography::SIZE_SMALL).color(color::TEXT_MUTED),
                     Space::with_width(spacing::SM),
                     text(path.display().to_string())
                         .size(typography::SIZE_SMALL)
@@ -135,13 +133,13 @@ fn watch_paths_list(s: &LoadedState) -> Element<'_, Message> {
 /// Watcher status indicator
 fn watcher_status(s: &LoadedState) -> Element<'_, Message> {
     let (icon, label, color_val) = if s.watcher_state.active {
-        (icons::CHECK_CIRCLE, "Active", color::SUCCESS)
+        (icons::CIRCLE_CHECK, "Active", color::SUCCESS)
     } else {
-        (icons::CIRCLE_STR, "Inactive", color::TEXT_MUTED)
+        (icons::CIRCLE, "Inactive", color::TEXT_MUTED)
     };
 
     row![
-        text(icon).size(typography::SIZE_BODY).color(color_val),
+        icon_sized(icon, typography::SIZE_BODY).color(color_val),
         Space::with_width(spacing::XS),
         text(label).size(typography::SIZE_BODY).color(color_val),
     ]
@@ -153,7 +151,7 @@ fn watcher_status(s: &LoadedState) -> Element<'_, Message> {
 fn rescan_button() -> Element<'static, Message> {
     button(
         row![
-            text(icons::REFRESH).size(typography::SIZE_SMALL),
+            icon_sized(icons::SYNC, typography::SIZE_SMALL).color(color::TEXT_PRIMARY),
             Space::with_width(spacing::XS),
             text("Rescan").size(typography::SIZE_BODY),
         ]
