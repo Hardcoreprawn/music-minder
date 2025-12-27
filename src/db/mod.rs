@@ -21,6 +21,7 @@ use crate::metadata::TrackMetadata;
 use crate::model::Track;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use std::time::Instant;
 
 /// Default database filename.
 pub const DEFAULT_DB_NAME: &str = "music_minder.db";
@@ -59,16 +60,39 @@ pub fn db_url(path: Option<&std::path::Path>) -> String {
 /// - Connection cannot be established
 /// - Migration fails
 pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
+    let total_start = Instant::now();
+
+    let exists_start = Instant::now();
     if !sqlx::Sqlite::database_exists(db_url).await.unwrap_or(false) {
+        tracing::debug!("Creating new database...");
         sqlx::Sqlite::create_database(db_url).await?;
     }
+    tracing::debug!(
+        "Database existence check: {:.1}ms",
+        exists_start.elapsed().as_secs_f64() * 1000.0
+    );
 
+    let pool_start = Instant::now();
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(db_url)
         .await?;
+    tracing::debug!(
+        "Connection pool created in {:.1}ms",
+        pool_start.elapsed().as_secs_f64() * 1000.0
+    );
 
+    let migrate_start = Instant::now();
     sqlx::migrate!("./migrations").run(&pool).await?;
+    tracing::debug!(
+        "Migrations completed in {:.1}ms",
+        migrate_start.elapsed().as_secs_f64() * 1000.0
+    );
+
+    tracing::info!(
+        "Total database init: {:.1}ms",
+        total_start.elapsed().as_secs_f64() * 1000.0
+    );
 
     Ok(pool)
 }
@@ -365,6 +389,57 @@ pub async fn get_all_tracks_with_metadata(
     )
     .fetch_all(pool)
     .await
+}
+
+/// Get tracks with metadata in paginated form.
+///
+/// Loads tracks in chunks to support progressive/lazy loading.
+/// This allows the UI to show results incrementally without loading
+/// the entire library into memory at once.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `limit` - Number of tracks to fetch per page
+/// * `offset` - Number of tracks to skip (for pagination)
+///
+/// # Returns
+///
+/// A vector of tracks with resolved artist/album names and metadata.
+pub async fn get_tracks_paginated(
+    pool: &SqlitePool,
+    limit: i64,
+    offset: i64,
+) -> sqlx::Result<Vec<TrackWithMetadata>> {
+    sqlx::query_as::<_, TrackWithMetadata>(
+        r#"
+        SELECT 
+            t.id, t.title, t.path, t.duration, t.track_number,
+            COALESCE(a.name, 'Unknown Artist') as artist_name,
+            COALESCE(al.title, 'Unknown Album') as album_name,
+            al.year,
+            t.quality_score, t.quality_flags
+        FROM tracks t
+        LEFT JOIN artists a ON t.artist_id = a.id
+        LEFT JOIN albums al ON t.album_id = al.id
+        ORDER BY t.id
+        LIMIT ? OFFSET ?
+        "#,
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+}
+
+/// Count total number of tracks in the database.
+///
+/// Fast query to determine library size for pagination/progress.
+pub async fn count_tracks(pool: &SqlitePool) -> sqlx::Result<i64> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tracks")
+        .fetch_one(pool)
+        .await?;
+    Ok(row.0)
 }
 
 // ============================================================================

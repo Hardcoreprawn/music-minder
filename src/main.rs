@@ -29,6 +29,7 @@ pub mod ui;
 use clap::Parser;
 use iced::application;
 use iced::window;
+use std::time::Instant;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use ui::MusicMinder;
 
@@ -36,6 +37,8 @@ use ui::MusicMinder;
 const APP_ICON: &[u8] = include_bytes!("../assets/icon-32.png");
 
 fn main() -> anyhow::Result<()> {
+    let startup_start = Instant::now();
+
     let args = cli::Cli::parse();
 
     // If running CLI commands on Windows, attach to console for output
@@ -50,6 +53,8 @@ fn main() -> anyhow::Result<()> {
         .with(EnvFilter::from_default_env().add_directive("music_minder=info".parse().unwrap()))
         .init();
 
+    tracing::info!("Startup initiated");
+
     // Try to run a CLI command
     if cli::run_command(&args)? {
         // A command was executed, exit normally
@@ -57,9 +62,20 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Load window icon from embedded PNG
+    let icon_start = Instant::now();
     let icon = load_icon(APP_ICON);
+    tracing::debug!(
+        "Icon loaded in {:.1}ms",
+        icon_start.elapsed().as_secs_f64() * 1000.0
+    );
 
     // No command specified, launch the GUI
+    let startup_end = Instant::now();
+    tracing::info!(
+        "Time to GUI startup: {:.1}ms",
+        startup_end.duration_since(startup_start).as_secs_f64() * 1000.0
+    );
+
     application("Music Minder", MusicMinder::update, MusicMinder::view)
         .subscription(MusicMinder::subscription)
         .font(ui::icons::ICON_FONT_BYTES)
