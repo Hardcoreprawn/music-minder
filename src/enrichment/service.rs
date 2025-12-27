@@ -124,6 +124,97 @@ impl EnrichmentService {
         Ok(identification)
     }
 
+    /// Identify a track and extract alternative releases from the best match
+    ///
+    /// Returns the best identification plus 2-3 alternatives from the same recording
+    /// that appear on different albums/compilations. Alternatives are ranked by
+    /// smart matching (path hints, metadata, release type preferences).
+    ///
+    /// Each alternative is returned with full enrichment from MusicBrainz.
+    pub async fn identify_track_with_alternatives(
+        &self,
+        path: &Path,
+    ) -> Result<(TrackIdentification, Vec<TrackIdentification>), EnrichmentError> {
+        // Step 1: Generate fingerprint
+        let fp = fingerprint::generate_fingerprint(path)?;
+
+        // Step 2: Look up on AcoustID
+        let identifications = self.acoustid.lookup(&fp).await?;
+
+        // Step 3: Read existing metadata from file for matching hints
+        let existing_meta = crate::metadata::read(path).ok();
+
+        // Filter by min_confidence and group by recording ID
+        let valid_ids: Vec<_> = identifications
+            .into_iter()
+            .filter(|id| id.score >= self.config.min_confidence)
+            .collect();
+
+        if valid_ids.is_empty() {
+            return Err(EnrichmentError::NoMatches);
+        }
+
+        // Get the recording ID from the first match (they should all be the same recording)
+        let recording_id = valid_ids
+            .first()
+            .and_then(|id| id.track.recording_id.as_ref())
+            .ok_or(EnrichmentError::NoMatches)?
+            .clone();
+
+        // Score all alternatives and select top 3
+        let mut scored: Vec<_> = valid_ids
+            .iter()
+            .map(|id| {
+                let score = calculate_match_score(id, path, existing_meta.as_ref());
+                (score, id.clone())
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Best match is first
+        let mut best = scored.remove(0).1;
+
+        // Keep top 2-3 alternatives (after best)
+        let alternatives: Vec<_> = scored.into_iter().take(2).map(|(_, id)| id).collect();
+
+        // Enrich best match with MusicBrainz
+        if self.config.use_musicbrainz && !recording_id.is_empty() {
+            tokio::time::sleep(Duration::from_millis(1100)).await;
+            match self.musicbrainz.lookup_recording(&recording_id).await {
+                Ok(mb_result) => {
+                    best.track.merge(&mb_result.track);
+                }
+                Err(e) => {
+                    tracing::warn!("MusicBrainz lookup failed for best match: {}", e);
+                }
+            }
+        }
+
+        // Enrich alternatives (respecting rate limits)
+        let mut enriched_alts = Vec::new();
+        for alt in alternatives {
+            // Small delay between MusicBrainz requests
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let mut enriched = alt;
+            if self.config.use_musicbrainz && !recording_id.is_empty() {
+                tokio::time::sleep(Duration::from_millis(1100)).await;
+                match self.musicbrainz.lookup_recording(&recording_id).await {
+                    Ok(mb_result) => {
+                        enriched.track.merge(&mb_result.track);
+                    }
+                    Err(e) => {
+                        tracing::debug!("MusicBrainz lookup failed for alternative: {}", e);
+                    }
+                }
+            }
+            enriched_alts.push(enriched);
+        }
+
+        Ok((best, enriched_alts))
+    }
+
     /// Fetch cover art for a release
     ///
     /// Requires a MusicBrainz release ID (from identify_track result).

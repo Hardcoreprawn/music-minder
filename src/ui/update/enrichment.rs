@@ -143,11 +143,13 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
             match result {
                 Ok(count) => {
                     s.status_message = format!("✓ Tags written ({} fields updated)", count);
+                    s.toasts.success(format!("Tags written ({} fields)", count));
                     // Reload tracks to show updated metadata
                     return load_tracks_task(s.pool.clone());
                 }
                 Err(e) => {
                     s.enrichment.last_error = Some(format!("Failed to write tags: {}", e));
+                    s.toasts.error(format!("Failed to write tags: {}", e));
                 }
             }
         }
@@ -224,7 +226,6 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
             s.enrichment_pane.fetch_cover_art = fetch;
         }
 
-        // Batch identification
         Message::EnrichBatchIdentify => {
             if s.enrichment_pane.api_key.is_empty() {
                 s.status_message = "API key required".to_string();
@@ -275,20 +276,21 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         ..Default::default()
                     };
                     let service = enrichment::EnrichmentService::new(config);
+                    // Call the new method that returns alternatives
                     let result = service
-                        .identify_track(&first_path)
+                        .identify_track_with_alternatives(&first_path)
                         .await
                         .map_err(|e| e.to_string());
                     (first_pos, result)
                 },
-                |(pos, result)| Message::EnrichBatchIdentifyResult(pos, result),
+                |(pos, result)| Message::EnrichBatchIdentifyWithAlts(pos, result),
             );
         }
 
-        Message::EnrichBatchIdentifyResult(pos, result) => {
-            // Create result entry
+        Message::EnrichBatchIdentifyWithAlts(pos, result) => {
+            // Create result entry with alternatives support
             let enrich_result = match result {
-                Ok(ref identification) => {
+                Ok((identification, alternatives_raw)) => {
                     let mut changes = Vec::new();
                     if identification.track.title.is_some() {
                         changes.push("title".to_string());
@@ -309,6 +311,19 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         ResultStatus::Warning
                     };
 
+                    // Convert raw alternatives to UI model
+                    let alternatives: Vec<crate::ui::state::AlternativeMatch> = alternatives_raw
+                        .iter()
+                        .map(|alt| crate::ui::state::AlternativeMatch {
+                            album: alt.track.album.clone().unwrap_or_default(),
+                            year: alt.track.year,
+                            confidence: alt.score,
+                            release_type: alt.track.release_type.clone().unwrap_or_default(),
+                            track_number: alt.track.track_number,
+                            identification: alt.clone(),
+                        })
+                        .collect();
+
                     EnrichmentResult {
                         track_index: pos,
                         status: result_status,
@@ -320,6 +335,9 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         error: None,
                         confirmed: identification.score >= 0.7, // Auto-confirm high confidence
                         identification: Some(identification.clone()),
+                        alternatives,
+                        show_alternatives: false, // Hidden by default, expanded on review
+                        selected_alternative: None,
                     }
                 }
                 Err(ref e) => EnrichmentResult {
@@ -333,6 +351,9 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                     error: Some(e.clone()),
                     confirmed: false,
                     identification: None,
+                    alternatives: vec![],
+                    show_alternatives: false,
+                    selected_alternative: None,
                 },
             };
 
@@ -374,12 +395,12 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         };
                         let service = enrichment::EnrichmentService::new(config);
                         let result = service
-                            .identify_track(&path)
+                            .identify_track_with_alternatives(&path)
                             .await
                             .map_err(|e| e.to_string());
                         (next_pos, result)
                     },
-                    |(pos, result)| Message::EnrichBatchIdentifyResult(pos, result),
+                    |(pos, result)| Message::EnrichBatchIdentifyWithAlts(pos, result),
                 );
             }
 
@@ -391,11 +412,29 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                 .iter()
                 .filter(|r| r.status == ResultStatus::Success)
                 .count();
+            let warning_count = s
+                .enrichment_pane
+                .results
+                .iter()
+                .filter(|r| r.status == ResultStatus::Warning)
+                .count();
+            let total = s.enrichment_pane.results.len();
             s.status_message = format!(
                 "Identification complete: {} of {} matched",
-                success_count,
-                s.enrichment_pane.results.len()
+                success_count, total
             );
+
+            // Show appropriate toast
+            if success_count == total {
+                s.toasts.success(format!("All {} tracks identified", total));
+            } else if success_count + warning_count > 0 {
+                s.toasts.info(format!(
+                    "{} matched, {} low confidence",
+                    success_count, warning_count
+                ));
+            } else {
+                s.toasts.warning("No matches found");
+            }
         }
 
         Message::EnrichBatchComplete => {
@@ -404,9 +443,51 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
 
         // Result actions
         Message::EnrichReviewResult(idx) => {
-            // Toggle confirmed status for review
+            // Toggle alternatives visibility for this result
             if let Some(result) = s.enrichment_pane.results.get_mut(idx) {
-                result.confirmed = !result.confirmed;
+                result.show_alternatives = !result.show_alternatives;
+            }
+        }
+
+        Message::EnrichToggleAlternatives(idx) => {
+            // Toggle alternatives list visibility
+            if let Some(result) = s.enrichment_pane.results.get_mut(idx) {
+                result.show_alternatives = !result.show_alternatives;
+            }
+        }
+
+        Message::EnrichSelectAlternative(result_idx, alt_idx) => {
+            // Switch to a different alternative for this result
+            if let Some(result) = s.enrichment_pane.results.get_mut(result_idx)
+                && alt_idx < result.alternatives.len()
+            {
+                // Get the alternative and use it as the main identification
+                let alt = result.alternatives[alt_idx].clone();
+
+                // Update the result's display fields
+                result.title = alt.identification.track.title.clone();
+                result.artist = alt.identification.track.artist.clone();
+                result.album = alt.identification.track.album.clone();
+                result.confidence = Some(alt.confidence);
+
+                // Update the identification to be written
+                result.identification = Some(alt.identification.clone());
+
+                // Mark as selected
+                result.selected_alternative = Some(alt_idx);
+
+                // Update changes list
+                let mut changes = Vec::new();
+                if result.title.is_some() {
+                    changes.push("title".to_string());
+                }
+                if result.artist.is_some() {
+                    changes.push("artist".to_string());
+                }
+                if result.album.is_some() {
+                    changes.push("album".to_string());
+                }
+                result.changes = changes;
             }
         }
 
