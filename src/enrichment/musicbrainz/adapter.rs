@@ -7,14 +7,18 @@
 use super::dto;
 use crate::enrichment::domain::{EnrichmentSource, IdentifiedTrack, TrackIdentification};
 
-/// Release info extracted from MusicBrainz: (album, release_id, track_num, total_tracks, year)
-type ReleaseInfo = (
-    Option<String>,
-    Option<String>,
-    Option<u32>,
-    Option<u32>,
-    Option<i32>,
-);
+/// Release info extracted from MusicBrainz
+struct ReleaseInfo {
+    album: Option<String>,
+    album_artist: Option<String>,
+    release_id: Option<String>,
+    release_group_id: Option<String>,
+    track_number: Option<u32>,
+    total_tracks: Option<u32>,
+    disc_number: Option<u32>,
+    total_discs: Option<u32>,
+    year: Option<i32>,
+}
 
 /// Convert a MusicBrainz recording response to a TrackIdentification
 pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentification {
@@ -23,24 +27,31 @@ pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentificatio
     let artist_id = response.artist_credit.first().map(|c| c.artist.id.clone());
 
     // Find the best release (prefer official albums)
-    let (album, release_id, track_number, total_tracks, year) =
-        extract_release_info(&response.releases);
+    let release_info = extract_release_info(&response.releases);
 
     let (release_type, secondary_types) = extract_release_types(&response.releases);
+
+    // Extract genres from tags, sorted by vote count
+    let genres = extract_genres(&response.tags);
 
     let track = IdentifiedTrack {
         recording_id: Some(response.id),
         title: Some(response.title),
         artist,
-        album,
-        track_number,
-        total_tracks,
-        year,
+        album_artist: release_info.album_artist,
+        album: release_info.album,
+        track_number: release_info.track_number,
+        total_tracks: release_info.total_tracks,
+        disc_number: release_info.disc_number,
+        total_discs: release_info.total_discs,
+        year: release_info.year,
         duration: response.length.map(std::time::Duration::from_millis),
         artist_id,
-        release_id,
+        release_id: release_info.release_id,
+        release_group_id: release_info.release_group_id,
         release_type,
         secondary_types: secondary_types.unwrap_or_default(),
+        genres,
     };
 
     TrackIdentification {
@@ -109,21 +120,58 @@ fn extract_release_info(releases: &[dto::Release]) -> ReleaseInfo {
         .or_else(|| releases.first());
 
     let Some(release) = release else {
-        return (None, None, None, None, None);
+        return ReleaseInfo {
+            album: None,
+            album_artist: None,
+            release_id: None,
+            release_group_id: None,
+            track_number: None,
+            total_tracks: None,
+            disc_number: None,
+            total_discs: None,
+            year: None,
+        };
     };
 
     let album = Some(release.title.clone());
     let release_id = Some(release.id.clone());
 
-    // Extract track position from first medium
-    let (track_number, total_tracks) = release
+    // Extract release group ID
+    let release_group_id = release.release_group.as_ref().map(|rg| rg.id.clone());
+
+    // Extract album artist from release artist credits
+    let album_artist = release
+        .artist_credit
+        .as_ref()
+        .and_then(|credits| build_artist_string(credits));
+
+    // Total number of discs in the release
+    let total_discs = if release.media.len() > 1 {
+        Some(release.media.len() as u32)
+    } else {
+        None // Don't bother with disc number for single-disc releases
+    };
+
+    // Extract track position and disc number from media
+    // We need to find which medium contains our track
+    let (track_number, total_tracks, disc_number) = release
         .media
-        .first()
-        .map(|m| {
-            let track_num = m.tracks.first().and_then(|t| t.position);
-            (track_num, m.track_count)
+        .iter()
+        .find_map(|m| {
+            // Check if this medium has tracks (our track should be here)
+            if let Some(track) = m.tracks.first() {
+                let track_num = track.position;
+                let disc_num = if release.media.len() > 1 {
+                    m.position // Only include disc number for multi-disc releases
+                } else {
+                    None
+                };
+                Some((track_num, m.track_count, disc_num))
+            } else {
+                None
+            }
         })
-        .unwrap_or((None, None));
+        .unwrap_or((None, None, None));
 
     // Parse year from date (YYYY, YYYY-MM, or YYYY-MM-DD)
     let year = release
@@ -132,7 +180,44 @@ fn extract_release_info(releases: &[dto::Release]) -> ReleaseInfo {
         .and_then(|d| d.split('-').next())
         .and_then(|y| y.parse().ok());
 
-    (album, release_id, track_number, total_tracks, year)
+    ReleaseInfo {
+        album,
+        album_artist,
+        release_id,
+        release_group_id,
+        track_number,
+        total_tracks,
+        disc_number,
+        total_discs,
+        year,
+    }
+}
+
+/// Extract genres from MusicBrainz tags, sorted by vote count (most popular first)
+/// Takes the top 5 most-voted tags to avoid noise from low-confidence tags
+fn extract_genres(tags: &[dto::Tag]) -> Vec<String> {
+    let mut sorted_tags: Vec<_> = tags.iter().collect();
+    sorted_tags.sort_by(|a, b| b.count.cmp(&a.count));
+
+    sorted_tags
+        .into_iter()
+        .take(5) // Top 5 genres
+        .filter(|t| t.count > 0) // Only include tags with positive votes
+        .map(|t| {
+            // Capitalize first letter of each word for display
+            t.name
+                .split_whitespace()
+                .map(|word| {
+                    let mut chars = word.chars();
+                    match chars.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        None => String::new(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -147,6 +232,7 @@ mod tests {
             disambiguation: None,
             artist_credit: vec![],
             releases: vec![],
+            tags: vec![],
         }
     }
 
@@ -209,11 +295,12 @@ mod tests {
             country: None,
             release_group: None,
             media: vec![],
+            artist_credit: None,
         }];
 
-        let (_, _, _, _, year) = extract_release_info(&releases);
+        let info = extract_release_info(&releases);
 
-        assert_eq!(year, Some(1975));
+        assert_eq!(info.year, Some(1975));
     }
 
     #[test]
@@ -232,6 +319,7 @@ mod tests {
                     first_release_date: None,
                 }),
                 media: vec![],
+                artist_credit: None,
             },
             dto::Release {
                 id: "album".to_string(),
@@ -246,11 +334,12 @@ mod tests {
                     first_release_date: None,
                 }),
                 media: vec![],
+                artist_credit: None,
             },
         ];
 
-        let (album, _, _, _, _) = extract_release_info(&releases);
+        let info = extract_release_info(&releases);
 
-        assert_eq!(album, Some("Album".to_string()));
+        assert_eq!(info.album, Some("Album".to_string()));
     }
 }

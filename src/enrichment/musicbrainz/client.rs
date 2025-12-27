@@ -64,7 +64,7 @@ impl MusicBrainzClient {
         recording_id: &str,
     ) -> Result<dto::RecordingResponse, EnrichmentError> {
         let url = format!(
-            "{}/recording/{}?fmt=json&inc=artists+releases+media",
+            "{}/recording/{}?fmt=json&inc=artists+releases+media+tags",
             self.base_url, recording_id
         );
 

@@ -29,6 +29,9 @@ pub struct RecordingResponse {
     /// Releases this recording appears on
     #[serde(default)]
     pub releases: Vec<Release>,
+    /// Tags/genres (when inc=tags is used)
+    #[serde(default)]
+    pub tags: Vec<Tag>,
 }
 
 /// Artist credit (can be multiple for collaborations)
@@ -71,6 +74,9 @@ pub struct Release {
     pub date: Option<String>,
     /// Country code
     pub country: Option<String>,
+    /// Artist credits for the release (album artist)
+    #[serde(default)]
+    pub artist_credit: Option<Vec<ArtistCredit>>,
     /// Release group (groups same album across editions)
     pub release_group: Option<ReleaseGroup>,
     /// Media (discs) in this release
@@ -118,6 +124,15 @@ pub struct Track {
     pub title: Option<String>,
     /// Track length in milliseconds
     pub length: Option<u64>,
+}
+
+/// Tag (genre) from MusicBrainz
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Tag {
+    /// Tag name (e.g., "rock", "electronic")
+    pub name: String,
+    /// Vote count (higher = more relevant)
+    pub count: i32,
 }
 
 /// Error response from MusicBrainz API
