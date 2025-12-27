@@ -2,6 +2,7 @@
 
 use iced::Task;
 use smallvec::smallvec;
+use std::time::Instant;
 
 use crate::{config, diagnostics, enrichment, health, organizer, player};
 
@@ -11,7 +12,7 @@ use super::super::state::{
     ActivePane, AppState, EnrichmentPaneState, EnrichmentState, FocusedList, GardenerState,
     LoadedState, OrganizeView, SortColumn, VisualizationMode, WatcherState,
 };
-use super::load_tracks_task;
+use super::load_tracks_initial_task;
 
 /// Helper to run diagnostics
 fn run_diagnostics_task() -> Task<Message> {
@@ -29,6 +30,21 @@ fn run_diagnostics_task() -> Task<Message> {
     )
 }
 
+/// Helper to enumerate audio devices in the background (deferred startup)
+fn enumerate_audio_devices_task() -> Task<Message> {
+    Task::perform(
+        async {
+            tokio::task::spawn_blocking(|| {
+                tracing::debug!("Enumerating audio devices...");
+                player::list_audio_devices()
+            })
+            .await
+            .unwrap_or_default()
+        },
+        Message::AudioDevicesEnumerated,
+    )
+}
+
 /// Handle database initialization
 pub fn handle_db_init(
     state: &mut AppState,
@@ -36,6 +52,9 @@ pub fn handle_db_init(
 ) -> Task<Message> {
     match result {
         Ok(pool) => {
+            let startup_start = Instant::now();
+            tracing::debug!("handle_db_init() started");
+
             // Load config from disk (or defaults)
             let cfg = config::load();
 
@@ -52,16 +71,10 @@ pub fn handle_db_init(
             let player_instance = player::Player::new();
             let player_state = player::PlayerState::default();
 
-            // Get audio device info
-            let audio_devices = player::list_audio_devices();
-            // Use saved device from config, or detect current
-            let saved_device = cfg.audio.output_device.clone();
-            let current_audio_device =
-                if saved_device.is_empty() || !audio_devices.contains(&saved_device) {
-                    player::current_audio_device()
-                } else {
-                    saved_device
-                };
+            // OPTIMIZATION: Defer audio device enumeration to background task
+            // Use empty list initially - devices will be populated when task completes
+            let audio_devices = vec![];
+            let current_audio_device = cfg.audio.output_device.clone();
 
             // Parse visualization mode from config
             let visualization_mode = match cfg.audio.visualization_mode.as_str() {
@@ -86,6 +99,7 @@ pub fn handle_db_init(
                 is_scanning: false,
                 tracks: vec![],
                 tracks_loading: true,
+                tracks_total: None,
                 status_message: "Loading library...".to_string(),
                 scan_count: 0,
                 scroll_offset: 0.0,
@@ -177,9 +191,22 @@ pub fn handle_db_init(
                 easter_egg_clicks: 0,
                 // Track detail modal state
                 track_detail: Default::default(),
+                // Toast notifications
+                toasts: Default::default(),
             }));
-            // Load tracks and run diagnostics in parallel
-            Task::batch([load_tracks_task(pool), run_diagnostics_task()])
+
+            tracing::debug!(
+                "LoadedState created in {:.1}ms",
+                startup_start.elapsed().as_secs_f64() * 1000.0
+            );
+
+            // Progressive loading: load first batch quickly, then rest in background
+            // Also run diagnostics and enumerate audio devices in parallel
+            Task::batch([
+                load_tracks_initial_task(pool),
+                run_diagnostics_task(),
+                enumerate_audio_devices_task(),
+            ])
         }
         Err(e) => {
             *state = AppState::Error(e);

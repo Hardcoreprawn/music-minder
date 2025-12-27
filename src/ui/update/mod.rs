@@ -43,15 +43,91 @@ pub use selection::handle_selection;
 pub use track_detail::handle_track_detail;
 pub use watcher::handle_watcher;
 
-/// Helper to load tracks from database
+/// Initial batch size for progressive loading - show UI quickly
+const INITIAL_BATCH_SIZE: i64 = 200;
+
+/// Helper to load tracks from database (all at once - legacy)
 pub(crate) fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {
     Task::perform(
         async move {
-            crate::db::get_all_tracks_with_metadata(&pool)
+            let load_start = std::time::Instant::now();
+            tracing::debug!("Loading tracks from database...");
+            let result = crate::db::get_all_tracks_with_metadata(&pool)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+            tracing::info!(
+                "Tracks loaded in {:.1}ms",
+                load_start.elapsed().as_secs_f64() * 1000.0
+            );
+            result
         },
         Message::TracksLoaded,
+    )
+}
+
+/// Load initial batch of tracks for fast UI display
+pub(crate) fn load_tracks_initial_task(pool: sqlx::SqlitePool) -> Task<Message> {
+    Task::perform(
+        async move {
+            let load_start = std::time::Instant::now();
+            tracing::debug!("Loading initial {} tracks...", INITIAL_BATCH_SIZE);
+
+            // Get total count first (very fast query)
+            let total = crate::db::count_tracks(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            // Load first batch
+            let tracks = crate::db::get_tracks_paginated(&pool, INITIAL_BATCH_SIZE, 0)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            tracing::info!(
+                "Initial {} tracks loaded in {:.1}ms (total: {})",
+                tracks.len(),
+                load_start.elapsed().as_secs_f64() * 1000.0,
+                total
+            );
+
+            Ok((tracks, total))
+        },
+        Message::TracksLoadedInitial,
+    )
+}
+
+/// Load remaining tracks after initial batch
+pub(crate) fn load_tracks_remaining_task(
+    pool: sqlx::SqlitePool,
+    offset: i64,
+    total: i64,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            let remaining = total - offset;
+            if remaining <= 0 {
+                return Ok(vec![]);
+            }
+
+            let load_start = std::time::Instant::now();
+            tracing::debug!(
+                "Loading remaining {} tracks (offset {})...",
+                remaining,
+                offset
+            );
+
+            let tracks = crate::db::get_tracks_paginated(&pool, remaining, offset)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            tracing::info!(
+                "Remaining {} tracks loaded in {:.1}ms",
+                tracks.len(),
+                load_start.elapsed().as_secs_f64() * 1000.0
+            );
+
+            Ok(tracks)
+        },
+        Message::TracksLoadedMore,
     )
 }
 

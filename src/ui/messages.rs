@@ -15,6 +15,7 @@ pub enum Message {
 
     // Initialization
     DbInitialized(Result<SqlitePool, String>),
+    AudioDevicesEnumerated(Vec<String>), // Deferred audio device list
     FontLoaded,
 
     // Navigation
@@ -32,6 +33,10 @@ pub enum Message {
     ScanEventReceived(library::ScanEvent),
     ScanFinished,
     TracksLoaded(Result<Vec<db::TrackWithMetadata>, String>),
+    /// Progressive loading: first batch of tracks with total count
+    TracksLoadedInitial(Result<(Vec<db::TrackWithMetadata>, i64), String>),
+    /// Progressive loading: subsequent batch of tracks
+    TracksLoadedMore(Result<Vec<db::TrackWithMetadata>, String>),
 
     // Scroll messages
     ScrollChanged(Viewport),
@@ -82,11 +87,23 @@ pub enum Message {
     EnrichFetchCoverArtToggled(bool), // Toggle fetch cover art option
     EnrichBatchIdentify,              // Start batch identification
     EnrichBatchIdentifyResult(usize, Result<enrichment::TrackIdentification, String>), // Single track result
-    EnrichBatchComplete,       // All tracks processed
-    EnrichReviewResult(usize), // Open result for review
-    EnrichWriteResult(usize),  // Write single result
-    EnrichWriteAllConfirmed,   // Write all confirmed results
-    EnrichExportReport,        // Export results to file
+    EnrichBatchIdentifyWithAlts(
+        usize,
+        Result<
+            (
+                enrichment::TrackIdentification,
+                Vec<enrichment::TrackIdentification>,
+            ),
+            String,
+        >,
+    ), // With alternatives
+    EnrichBatchComplete,                   // All tracks processed
+    EnrichReviewResult(usize),             // Open result for review (show/hide alternatives)
+    EnrichWriteResult(usize),              // Write single result
+    EnrichWriteAllConfirmed,               // Write all confirmed results
+    EnrichExportReport,                    // Export results to file
+    EnrichToggleAlternatives(usize),       // Toggle alternatives list for result at index
+    EnrichSelectAlternative(usize, usize), // Select alternative for result (result_idx, alt_idx)
 
     // Player messages
     PlayerPlay,
@@ -189,4 +206,8 @@ pub enum Message {
             String,
         >,
     ),
+
+    // Toast notification messages
+    ToastDismiss(u64), // Dismiss a specific toast by ID
+    ToastExpireTick,   // Periodic tick to remove expired toasts
 }

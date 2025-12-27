@@ -123,6 +123,8 @@ pub struct LoadedState {
     pub is_scanning: bool,
     pub tracks: Vec<db::TrackWithMetadata>,
     pub tracks_loading: bool,
+    /// Total tracks in database (for progressive loading)
+    pub tracks_total: Option<i64>,
     pub status_message: String,
     pub scan_count: usize,
 
@@ -230,6 +232,9 @@ pub struct LoadedState {
 
     // Track detail modal state
     pub track_detail: TrackDetailState,
+
+    // Toast notifications
+    pub toasts: super::views::ToastQueue,
 }
 
 impl LoadedState {
@@ -427,6 +432,27 @@ pub enum ResultStatus {
     Error,
 }
 
+/// Alternative album match for a track (different release/compilation)
+#[derive(Debug, Clone)]
+pub struct AlternativeMatch {
+    /// Album/release title
+    #[allow(dead_code)]
+    pub album: String,
+    /// Release year (if available)
+    #[allow(dead_code)]
+    pub year: Option<i32>,
+    /// Confidence score for this alternative (0.0 - 1.0)
+    pub confidence: f32,
+    /// Release type (Album, Single, Compilation, Live, etc.)
+    #[allow(dead_code)]
+    pub release_type: String,
+    /// Track number on this release
+    #[allow(dead_code)]
+    pub track_number: Option<u32>,
+    /// Full identification for this alternative
+    pub identification: crate::enrichment::TrackIdentification,
+}
+
 /// A single enrichment result
 #[derive(Debug, Clone, Default)]
 pub struct EnrichmentResult {
@@ -450,6 +476,13 @@ pub struct EnrichmentResult {
     pub confirmed: bool,
     /// Full identification result for writing
     pub identification: Option<crate::enrichment::TrackIdentification>,
+    /// Alternative album matches (same recording on different releases)
+    /// Kept to 2-3 best options, only during session
+    pub alternatives: Vec<AlternativeMatch>,
+    /// Whether alternatives list is currently expanded
+    pub show_alternatives: bool,
+    /// Index of currently selected alternative (into alternatives vec)
+    pub selected_alternative: Option<usize>,
 }
 
 /// State for cover art display.

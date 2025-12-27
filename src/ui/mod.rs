@@ -24,13 +24,29 @@ pub struct MusicMinder {
 
 impl MusicMinder {
     pub fn new() -> (Self, Task<Message>) {
+        use std::time::Instant;
+
+        let ui_init_start = Instant::now();
+        tracing::debug!("UI::new() started");
+
         let init_db = Task::perform(
             async {
-                crate::db::init_db("sqlite:music_minder.db")
+                let db_start = Instant::now();
+                let result = crate::db::init_db("sqlite:music_minder.db")
                     .await
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| e.to_string());
+                tracing::info!(
+                    "Database init completed in {:.1}ms",
+                    db_start.elapsed().as_secs_f64() * 1000.0
+                );
+                result
             },
             Message::DbInitialized,
+        );
+
+        tracing::debug!(
+            "UI::new() task created in {:.1}ms",
+            ui_init_start.elapsed().as_secs_f64() * 1000.0
         );
 
         (
@@ -123,6 +139,14 @@ impl MusicMinder {
             Message::DbInitialized(result) => {
                 return update::handle_db_init(&mut self.state, result.clone());
             }
+            Message::AudioDevicesEnumerated(devices) => {
+                // Update audio devices if we're loaded
+                if let AppState::Loaded(s) = &mut self.state {
+                    tracing::debug!("Audio devices enumerated: {:?}", devices);
+                    s.audio_devices = devices.clone();
+                }
+                return Task::none();
+            }
             Message::PickPath => return pick_folder(Message::PathPicked),
             Message::FontLoaded => return Task::none(), // Font loaded successfully
             _ => {}
@@ -171,15 +195,55 @@ impl MusicMinder {
                 s.scan_path = p.clone();
             }
 
-            // Tracks loaded
+            // Tracks loaded (legacy - full load)
             Message::TracksLoaded(Ok(tracks)) => {
                 s.tracks = tracks.clone();
                 s.tracks_loading = false;
+                s.tracks_total = Some(s.tracks.len() as i64);
                 s.status_message = format!("{} tracks loaded.", s.tracks.len());
             }
             Message::TracksLoaded(Err(e)) => {
                 s.tracks_loading = false;
                 s.status_message = format!("Error loading tracks: {}", e);
+            }
+
+            // Progressive loading: initial batch
+            Message::TracksLoadedInitial(Ok((tracks, total))) => {
+                s.tracks = tracks.clone();
+                s.tracks_total = Some(*total);
+                let loaded = s.tracks.len();
+
+                if loaded as i64 >= *total {
+                    // All tracks fit in initial batch
+                    s.tracks_loading = false;
+                    s.status_message = format!("{} tracks loaded.", loaded);
+                    return Task::none();
+                } else {
+                    // More tracks to load - update status and kick off remaining load
+                    s.status_message = format!("Loaded {} of {} tracks...", loaded, total);
+                    return update::load_tracks_remaining_task(
+                        s.pool.clone(),
+                        loaded as i64,
+                        *total,
+                    );
+                }
+            }
+            Message::TracksLoadedInitial(Err(e)) => {
+                s.tracks_loading = false;
+                s.status_message = format!("Error loading tracks: {}", e);
+            }
+
+            // Progressive loading: remaining tracks
+            Message::TracksLoadedMore(Ok(tracks)) => {
+                s.tracks.extend(tracks.iter().cloned());
+                s.tracks_loading = false;
+                s.status_message = format!("{} tracks loaded.", s.tracks.len());
+            }
+            Message::TracksLoadedMore(Err(e)) => {
+                // Keep partial results, just log error
+                s.tracks_loading = false;
+                tracing::error!("Error loading remaining tracks: {}", e);
+                s.status_message = format!("{} tracks loaded (some failed).", s.tracks.len());
             }
 
             // Scan messages
@@ -233,8 +297,11 @@ impl MusicMinder {
             | Message::EnrichFetchCoverArtToggled(_)
             | Message::EnrichBatchIdentify
             | Message::EnrichBatchIdentifyResult(_, _)
+            | Message::EnrichBatchIdentifyWithAlts(_, _)
             | Message::EnrichBatchComplete
             | Message::EnrichReviewResult(_)
+            | Message::EnrichToggleAlternatives(_)
+            | Message::EnrichSelectAlternative(_, _)
             | Message::EnrichWriteResult(_)
             | Message::EnrichWriteAllConfirmed
             | Message::EnrichExportReport => {
@@ -325,6 +392,14 @@ impl MusicMinder {
             | Message::TrackDetailRefresh
             | Message::TrackDetailRefreshed(_) => {
                 return update::handle_track_detail(s, message);
+            }
+
+            // Toast notification messages
+            Message::ToastDismiss(id) => {
+                s.toasts.remove(*id);
+            }
+            Message::ToastExpireTick => {
+                s.toasts.remove_expired();
             }
 
             // Keyboard shortcuts
