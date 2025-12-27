@@ -3,7 +3,7 @@
 use iced::Task;
 use smallvec::smallvec;
 
-use crate::{diagnostics, enrichment, health, organizer, player};
+use crate::{config, diagnostics, enrichment, health, organizer, player};
 
 use super::super::messages::Message;
 use super::super::platform::get_user_music_folder;
@@ -36,9 +36,17 @@ pub fn handle_db_init(
 ) -> Task<Message> {
     match result {
         Ok(pool) => {
+            // Load config from disk (or defaults)
+            let cfg = config::load();
+
             let music_folder = get_user_music_folder();
             let fpcalc_available = enrichment::fingerprint::is_fpcalc_available();
-            let api_key = std::env::var("ACOUSTID_API_KEY").unwrap_or_default();
+
+            // API key priority: config file > environment variable > default
+            let api_key = cfg.credentials.acoustid_api_key.clone().unwrap_or_else(|| {
+                std::env::var("ACOUSTID_API_KEY")
+                    .unwrap_or_else(|_| enrichment::DEFAULT_ACOUSTID_API_KEY.to_string())
+            });
 
             // Try to initialize player
             let player_instance = player::Player::new();
@@ -46,7 +54,22 @@ pub fn handle_db_init(
 
             // Get audio device info
             let audio_devices = player::list_audio_devices();
-            let current_audio_device = player::current_audio_device();
+            // Use saved device from config, or detect current
+            let saved_device = cfg.audio.output_device.clone();
+            let current_audio_device =
+                if saved_device.is_empty() || !audio_devices.contains(&saved_device) {
+                    player::current_audio_device()
+                } else {
+                    saved_device
+                };
+
+            // Parse visualization mode from config
+            let visualization_mode = match cfg.audio.visualization_mode.as_str() {
+                "waveform" => VisualizationMode::Waveform,
+                "vu_meter" => VisualizationMode::VuMeter,
+                "off" => VisualizationMode::Off,
+                _ => VisualizationMode::Spectrum,
+            };
 
             // Initialize OS media controls (SMTC on Windows, MPRIS on Linux)
             let media_controls = player::MediaControlsHandle::new();
@@ -94,8 +117,8 @@ pub fn handle_db_init(
                 player_state,
                 file_metadata: None,
                 visualization: player::SpectrumData::default(),
-                visualization_mode: VisualizationMode::Spectrum,
-                auto_queue_enabled: true,
+                visualization_mode,
+                auto_queue_enabled: cfg.library.auto_queue,
                 audio_devices,
                 current_audio_device,
                 seek_preview: None,
@@ -136,7 +159,7 @@ pub fn handle_db_init(
                 filter_format: None,
                 filter_lossless: None,
                 // Sidebar state
-                sidebar_collapsed: false,
+                sidebar_collapsed: cfg.appearance.sidebar_collapsed,
                 // Organize section collapsed state
                 organize_collapsed: true, // Collapsed by default per design spec
                 // Selection and focus state for keyboard navigation
@@ -145,6 +168,15 @@ pub fn handle_db_init(
                 queue_selection: None,
                 // Queue drag-and-drop state
                 queue_drag: Default::default(),
+                // Easter egg state - random starting point
+                easter_egg_index: (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as usize)
+                    % 8, // 8 easter eggs
+                easter_egg_clicks: 0,
+                // Track detail modal state
+                track_detail: Default::default(),
             }));
             // Load tracks and run diagnostics in parallel
             Task::batch([load_tracks_task(pool), run_diagnostics_task()])

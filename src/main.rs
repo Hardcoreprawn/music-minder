@@ -9,6 +9,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 pub mod cli;
+pub mod config;
 pub mod cover;
 pub mod db;
 pub mod diagnostics;

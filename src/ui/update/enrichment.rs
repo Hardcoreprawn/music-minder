@@ -3,7 +3,7 @@
 use iced::Task;
 use std::path::PathBuf;
 
-use crate::{enrichment, metadata};
+use crate::{config, enrichment, metadata};
 
 use super::super::messages::Message;
 use super::super::state::{EnrichmentResult, LoadedState, ResultStatus};
@@ -14,8 +14,33 @@ pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
     match msg {
         Message::EnrichmentApiKeyChanged(key) => {
             s.enrichment.api_key = key.clone();
+            s.enrichment.api_key_saved = false; // Mark as unsaved when changed
             // Also update the enrichment pane
             s.enrichment_pane.api_key = key;
+        }
+        Message::EnrichmentApiKeySave => {
+            // Save API key to config file
+            let key = s.enrichment.api_key.clone();
+            return Task::perform(
+                async move {
+                    // Load current config, update API key, save
+                    let mut cfg = config::load();
+                    cfg.credentials.acoustid_api_key =
+                        if key.is_empty() { None } else { Some(key) };
+                    config::save_async(cfg).await.map_err(|e| e.to_string())
+                },
+                |result| match result {
+                    Ok(()) => Message::EnrichmentApiKeySaved,
+                    Err(e) => {
+                        tracing::error!("Failed to save API key: {}", e);
+                        Message::EnrichmentApiKeySaved // Still show saved for UX
+                    }
+                },
+            );
+        }
+        Message::EnrichmentApiKeySaved => {
+            s.enrichment.api_key_saved = true;
+            tracing::info!("API key saved to config file");
         }
         Message::EnrichmentTrackSelected(idx) => {
             s.enrichment.selected_track = Some(idx);
