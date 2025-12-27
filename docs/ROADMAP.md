@@ -455,17 +455,17 @@ fn calculate_auto_scroll(cursor_y: f32, list_bounds: Rectangle) -> i8 {
 
 #### Implementation Order
 
-| Step | Task | Time Est. |
-|------|------|-----------|
-| 1 | Keyboard reordering (`Alt+↑/↓`) | 30 min |
-| 2 | Queue selection state + highlight | 15 min |
-| 3 | Drag handle UI (grip icon) | 15 min |
-| 4 | Basic drag state + messages | 30 min |
-| 5 | Drop target calculation + insertion line | 30 min |
-| 6 | Visual feedback (dimming, cursor) | 15 min |
-| 7 | Auto-scroll at edges | 45 min |
-| 8 | Edge cases (cancel, focus, shuffle) | 30 min |
-| **Total** | | **~3.5 hours** |
+ | Step | Task | Time Est. |
+ | --- | --- | --- |
+ | 1 | Keyboard reordering (`Alt+↑/↓`) | 30 min |
+ | 2 | Queue selection state + highlight | 15 min |
+ | 3 | Drag handle UI (grip icon) | 15 min |
+ | 4 | Basic drag state + messages | 30 min |
+ | 5 | Drop target calculation + insertion line | 30 min |
+ | 6 | Visual feedback (dimming, cursor) | 15 min |
+ | 7 | Auto-scroll at edges | 45 min |
+ | 8 | Edge cases (cancel, focus, shuffle) | 30 min |
+ | **Total** | | **~3.5 hours** |
 
 **Files to Modify:**
 
@@ -704,13 +704,13 @@ that could benefit from enrichment without being intrusive.
 
 **Quality Scoring:**
 
-| Score | Tier | Meaning |
-|-------|------|---------|
+| Score  | Tier        | Meaning                       |
+| ------ | ----------- | ----------------------------- |
 | 90-100 | ★ Excellent | Fully tagged, high confidence |
-| 70-89 | ● Good | Minor gaps but usable |
-| 50-69 | ◐ Fair | Significant metadata missing |
-| 0-49 | ○ Poor | Needs attention |
-| null | ? | Not yet analyzed |
+| 70-89  | ● Good      | Minor gaps but usable         |
+| 50-69  | ◐ Fair      | Significant metadata missing  |
+| 0-49   | ○ Poor      | Needs attention               |
+| null   | ?           | Not yet analyzed              |
 
 **Quality Flags (Metadata):**
 
@@ -1012,6 +1012,174 @@ Spotify isn't the only option—architecture should be service-agnostic:
 
 ---
 
+## Technical Debt: Safe File Writing (Atomic Writes & Rollback)
+
+**Status**: 🔄 Partial (metadata write implemented, cover art pending)
+
+### The Problem
+
+Writing to audio files (metadata, embedded cover art) and sidecar images risks corruption if:
+
+- Process crashes mid-write
+- Disk runs out of space
+- Power failure during write
+- Antivirus locks the file
+
+### The Solution: Atomic Write Pattern
+
+Write to a temp file, validate, then atomically replace the original.
+
+**Pattern (5-step):**
+
+```text
+1. Write changes to .tmp file
+2. Validate .tmp file (can be read back, audio intact)
+3. Rename original to .bak (atomic on same filesystem)
+4. Rename .tmp to original (atomic)
+5. Delete .bak on success
+```
+
+**Rollback on failure:**
+
+- If step 4 fails: restore .bak → original
+- If step 2 fails: delete .tmp, original untouched
+- .bak serves as automatic backup during the critical window
+
+### Implementation Status
+
+| Operation | Atomic Write | Rollback | Retry |
+|-----------|--------------|----------|-------|
+| Metadata write (`write_metadata()`) | ✅ | ✅ | ❌ |
+| Embedded cover art | ❌ | ❌ | ❌ |
+| Sidecar cover art (folder.jpg) | ❌ | ❌ | ❌ |
+
+### Tasks
+
+- [x] **Metadata writing**: Atomic pattern in `metadata/mod.rs`
+- [ ] **Embedded cover art**: Apply same pattern in `cover/embedded.rs`
+- [ ] **Sidecar images**: Apply pattern in `cover/sidecar.rs`
+- [ ] **Retry mechanism**: Configurable retry with backoff for transient failures
+- [ ] **Cleanup stale temps**: On startup, remove orphaned `.tmp` files
+- [ ] **Restore from .bak**: CLI command to restore `.bak` files if found
+
+### Retry Mechanism Design
+
+For transient failures (file locked, network hiccup), retry with exponential backoff:
+
+```rust
+const MAX_RETRIES: u32 = 3;
+const BASE_DELAY_MS: u64 = 100;
+
+async fn with_retry<T, F, Fut>(operation: F) -> Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<T>>,
+{
+    for attempt in 0..MAX_RETRIES {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(e) if is_transient(&e) => {
+                let delay = BASE_DELAY_MS * 2u64.pow(attempt);
+                tokio::time::sleep(Duration::from_millis(delay)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    operation().await // Final attempt
+}
+
+fn is_transient(err: &Error) -> bool {
+    matches!(
+        err.kind(),
+        ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted
+    )
+}
+```
+
+**Retryable errors:**
+
+- `WouldBlock` / `TimedOut` - temporary lock
+- `PermissionDenied` - antivirus scanning (retry once)
+- Network errors for remote fetches
+
+**Non-retryable:**
+
+- `NotFound` - file doesn't exist
+- `InvalidData` - corrupt source
+- `OutOfMemory` / `StorageFull` - resource exhaustion
+
+### Embedded Cover Art Safety
+
+Apply atomic pattern to `cover/embedded.rs`:
+
+```rust
+pub fn embed_cover_art(path: &Path, image_data: &[u8]) -> Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    let bak_path = path.with_extension("bak");
+    
+    // 1. Copy original to tmp
+    fs::copy(path, &tmp_path)?;
+    
+    // 2. Write cover to tmp file
+    let mut tagged = Probe::open(&tmp_path)?.read()?;
+    // ... add picture to tag ...
+    tagged.save_to_path(&tmp_path)?;
+    
+    // 3. Validate tmp (can read, has audio)
+    validate_audio_file(&tmp_path)?;
+    
+    // 4. Atomic swap
+    fs::rename(path, &bak_path)?;
+    match fs::rename(&tmp_path, path) {
+        Ok(_) => { let _ = fs::remove_file(&bak_path); Ok(()) }
+        Err(e) => { let _ = fs::rename(&bak_path, path); Err(e.into()) }
+    }
+}
+```
+
+### Sidecar Image Safety
+
+Apply atomic pattern to `cover/sidecar.rs`:
+
+```rust
+pub fn write_sidecar_cover(folder: &Path, image_data: &[u8]) -> Result<PathBuf> {
+    let target = folder.join("folder.jpg");
+    let tmp_path = folder.join("folder.jpg.tmp");
+    let bak_path = folder.join("folder.jpg.bak");
+    
+    // 1. Write to tmp
+    fs::write(&tmp_path, image_data)?;
+    
+    // 2. Validate (is valid JPEG/PNG)
+    validate_image(&tmp_path)?;
+    
+    // 3. Backup existing (if any)
+    if target.exists() {
+        fs::rename(&target, &bak_path)?;
+    }
+    
+    // 4. Atomic swap
+    match fs::rename(&tmp_path, &target) {
+        Ok(_) => { let _ = fs::remove_file(&bak_path); Ok(target) }
+        Err(e) => { 
+            if bak_path.exists() { let _ = fs::rename(&bak_path, &target); }
+            Err(e.into()) 
+        }
+    }
+}
+```
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/cover/embedded.rs` | Add atomic write pattern to `embed_cover_art()` |
+| `src/cover/sidecar.rs` | Add atomic write pattern to sidecar functions |
+| `src/error.rs` | Add `is_transient()` error classification |
+| `src/lib.rs` or new `src/util/retry.rs` | Shared retry helper |
+
+---
+
 ## Technical Debt: Duplicate Load+Play Paths
 
 **Status**: ✅ Fixed
@@ -1170,7 +1338,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 ### Quick Wins (Low Effort, High Impact)
 
 | Item | Effort | Notes |
-|------|--------|-------|
+| --- | --- | --- |
 | ~~Keyboard: Space for play/pause~~ | ~~Low~~ | ✅ Done |
 | ~~Keyboard: ←/→ for prev/next~~ | ~~Low~~ | ✅ Done |
 | Startup tagline | Low | Fun, adds personality |
@@ -1184,7 +1352,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 ### Medium Effort, High Value
 
 | Item | Effort | Notes |
-|------|--------|-------|
+| --- | --- | --- |
 | ~~All keyboard shortcuts~~ | ~~Medium~~ | ✅ Done (8/9 - global hotkeys deferred) |
 | Empty states | Medium | Better UX for new users |
 | Loading/error states | Medium | Polish across app |
@@ -1193,7 +1361,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 ### Harder But Important
 
 | Item | Effort | Notes |
-|------|--------|-------|
+| --- | --- | --- |
 | Queue reordering (7.7) | Medium | Scoped in 7.7 - keyboard + drag-drop |
 | Context panel | Hard | New UI surface |
 | ~~Metadata fallback chain~~ | ~~Medium~~ | ✅ Done |
@@ -1202,7 +1370,7 @@ Ranked by impact vs effort for deciding what to tackle next.
 ### Lower Priority / Future
 
 | Item | Effort | Notes |
-|------|--------|-------|
+| --- | --- | --- |
 | Global hotkeys | Hard | Platform-specific |
 | Visualizer API cleanup | Low | Only if we extend viz |
 | Service manager unification | Medium | Architectural cleanup |
