@@ -12,7 +12,14 @@
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use crate::enrichment::domain::{AudioFingerprint, EnrichmentError};
+
+/// Windows: CREATE_NO_WINDOW flag to prevent console popup
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Common installation paths for fpcalc on Windows
 #[cfg(windows)]
@@ -37,11 +44,11 @@ fn find_fpcalc() -> Option<&'static str> {
     FPCALC_PATHS
         .iter()
         .find(|&path| {
-            Command::new(path)
-                .arg("-version")
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
+            let mut cmd = Command::new(path);
+            cmd.arg("-version");
+            #[cfg(windows)]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd.output().map(|o| o.status.success()).unwrap_or(false)
         })
         .map(|v| v as _)
 }
@@ -55,9 +62,12 @@ pub fn generate_fingerprint(path: &Path) -> Result<AudioFingerprint, EnrichmentE
         )
     })?;
 
-    let output = Command::new(fpcalc)
-        .arg("-json")
-        .arg(path)
+    let mut cmd = Command::new(fpcalc);
+    cmd.arg("-json").arg(path);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd
         .output()
         .map_err(|e| EnrichmentError::FingerprintError(format!("Failed to run fpcalc: {}", e)))?;
 
@@ -100,9 +110,11 @@ pub fn is_fpcalc_available() -> bool {
 /// Get fpcalc version string (for diagnostics)
 pub fn get_fpcalc_version() -> Option<String> {
     let fpcalc = find_fpcalc()?;
-    Command::new(fpcalc)
-        .arg("-version")
-        .output()
+    let mut cmd = Command::new(fpcalc);
+    cmd.arg("-version");
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
