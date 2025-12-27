@@ -25,12 +25,18 @@ pub struct IdentifiedTrack {
     pub title: Option<String>,
     /// Artist name
     pub artist: Option<String>,
+    /// Album artist (may differ from track artist on compilations)
+    pub album_artist: Option<String>,
     /// Album title
     pub album: Option<String>,
     /// Track number on album
     pub track_number: Option<u32>,
     /// Total tracks on album
     pub total_tracks: Option<u32>,
+    /// Disc number on multi-disc release
+    pub disc_number: Option<u32>,
+    /// Total discs in release
+    pub total_discs: Option<u32>,
     /// Release year
     pub year: Option<i32>,
     /// Track duration
@@ -39,10 +45,14 @@ pub struct IdentifiedTrack {
     pub artist_id: Option<String>,
     /// MusicBrainz release (album) ID  
     pub release_id: Option<String>,
+    /// MusicBrainz release group ID
+    pub release_group_id: Option<String>,
     /// Release type (Album, Single, EP, etc.)
     pub release_type: Option<String>,
     /// Secondary release types (Compilation, Live, Soundtrack, etc.)
     pub secondary_types: Vec<String>,
+    /// Genres/tags from MusicBrainz
+    pub genres: Vec<String>,
 }
 
 /// Source of enrichment data
@@ -99,6 +109,9 @@ impl IdentifiedTrack {
         if self.artist.is_none() {
             self.artist = other.artist.clone();
         }
+        if self.album_artist.is_none() {
+            self.album_artist = other.album_artist.clone();
+        }
         if self.album.is_none() {
             self.album = other.album.clone();
         }
@@ -107,6 +120,12 @@ impl IdentifiedTrack {
         }
         if self.total_tracks.is_none() {
             self.total_tracks = other.total_tracks;
+        }
+        if self.disc_number.is_none() {
+            self.disc_number = other.disc_number;
+        }
+        if self.total_discs.is_none() {
+            self.total_discs = other.total_discs;
         }
         if self.year.is_none() {
             self.year = other.year;
@@ -122,6 +141,12 @@ impl IdentifiedTrack {
         }
         if self.release_id.is_none() {
             self.release_id = other.release_id.clone();
+        }
+        if self.release_group_id.is_none() {
+            self.release_group_id = other.release_group_id.clone();
+        }
+        if self.genres.is_empty() {
+            self.genres = other.genres.clone();
         }
     }
 }

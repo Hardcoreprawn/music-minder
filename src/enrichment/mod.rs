@@ -31,6 +31,10 @@
 //! println!("Title: {:?}, Artist: {:?}", result.track.title, result.track.artist);
 //! ```
 
+/// Default AcoustID application API key for Music Minder.
+/// Users can override this via config file or environment variable.
+pub const DEFAULT_ACOUSTID_API_KEY: &str = "SIwKdLgXuH";
+
 pub mod acoustid;
 pub mod coverart;
 pub mod domain;
