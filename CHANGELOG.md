@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.1.7](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.6...music-minder-v0.1.7) (2025-12-27)
+
+
+### ✨ Features
+
+* **acoustid:** add new domain fields and improve error messages ([cb58a27](https://github.com/Hardcoreprawn/music-minder/commit/cb58a27403ff1eb4f323f46f89418aab72f91c0b))
+* add toast notifications, loading states, and empty states ([5629dc9](https://github.com/Hardcoreprawn/music-minder/commit/5629dc9c76710bc721d8d55914a9cd63c4d7ffb6))
+* alternative album matches for track enrichment ([2870aa5](https://github.com/Hardcoreprawn/music-minder/commit/2870aa58d04e63ea79c1aa4e3af8db73b91ed6eb))
+* **config:** add TOML configuration system ([37bf458](https://github.com/Hardcoreprawn/music-minder/commit/37bf4584b7f831bb2e760cb52403f58ab7d2d7d8))
+* **enrichment:** expand IdentifiedTrack with additional fields ([c0323cf](https://github.com/Hardcoreprawn/music-minder/commit/c0323cf4bbbfad21f8bf08c7b50d178e1f1565df))
+* integrate UI features into state and message handling ([d5e44a1](https://github.com/Hardcoreprawn/music-minder/commit/d5e44a1c217fe096bfb893bf446069970b28c77f))
+* **metadata:** add atomic writes and full metadata support ([70a16c2](https://github.com/Hardcoreprawn/music-minder/commit/70a16c26e1eccf98e21b3eded67999e070263408))
+* **musicbrainz:** extract genres, album artist, and disc info ([a4a9ee4](https://github.com/Hardcoreprawn/music-minder/commit/a4a9ee41b0323cdb83b321e16bacdf3ae96d676c))
+* **player:** metadata fallback chain DB → file tags → filename ([8426d83](https://github.com/Hardcoreprawn/music-minder/commit/8426d835bdf7beb63fcb6e8978d7acbfc4516287))
+* **queue:** add keyboard reordering with Alt+Up/Down (7.7.1) ([6232657](https://github.com/Hardcoreprawn/music-minder/commit/6232657160d0ab30733a8a317b9b9ffbb20ed81b))
+* **queue:** implement shuffle order logic with Fisher-Yates ([135c911](https://github.com/Hardcoreprawn/music-minder/commit/135c911e8a92d0a284d27ef4f020793307512edc))
+* startup performance optimization (Phase 1 & 2) ([02f5253](https://github.com/Hardcoreprawn/music-minder/commit/02f525383f07f9f95009c09529143c7789201330))
+* **ui:** add grip handle icon to queue items (7.7.2) ([5f25c06](https://github.com/Hardcoreprawn/music-minder/commit/5f25c06bd1754bcde1338d29e0202b556e3a4568))
+* **ui:** add track detail modal for single-track enrichment ([45abb94](https://github.com/Hardcoreprawn/music-minder/commit/45abb947616aef865620bf35e47124ca75f132f4))
+* **ui:** implement queue drag-and-drop reordering (7.7.2-7.7.3) ([7ea453b](https://github.com/Hardcoreprawn/music-minder/commit/7ea453b8f953735dcd6ed6c31e49f7cc7509a153))
+* **ui:** keyboard navigation with Enter/Delete shortcuts ([a1cf158](https://github.com/Hardcoreprawn/music-minder/commit/a1cf1586522fa53931b6515569c062a5cdfdd3dd))
+
+
+### 🐛 Bug Fixes
+
+* **ci:** Split release workflow for reliable installer builds ([f051548](https://github.com/Hardcoreprawn/music-minder/commit/f0515488320d4d31e2d85b57a0c13e470378032a))
+* **queue:** improve drag-drop origin tracking ([995faeb](https://github.com/Hardcoreprawn/music-minder/commit/995faeb21aa49c3aad373cdec50c25f78a41a046))
+* **windows:** prevent console popup when running fpcalc ([35a990a](https://github.com/Hardcoreprawn/music-minder/commit/35a990ad6db173059761b1f8495bdefefe6154c6))
+
+
+### ♻️ Refactoring
+
+* **ui:** consolidate icons to char-based system with easter eggs ([e209b2d](https://github.com/Hardcoreprawn/music-minder/commit/e209b2de450be529bd0860c204a34db80ffcddb8))
+
+
+### 📚 Documentation
+
+* add atomic write pattern and safe file writing section ([4d62888](https://github.com/Hardcoreprawn/music-minder/commit/4d62888c2141df1eaff926ace7cafb37fda4ffbe))
+* add comprehensive 7.7 Queue Reordering feature spec ([76222e3](https://github.com/Hardcoreprawn/music-minder/commit/76222e371de9922bb4b4a25b08ead5de939a7be4))
+* **roadmap:** add Phase 8.25, Phase 11, and deferred items tracking ([0b5e53b](https://github.com/Hardcoreprawn/music-minder/commit/0b5e53b99824beb574b04ba4722fff0751c9026a))
+* update roadmap with completed UI polish features ([2b87829](https://github.com/Hardcoreprawn/music-minder/commit/2b87829c84a9dbeebfcfb12f22504b4b3c19efd6))
+
 ## [0.1.6](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.5...music-minder-v0.1.6) (2025-12-22)
 
 
