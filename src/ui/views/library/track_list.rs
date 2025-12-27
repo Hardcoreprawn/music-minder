@@ -112,14 +112,58 @@ pub fn track_table_header(state: &LoadedState) -> Element<'_, Message> {
         row![
             // Spacer for play/queue buttons
             Space::with_width(Length::Fixed(70.0)),
-            // Quality column (non-sortable for now)
-            container(
-                text("Q")
-                    .size(typography::SIZE_TINY)
-                    .color(color::TEXT_MUTED)
+            // Quality column (non-sortable for now) with tooltip
+            tooltip(
+                container(
+                    text("Q")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED)
+                )
+                .width(Length::Fixed(20.0))
+                .center_x(Length::Fixed(20.0)),
+                column![
+                    text("Quality Score").size(typography::SIZE_SMALL),
+                    text("Metadata completeness (0-100%)").size(typography::SIZE_TINY),
+                    Space::with_height(spacing::XS),
+                    text("★ 90%+ Excellent")
+                        .size(typography::SIZE_TINY)
+                        .color(color::SUCCESS),
+                    text("● 70%+ Good")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_SECONDARY),
+                    text("◐ 50%+ Fair - some issues")
+                        .size(typography::SIZE_TINY)
+                        .color(color::WARNING),
+                    text("○ <50% Needs attention")
+                        .size(typography::SIZE_TINY)
+                        .color(color::ERROR),
+                    Space::with_height(spacing::XS),
+                    text("Deductions:")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED),
+                    text("-10 No MusicBrainz ID")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED),
+                    text("-10 Never fingerprinted")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED),
+                    text("-5 Missing year/track#")
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_MUTED),
+                ]
+                .spacing(2),
+                tooltip::Position::Bottom,
             )
-            .width(Length::Fixed(20.0))
-            .center_x(Length::Fixed(20.0)),
+            .gap(spacing::XS)
+            .style(|_| container::Style {
+                background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
+                border: iced::Border {
+                    color: color::BORDER_SUBTLE,
+                    width: 1.0,
+                    radius: radius::SM.into(),
+                },
+                ..Default::default()
+            }),
             // Title column
             sortable_header("Title", SortColumn::Title, state, 3),
             // Artist column
@@ -365,6 +409,13 @@ fn track_row(
         .width(Length::Fixed(60.0))
         .center_y(Length::Fixed(virt::TRACK_ROW_HEIGHT))
         .center_x(Length::Fixed(60.0)),
+        // Context menu button (opens track detail for now, will become dropdown)
+        button(icon_sized(icons::ELLIPSIS_V, typography::SIZE_SMALL).color(color::TEXT_MUTED))
+            .padding([spacing::XS, spacing::SM])
+            .style(theme::button_ghost)
+            .on_press(Message::TrackDetailOpen(idx)),
+        // Right padding to match left side and avoid scrollbar
+        Space::with_width(spacing::SM),
     ]
     .spacing(spacing::SM)
     .align_y(iced::Alignment::Center);

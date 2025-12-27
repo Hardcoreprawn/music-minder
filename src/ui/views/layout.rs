@@ -12,6 +12,7 @@ use super::enrich::enrich_pane;
 use super::library::library_pane;
 use super::player::player_controls;
 use super::settings::settings_pane;
+use super::track_detail::track_detail_modal;
 
 /// Main loaded state view - integrated layout with sidebar
 pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
@@ -37,9 +38,17 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
             ..Default::default()
         });
 
-    column![row![sidebar, content_area].height(Length::Fill), player_bar,]
-        .spacing(0)
-        .into()
+    let base_layout: Element<'_, Message> =
+        column![row![sidebar, content_area].height(Length::Fill), player_bar,]
+            .spacing(0)
+            .into();
+
+    // If track detail modal is open, overlay it
+    if let Some(modal) = track_detail_modal(s) {
+        iced::widget::stack![base_layout, modal].into()
+    } else {
+        base_layout
+    }
 }
 
 /// Watcher status indicator - shows if background scanning is active
@@ -485,30 +494,51 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
             })
             .into()
     } else {
-        container(
-            column![
-                icon_sized(icons::MUSIC, 64).color(color::TEXT_MUTED),
-                text("No Cover")
-                    .size(typography::SIZE_SMALL)
-                    .color(color::TEXT_MUTED),
-            ]
-            .align_x(iced::Alignment::Center)
-            .spacing(spacing::SM),
-        )
-        .width(Length::Fixed(cover_size))
-        .height(Length::Fixed(cover_size))
-        .center_x(Length::Fixed(cover_size))
-        .center_y(Length::Fixed(cover_size))
-        .style(|_| container::Style {
-            background: Some(iced::Background::Color(color::SURFACE_ELEVATED)),
-            border: iced::Border {
-                color: color::BORDER_SUBTLE,
-                width: 1.0,
-                radius: 8.0.into(),
-            },
-            ..Default::default()
-        })
-        .into()
+        // Easter egg placeholder - fun messages when no cover art
+        let (icon, message, secondary) = get_easter_egg(s.easter_egg_index, s.easter_egg_clicks);
+
+        let content = column![
+            icon_sized(icon, 72).color(color::TEXT_MUTED),
+            Space::with_height(spacing::SM),
+            text(message)
+                .size(typography::SIZE_BODY)
+                .color(color::TEXT_MUTED),
+            text(secondary)
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_MUTED),
+        ]
+        .align_x(iced::Alignment::Center)
+        .spacing(spacing::XS);
+
+        // Center the content within the button
+        let centered_content = container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill);
+
+        // Make it clickable for interactive easter eggs
+        button(centered_content)
+            .width(Length::Fixed(cover_size))
+            .height(Length::Fixed(cover_size))
+            .style(move |_, status| {
+                let bg = match status {
+                    button::Status::Hovered => color::SURFACE_HOVER,
+                    _ => color::SURFACE_ELEVATED,
+                };
+                button::Style {
+                    background: Some(iced::Background::Color(bg)),
+                    text_color: color::TEXT_MUTED,
+                    border: iced::Border {
+                        color: color::BORDER_SUBTLE,
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .on_press(Message::PlaceholderClicked)
+            .into()
     };
 
     // Track info section (right of cover art)
@@ -669,9 +699,21 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                         .map(|d| d.index == i)
                         .unwrap_or(false);
 
-                    // Check if this is the drop target position
-                    let is_drop_target =
-                        s.queue_drag.dragging.is_some() && s.queue_drag.drop_target == Some(i);
+                    // Check if drop indicator should show ABOVE or BELOW this item
+                    // When moving UP (target < origin): show indicator ABOVE target
+                    // When moving DOWN (target > origin): show indicator BELOW target
+                    let (show_indicator_above, show_indicator_below) =
+                        if let Some(ref drag) = s.queue_drag.dragging {
+                            let target = s.queue_drag.drop_target;
+                            let moving_down = target.map(|t| t > drag.index).unwrap_or(false);
+                            let moving_up = target.map(|t| t < drag.index).unwrap_or(false);
+
+                            let above = moving_up && target == Some(i);
+                            let below = moving_down && target == Some(i);
+                            (above, below)
+                        } else {
+                            (false, false)
+                        };
 
                     // Priority: keyboard selection > current playing > alternating
                     // Dimmed if being dragged
@@ -741,7 +783,7 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                         .style(theme::button_ghost)
                         .on_press(Message::QueueRemove(i));
 
-                    // Make the row clickable to select and set keyboard focus
+                    // Make the row clickable to jump to that track
                     let track_btn = button(
                         row![
                             container(index_widget).width(Length::Fixed(24.0)),
@@ -763,12 +805,12 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                             ..Default::default()
                         }
                     })
-                    .on_press(Message::QueueSelectIndex(i));
+                    .on_press(Message::QueueJumpTo(i));
 
                     // Wrap grip handle in a container for consistent sizing
                     let grip_container = container(grip_handle)
                         .width(Length::Fixed(16.0))
-                        .center_y(Length::Fill);
+                        .padding([spacing::XS, 0]);
 
                     let queue_row = row![
                         grip_container,
@@ -778,16 +820,23 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
                     ]
                     .align_y(iced::Alignment::Center);
 
-                    // Add drop indicator line above drop target
-                    if is_drop_target {
-                        let drop_line =
-                            container(Space::with_height(2))
-                                .width(Length::Fill)
-                                .style(|_| container::Style {
-                                    background: Some(iced::Background::Color(color::PRIMARY)),
-                                    ..Default::default()
-                                });
-                        column![drop_line, queue_row].spacing(0).into()
+                    // Add drop indicator line at the appropriate position
+                    // Shows WHERE the item will land after drop
+                    let drop_line = || {
+                        container(Space::with_height(2))
+                            .width(Length::Fill)
+                            .style(|_| container::Style {
+                                background: Some(iced::Background::Color(color::PRIMARY)),
+                                ..Default::default()
+                            })
+                    };
+
+                    if show_indicator_above {
+                        // Moving UP: indicator above target shows where item lands
+                        column![drop_line(), queue_row].spacing(0).into()
+                    } else if show_indicator_below {
+                        // Moving DOWN: indicator below target shows where item lands
+                        column![queue_row, drop_line()].spacing(0).into()
                     } else {
                         queue_row.into()
                     }
@@ -848,4 +897,61 @@ fn now_playing_pane(s: &LoadedState) -> Element<'_, Message> {
     .padding(spacing::LG)
     .height(Length::Fill)
     .into()
+}
+/// Get easter egg content for the empty album art placeholder
+/// Returns (icon, main_message, secondary_message)
+fn get_easter_egg(index: usize, clicks: u32) -> (char, &'static str, &'static str) {
+    // Check for Christmas season (Dec 20-26)
+    let is_christmas = {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        // Rough check: December 20-26 any year
+        let day_of_year = (now / 86400) % 365;
+        (354..=360).contains(&day_of_year) // Approximate Dec 20-26
+    };
+
+    // Interactive click-based messages
+    if clicks > 0 {
+        return match clicks {
+            1 => (icons::HAND_POINTER, "Oh, hello!", ""),
+            2 => (icons::FACE_SMILE, "Hi again!", ""),
+            3 => (icons::FACE_GRIN, "You're persistent!", ""),
+            4 => (icons::HEART, "I like you too", ""),
+            5 => (icons::STAR, "Keep going...", ""),
+            6 => (icons::WAND_SPARKLES, "Almost there!", ""),
+            7 => (icons::FIRE, "So close!", ""),
+            8 => (icons::ROCKET, "3... 2... 1...", ""),
+            9 => (icons::GIFT, "🎁 New easter egg!", "Click once more!"),
+            _ => (icons::MUSIC, "???", ""),
+        };
+    }
+
+    // Christmas special
+    if is_christmas {
+        return (icons::GIFT, "Happy Holidays!", "🎄 🎁 ❄️");
+    }
+
+    // Regular rotation of easter eggs
+    match index % 8 {
+        0 => (
+            icons::COMPACT_DISC,
+            "Insert disc here",
+            "Side A recommended",
+        ),
+        1 => (
+            icons::RECORD_VINYL,
+            "Vinyl not included",
+            "Imagination required",
+        ),
+        2 => (icons::RADIO, "Tuning in...", "Stand by"),
+        3 => (icons::HEADPHONES, "Cover band", "couldn't make it"),
+        4 => (icons::GUITAR, "Album art", "on tour"),
+        5 => (icons::DRUM, "Artwork loading...", "Since 1983"),
+        6 => (icons::MICROPHONE, "This space for rent", "Contact manager"),
+        7 => (icons::MUSIC, "No cover art", "Click me!"),
+        _ => (icons::MUSIC, "No Cover", ""),
+    }
 }

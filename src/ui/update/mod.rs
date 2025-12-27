@@ -20,6 +20,7 @@ mod player;
 mod scan;
 mod search;
 mod selection;
+mod track_detail;
 mod watcher;
 
 use iced::Task;
@@ -39,6 +40,7 @@ pub use player::handle_player;
 pub use scan::handle_scan;
 pub use search::handle_search_filter;
 pub use selection::handle_selection;
+pub use track_detail::handle_track_detail;
 pub use watcher::handle_watcher;
 
 /// Helper to load tracks from database

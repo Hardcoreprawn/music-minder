@@ -68,8 +68,8 @@ pub struct QueueDragState {
 pub struct DragInfo {
     /// Original index of the dragged item in the queue
     pub index: usize,
-    /// Y position at drag start (for calculating drag delta)
-    pub origin_y: f32,
+    /// Y position at drag start (captured on first move event)
+    pub origin_y: Option<f32>,
     /// Current cursor Y position
     pub current_y: f32,
     /// Snapshot of shuffle state at drag start
@@ -223,6 +223,13 @@ pub struct LoadedState {
     // Queue drag-and-drop state
     #[allow(dead_code)] // Will be used when drag-drop UI is fully implemented
     pub queue_drag: QueueDragState,
+
+    // Easter egg state for empty album art placeholder
+    pub easter_egg_index: usize,
+    pub easter_egg_clicks: u32,
+
+    // Track detail modal state
+    pub track_detail: TrackDetailState,
 }
 
 impl LoadedState {
@@ -316,6 +323,8 @@ impl LoadedState {
 pub struct EnrichmentState {
     /// AcoustID API key
     pub api_key: String,
+    /// Whether the API key has been saved (for UI feedback)
+    pub api_key_saved: bool,
     /// Currently selected track index (if any)
     pub selected_track: Option<usize>,
     /// Whether we're currently identifying a track
@@ -326,6 +335,42 @@ pub struct EnrichmentState {
     pub last_error: Option<String>,
     /// Whether fpcalc is available
     pub fpcalc_available: bool,
+}
+
+/// State for track detail modal view
+#[derive(Default)]
+pub struct TrackDetailState {
+    /// Track index being viewed (into LoadedState.tracks)
+    pub track_index: Option<usize>,
+    /// Fresh metadata read from the file (may differ from DB if changed)
+    pub file_metadata: Option<crate::metadata::TrackMetadata>,
+    /// Full metadata from file (all fields)
+    pub full_metadata: Option<crate::metadata::FullMetadata>,
+    /// File format info
+    pub format_info: Option<FileFormatInfo>,
+    /// Whether we're currently identifying the track
+    pub is_identifying: bool,
+    /// Identification result (if any)
+    pub identification: Option<enrichment::TrackIdentification>,
+    /// Error message (if identification failed)
+    pub error: Option<String>,
+    /// Whether tags were recently written
+    pub tags_written: bool,
+}
+
+/// Audio file format information
+#[derive(Debug, Clone)]
+pub struct FileFormatInfo {
+    /// File extension (mp3, flac, etc.)
+    pub extension: String,
+    /// Bitrate if available
+    pub bitrate: Option<u32>,
+    /// Sample rate if available
+    pub sample_rate: Option<u32>,
+    /// Channels (1=mono, 2=stereo)
+    pub channels: Option<u8>,
+    /// Whether lossless format
+    pub is_lossless: bool,
 }
 
 /// State for the enrichment pane (batch operations)

@@ -63,6 +63,8 @@ pub enum Message {
 
     // Enrichment messages
     EnrichmentApiKeyChanged(String),
+    EnrichmentApiKeySave,  // Save API key to database
+    EnrichmentApiKeySaved, // API key was saved successfully
     EnrichmentTrackSelected(usize),
     EnrichmentIdentifyPressed,
     EnrichmentIdentifyResult(Result<enrichment::TrackIdentification, String>),
@@ -166,4 +168,25 @@ pub enum Message {
 
     PlaySelected,            // Play the selected track (Enter key)
     RemoveSelectedFromQueue, // Remove selected from queue (Delete key)
+
+    // Easter egg messages
+    PlaceholderClicked, // User clicked the empty album art placeholder
+
+    // Track detail messages
+    TrackDetailOpen(usize), // Open detail view for track at index
+    TrackDetailClose,       // Close detail view
+    TrackDetailIdentify,    // Start identification for detailed track
+    TrackDetailIdentifyResult(Result<enrichment::TrackIdentification, String>),
+    TrackDetailWriteTags, // Write identified metadata to file
+    TrackDetailWriteResult(Result<usize, String>),
+    TrackDetailRefresh, // Refresh current file's metadata from disk
+    TrackDetailRefreshed(
+        Result<
+            (
+                crate::metadata::TrackMetadata,
+                crate::metadata::FullMetadata,
+            ),
+            String,
+        >,
+    ),
 }

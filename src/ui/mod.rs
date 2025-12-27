@@ -144,6 +144,14 @@ impl MusicMinder {
             Message::ToggleOrganizeSection => {
                 s.organize_collapsed = !s.organize_collapsed;
             }
+            Message::PlaceholderClicked => {
+                s.easter_egg_clicks += 1;
+                // After 10 clicks, cycle to the next easter egg
+                if s.easter_egg_clicks >= 10 {
+                    s.easter_egg_index = (s.easter_egg_index + 1) % 8;
+                    s.easter_egg_clicks = 0;
+                }
+            }
 
             // Scroll updates
             Message::ScrollChanged(v) => {
@@ -204,6 +212,8 @@ impl MusicMinder {
 
             // Enrichment messages (single track - Settings pane)
             Message::EnrichmentApiKeyChanged(_)
+            | Message::EnrichmentApiKeySave
+            | Message::EnrichmentApiKeySaved
             | Message::EnrichmentTrackSelected(_)
             | Message::EnrichmentIdentifyPressed
             | Message::EnrichmentIdentifyResult(_)
@@ -303,6 +313,18 @@ impl MusicMinder {
             | Message::PlaySelected
             | Message::RemoveSelectedFromQueue => {
                 return update::handle_selection(s, message);
+            }
+
+            // Track detail messages
+            Message::TrackDetailOpen(_)
+            | Message::TrackDetailClose
+            | Message::TrackDetailIdentify
+            | Message::TrackDetailIdentifyResult(_)
+            | Message::TrackDetailWriteTags
+            | Message::TrackDetailWriteResult(_)
+            | Message::TrackDetailRefresh
+            | Message::TrackDetailRefreshed(_) => {
+                return update::handle_track_detail(s, message);
             }
 
             // Keyboard shortcuts
