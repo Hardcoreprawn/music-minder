@@ -10,8 +10,7 @@
 2. **It Just Works**: Scan a folder, press play. No cloud accounts, no subscriptions.
 3. **Retro Soul, Modern Tech**: Winamp's spirit with 2024's engineering.
 4. **Native & Fast**: No Electron. No web views. Pure Rust performance.
-5. **Learning Project**: A playground for exploring Rust, audio, and UI.
-6. **CLI-First, GUI-Second**: Every feature works from the command line first.
+5. **CLI-First, GUI-Second**: Every feature works from the command line first.
 
 ### The Winamp DNA
 
@@ -20,9 +19,363 @@ What made Winamp special:
 - **Instant startup** — Ready before you blink
 - **Tiny footprint** — Runs on anything
 - **Visualization** — Mesmerizing spectrum analyzers
-- **Skins** — Express yourself (future goal)
 - **Global hotkeys** — Control from anywhere
 - **"It really whips the llama's ass"** — Personality and fun
+
+---
+
+## Current Status: v0.1.7
+
+**207 tests passing** | **0 clippy warnings** | **Alternative Matches UI complete**
+
+### ✅ Completed Phases (1-8.5) + Alternative Matches UI
+
+| Phase | Features |
+| ------- | ---------- |
+| **1. Foundation** | Rust 2024, Iced 0.13, SQLite, async runtime |
+| **2. Scanning** | Recursive scanner (MP3/FLAC/OGG/WAV/M4A), metadata extraction, virtualized library |
+| **3. Organization** | Pattern-based file moving, preview, undo support |
+| **4. Enrichment** | AcoustID fingerprinting, MusicBrainz lookup, Cover Art Archive |
+| **5. CLI** | `scan`, `list`, `identify`, `enrich`, `organize`, `write-tags`, `check`, `watch`, `diagnose` |
+| **6. Playback** | Audio playback, visualization (spectrum/waveform/VU), cover art display |
+| **7. Library UX** | Search/filter, column sorting, queue management, keyboard shortcuts, file watcher |
+| **8. GUI Enrichment** | Batch enrichment pane, progress tracking, write tags button |
+| **8.5 Library Gardener** | Quality scoring, verification flags, background maintenance |
+| **10. UI Polish** | Theme system, player bar, sidebar, settings pane, enrich pane styling |
+| **2.1 Alternative Matches** | Multi-album selection, smart matching by path/metadata, expandable UI |
+
+---
+
+## 🚧 Current Sprint: Polish Release (v0.2.0)
+
+### Priority 1: User Feedback (Quick Wins)
+
+These are missing UX essentials that make the app feel unfinished.
+
+#### 1.1 Toast Notifications ✅
+
+Non-blocking feedback for async operations.
+
+- [x] Toast component (horizontal bar at bottom, auto-dismiss after 4s)
+- [x] Success states: "Tags written", "Scan complete", "Organized X files"
+- [x] Error states: "Failed to write tags"
+- [x] Warning states: "Scan stopped", "Low confidence matches"
+- [x] Info states: Batch enrichment results
+
+**Files:** `src/ui/views/toast.rs`, `src/ui/state.rs`, `src/ui/mod.rs`, `src/ui/update/*.rs`
+
+#### 1.2 Empty States ✅
+
+Helpful messages when lists are empty.
+
+- [x] Library: "No tracks in library. Scan a folder to get started!"
+- [x] Library search: "No results for '{query}'"
+- [x] Queue: "Queue is empty — add tracks from the Library"
+- [x] Enrich selection: "No tracks selected. Add tracks from the Library"
+
+**Files:** `src/ui/views/library/track_list.rs`, `src/ui/views/layout.rs`, `src/ui/views/enrich/selection.rs`
+
+#### 1.3 Loading States ✅
+
+Visual feedback during async operations with fun, personality-filled messages.
+
+- [x] Loading module with `LoadingContext` enum (Library, Scanning, Identifying, etc.)
+- [x] Serious messages: "Loading library...", "Generating audio fingerprint..."
+- [x] Silly messages (SimCity/Winamp inspired): "Reticulating splines...", "Whipping the llama's ass..."
+- [x] Message rotation: alternates serious/silly every ~3 seconds
+- [x] Spinner animation with context-appropriate icons
+- [x] Library loading state with rotating messages
+- [x] Scan progress with fun messages + file count
+- [x] Enrich progress with fun messages
+
+**Files:** `src/ui/views/loading.rs` (new), `src/ui/views/library/track_list.rs`, `src/ui/views/library/mod.rs`, `src/ui/views/enrich/mod.rs`
+
+---
+
+### Priority 2: Alternative Matches UI ✅
+
+**COMPLETED** - When enrichment returns multiple album matches, users can now review and select the correct version.
+
+#### Implementation Summary
+
+**Data Model** (`src/ui/state.rs`):
+
+- `AlternativeMatch` struct with album, year, confidence, release_type, and full identification
+- Extended `EnrichmentResult` with `alternatives`, `show_alternatives`, and `selected_alternative` fields
+
+**Service Layer** (`src/enrichment/service.rs`):
+
+- New `identify_track_with_alternatives()` method that:
+  - Scores all matches using smart path/metadata hints
+  - Returns best + 2-3 alternatives per session
+  - Enriches all with MusicBrainz (respecting rate limits)
+
+**State Management** (`src/ui/update/enrichment.rs`):
+
+- New message `EnrichBatchIdentifyWithAlts` carries best + alternatives
+- `EnrichToggleAlternatives(idx)` - expand/collapse alternatives list
+- `EnrichSelectAlternative(result_idx, alt_idx)` - switch to different album
+- Smart selection: auto-picks best match, considers folder names and file metadata
+
+**UI Component** (`src/ui/views/enrich/results.rs`):
+
+- Review button shows "▼" when alternatives exist, "▲" when expanded
+- Click to expand shows alternatives with confidence scores (color-coded)
+- "Select" button on each alternative switches the identification
+- Smooth expand/collapse with nested panel styling
+
+#### User Flow
+
+```text
+Identify → Best match + alternatives displayed
+         → Click "Review ▼" → Alternatives expand
+         → Click "Select" on different album → Updates display
+         → Click "Write" → Writes selected version's metadata
+```
+
+#### Smart Matching Logic
+
+- Boosts matches where album name appears in folder path
+- Boosts matches aligning with existing file metadata
+- Penalizes undesirable types (karaoke, remixes) unless expected
+- Prioritizes original studio albums
+
+#### Session-Only Storage
+
+- Alternatives generated only during batch identification
+- Kept to 2-3 best options
+- Discarded when batch finishes (no persistence)
+- Recreated fresh on next identify cycle
+
+**Files:** `src/ui/state.rs`, `src/enrichment/service.rs`, `src/ui/views/enrich/results.rs`, `src/ui/update/enrichment.rs`, `src/ui/messages.rs`, `src/ui/mod.rs`
+
+**Tests:** 207 tests passing, all enrichment tests validated
+
+---
+
+### Priority 3: Startup Performance ⚡ Phase 1-2 Complete
+
+"Instant startup — ready before you blink" is core to the Winamp DNA. Current startup is sluggish.
+
+#### Phase 1: Deferred Initialization & Instrumentation ✅ COMPLETE
+
+- [x] Add detailed timing instrumentation to startup path
+- [x] Defer audio device enumeration to background task
+- [x] Parallelize DB, diagnostics, and device enumeration tasks
+- [x] Add tracing to database and track loading operations
+- [x] Compile and validate changes
+
+See [STARTUP_OPTIMIZATION_PHASE_1.md](STARTUP_OPTIMIZATION_PHASE_1.md) for implementation details.
+
+#### Phase 2: Progressive Library Loading ✅ COMPLETE
+
+- [x] Add `get_tracks_paginated(limit, offset)` database function
+- [x] Add `count_tracks()` to determine total library size
+- [x] Modify UI to load first batch of tracks (200) immediately
+- [x] Load remaining tracks in background after initial batch
+- [x] Test with large libraries (11k+ tracks verified)
+
+**Results (11,638 track library):**
+
+- Initial 200 tracks loaded in **14.5ms** (UI responsive immediately)
+- Remaining 11,438 tracks loaded in **118.3ms** (background)
+- Total time: ~133ms vs previous ~58ms for all-at-once
+
+**Implementation:**
+
+- New messages: `TracksLoadedInitial`, `TracksLoadedMore`
+- New state field: `tracks_total` for progress tracking
+- Progressive loading tasks: `load_tracks_initial_task`, `load_tracks_remaining_task`
+
+#### Phase 3: Further Optimization (Future)
+
+- [ ] Profile startup with `cargo build --timings` and runtime tracing
+- [ ] Lazy player initialization (defer audio until first play)
+- [ ] Demand-based loading (load more on scroll for very large libraries)
+- [ ] Measure time-to-first-paint vs time-to-interactive
+
+#### Current Performance Metrics
+
+| Metric | Before | After | Notes |
+| -------- | ------- | ------ | ------- |
+| Startup to GUI ready | ~2-3s | ~2ms | Time to `application()` call |
+| Database init | ~3.5ms | ~3.5ms | Already fast |
+| Initial tracks visible | ~58ms | ~14.5ms | 200 tracks immediately |
+| Full library loaded | ~58ms | ~133ms | Split across 2 loads |
+| UI responsive | After full load | After 14.5ms | User can interact immediately |
+
+#### Likely Remaining Culprits
+
+| Area | Issue | Status |
+| ------ | ------- | -------- |
+| Audio device enumeration | CPAL enumerates synchronously in Player::new() | Could defer player init |
+| Iced window creation | ~1s between main() and first paint | Framework limitation |
+| Font/theme loading | Iced resource loading | Embedded fonts help |
+
+**Files:** `src/main.rs`, `src/ui/mod.rs`, `src/ui/update/mod.rs`, `src/ui/update/db.rs`, `src/ui/messages.rs`, `src/ui/state.rs`, `src/db/mod.rs`
+
+---
+
+### Priority 4: Async & Throughput Optimization
+
+Make scanning and external APIs as fast as possible through proper concurrency.
+
+#### 4.1 Scanning Speed
+
+Current: Sequential file processing. Goal: Maximize disk throughput.
+
+| Task | Description |
+| ---- | ----------- |
+| [ ] Profile current scanner | Measure time in I/O vs metadata parsing vs DB writes |
+| [ ] Parallel file discovery | Use `rayon` or `tokio::spawn_blocking` for directory walks |
+| [ ] Batch DB inserts | Collect 50-100 tracks, single transaction instead of per-file |
+| [ ] Streaming metadata reads | Start processing files before walk completes |
+| [ ] Progress granularity | Report files/second, show ETA |
+
+**Current architecture:** `scanner/mod.rs` uses `walkdir` synchronously, sends batches via channel.
+
+**Target:** 1000+ files/second on SSD (currently ~200-500 depending on metadata complexity).
+
+#### 4.2 External API Throughput
+
+AcoustID, MusicBrainz, and CoverArt Archive all have rate limits. Maximize throughput within limits.
+
+| API | Rate Limit | Current | Optimization |
+| --- | ---------- | ------- | ------------ |
+| AcoustID | 3 req/s | Sequential, 500ms delay | Pipeline: fingerprint while waiting for previous response |
+| MusicBrainz | 1 req/s | On-demand | Cache responses, batch lookups where possible |
+| CoverArt Archive | 1 req/s | On-demand | Pre-fetch during enrichment, aggressive caching |
+
+**Tasks:**
+
+- [ ] Pipeline fingerprinting with lookups (fingerprint track N+1 while waiting for API response for track N)
+- [ ] Connection pooling for HTTP client (reuse TCP connections)
+- [ ] Request coalescing: batch MusicBrainz lookups by release group
+- [ ] Smarter retry: exponential backoff, circuit breaker for API outages
+- [ ] Offline mode: queue requests when API unavailable, process when back
+
+#### 4.3 Async Best Practices Audit
+
+Ensure we're not blocking the async runtime anywhere.
+
+| Area | Check |
+| ---- | ----- |
+| [ ] File I/O | All file reads via `spawn_blocking`, never in async context |
+| [ ] Metadata parsing | `lofty`/`symphonia` calls wrapped in `spawn_blocking` |
+| [ ] Database | All SQLx queries are truly async (no blocking calls) |
+| [ ] UI updates | Heavy computations don't block the render loop |
+| [ ] Thread pool sizing | `spawn_blocking` pool sized appropriately for workload |
+
+**Files:** `src/scanner/mod.rs`, `src/enrichment/service.rs`, `src/metadata/mod.rs`
+
+---
+
+### Priority 5: Queue Drag-Drop Polish
+
+Keyboard reordering works (Alt+↑/↓). Drag-drop needs finishing touches:
+
+- [x] Keyboard reordering (Alt+↑/↓)
+- [x] Drag handle UI (grip icon)
+- [x] Basic drag state + drop target calculation
+- [x] Visual feedback (dimming, cursor)
+- [ ] Auto-scroll at edges during drag
+- [ ] Cancel drag on focus loss / Escape / right-click
+
+**Files:** `src/ui/views/player.rs`, `src/ui/update/selection.rs`, `src/ui/streams.rs`
+
+---
+
+## 📋 Backlog
+
+### Phase 9: Audio Features
+
+| Feature | Complexity | Notes |
+| --------- | ------------ | ------- |
+| Gapless playback | Medium | Pre-buffer next track, seamless transition |
+| Equalizer (10-band) | Medium | Rock/Pop/Jazz/Classical presets |
+| ReplayGain | Medium | Volume normalization scanning |
+| Crossfade | Medium | 0-12s configurable transitions |
+| Playlist save/load | Low | .m3u8 format support |
+
+### Phase 10: Remaining UI Polish
+
+| Feature | Complexity | Notes |
+| ------- | ---------- | ----- |
+| Context panel (slide-in) | Medium | Bulk selection actions, before/after preview |
+| Smooth transitions | Low | 100-200ms for state changes |
+| Focus indicators | Low | Keyboard navigation support |
+| Startup tagline | Low | Random "It really whips..." messages |
+| Easter egg theme | Low | Hidden classic green Winamp unlock |
+
+### Phase 11: Streaming Integration (Future Vision)
+
+Bridge your local library with streaming services for discovery:
+
+- **Taste analysis**: Genre/mood/era distribution from your collection
+- **Spotify recommendations**: Seeded by your actual music taste, not just streaming history
+- **Quality routing**: Always play the best available version (local FLAC vs streaming)
+- **AI DJ**: Playlists built from "70% owned, 30% discovery"
+
+### Library Features (Backlog)
+
+- Duplicate detection
+- Bulk metadata editing
+- Album view with grid layout
+- Artist/Album grouping (collapsible sections)
+- Smart playlists (rule-based auto-generation)
+
+### Integration (Backlog)
+
+- Global hotkeys (platform-specific implementation)
+- Lyrics display (external API integration)
+- Last.fm / ListenBrainz scrobbling
+- Discord Rich Presence
+
+---
+
+## 🔧 Technical Debt
+
+### Medium Priority
+
+| Item | Notes |
+| ---- | ----- |
+| Atomic writes for cover art | `embed_cover_art()` and sidecar writes need atomic write-swap pattern |
+| Retry mechanism | Exponential backoff for file locks, network timeouts |
+| Cleanup stale temps | Remove orphaned `.tmp` files on startup |
+
+### Low Priority
+
+| Item | Notes |
+| ----- | ----- |
+| Watcher refactor | Migrate from Iced subscription to init-time start pattern |
+| Duration nullability | Make `NOT NULL DEFAULT 0` (currently `Option<i64>`) |
+| Dead code audit | 19 `#[allow(dead_code)]` annotations, mostly intentional |
+
+---
+
+## CLI Reference
+
+```bash
+# Library management
+music-minder scan <path>           # Scan directory for music
+music-minder list                  # List all tracks in database
+music-minder watch <path>          # Watch directory for changes
+
+# Metadata enrichment
+music-minder identify <file>       # Fingerprint + identify track
+music-minder enrich <path>         # Batch metadata enrichment
+music-minder write-tags <file>     # Write metadata to file tags
+
+# File operations
+music-minder organize <path>       # Organize files by pattern
+music-minder check [path]          # Check file health status
+
+# Diagnostics
+music-minder check-tools           # Verify fpcalc is installed
+music-minder diagnose              # Audio system diagnostics
+```
+
+**Common flags:** `--dry-run`, `--verbose`, `--json`, `--quiet`
 
 ---
 
@@ -30,1348 +383,38 @@ What made Winamp special:
 
 ### CLI-First Development
 
-**Every feature should be testable from the command line.** This enables:
+Every feature should be testable from the command line:
 
-- **AI-assisted development**: Copilot/agents can run commands, see outputs, iterate
-- **Debuggability**: Isolate issues without GUI complexity
-- **Composability**: Chain commands, script workflows, automate testing
-- **Separation of concerns**: Core logic is decoupled from UI
-
-**Pattern:**
-
-```text
 1. Build the feature as a library function
-2. Expose it via CLI command with --verbose/--json flags
-3. Add tracing/logging at key decision points
-4. Wire up GUI as a thin layer over the same logic
-```
+2. Expose via CLI with `--verbose`/`--json` flags
+3. Add tracing at key decision points
+4. Wire GUI as thin layer over the same logic
 
-**CLI conventions:**
+### Metadata: File-First, DB for Library
 
-- `--dry-run` / `--preview`: Show what would happen without doing it
-- `--verbose` / `-v`: Enable debug logging
-- `--json`: Machine-readable output for scripting/AI parsing
-- `--quiet` / `-q`: Suppress non-essential output
-- Exit codes: 0 = success, 1 = error, 2 = partial success
+**The audio file is the source of truth.** The database is an index for fast browsing:
 
-**Existing CLI commands:**
+- Playback reads metadata directly from file tags
+- Enrichment writes to file tags, not just database
+- Database rebuilds on rescan (cache, not canonical store)
 
-```bash
-music-minder scan <path>           # Scan directory for music
-music-minder list                  # List all tracks in database
-music-minder identify <file>       # Fingerprint + identify track
-music-minder enrich <path>         # Batch metadata enrichment
-music-minder organize <path>       # Organize files by pattern
-music-minder write-tags <file>     # Write metadata to file tags
-music-minder check [path]          # Check file health status
-music-minder check-tools           # Verify fpcalc is installed
-music-minder diagnose              # Audio system diagnostics (--json)
-music-minder watch <path>          # Watch directory for changes (-v, --db, --scan-first)
-```
-
-**Planned CLI commands:**
-
-```bash
-# Playback control (headless player daemon)
-music-minder play <file|path>      # Play a file or folder
-music-minder pause                 # Pause playback
-music-minder next                  # Skip to next track
-music-minder prev                  # Go to previous track
-music-minder seek <position>       # Seek to position (0.0-1.0 or mm:ss)
-music-minder volume <level>        # Set volume (0-100)
-music-minder status                # Show player state (--json for scripting)
-
-# Queue management
-music-minder queue                 # Show current queue
-music-minder queue add <file>      # Add to queue
-music-minder queue clear           # Clear queue
-music-minder queue shuffle         # Shuffle queue
-
-# Library queries
-music-minder search <query>        # Search library (artist/album/title)
-music-minder info <file>           # Show file metadata (--json)
-music-minder stats                 # Library statistics
-```
-
-### Tracing & Observability
-
-**Use `tracing` crate with structured logging:**
-
-```rust
-// Good: Structured, filterable, includes context
-tracing::debug!(target: "player::events", event = ?event, "Received player event");
-tracing::info!(target: "scanner::progress", count = 100, "Scanned 100 tracks");
-
-// Bad: Unstructured, hard to filter
-println!("Received event: {:?}", event);
-```
-
-**Log target naming convention:**
-
-```text
-module::subsystem
-  ├── player::events      # Audio thread events
-  ├── player::decoder     # Decode operations  
-  ├── ui::commands        # UI command dispatch
-  ├── ui::events          # UI event handling
-  ├── scanner::progress   # Scan progress
-  ├── scanner::files      # File discovery
-  ├── enrichment::api     # External API calls
-  ├── enrichment::match   # Match scoring
-  ├── cover::resolver     # Cover art resolution
-  └── health::db          # Health record updates
-```
-
-**When adding a new feature:**
-
-1. Choose a log target following the `module::subsystem` pattern
-2. Add `debug!` for internal state changes
-3. Add `info!` for significant operations (file processed, API called)
-4. Add `warn!` for recoverable issues
-5. Add `error!` for failures (but prefer `Result` over panics)
-
-**Run with specific log targets:**
+### Tracing Targets
 
 ```powershell
 $env:RUST_LOG="player::events=debug,ui::commands=debug"
 cargo run --release
 ```
 
-### Metadata: File-First, DB for Library
-
-**The audio file is the source of truth for metadata.** The database serves as an index for fast library browsing, but:
-
-- Playback reads metadata directly from file tags (via `lofty`)
-- Enrichment writes to file tags, not just the database
-- Database is rebuilt on rescan (cache, not canonical store)
-- This ensures metadata travels with the files
-
----
-
-## Completed Phases
-
-### Phase 1: Foundation ✅
-
-- [x] Project setup with Rust 2024 edition
-- [x] Dependencies: Iced 0.13, Tokio, SQLx, Lofty, Clap
-- [x] SQLite database with migrations
-- [x] Optimized build configuration
-
-### Phase 2: Scanning & Library ✅
-
-- [x] Recursive directory scanner (MP3, FLAC, OGG, WAV, M4A)
-- [x] Metadata extraction (Artist, Album, Title, Track#, Duration)
-- [x] Virtualized library view (10k+ tracks)
-- [x] Live scan progress updates
-
-### Phase 3: Organization ✅
-
-- [x] Pattern-based file organization
-- [x] Streaming preview with parallel file checks
-- [x] Virtualized preview list
-- [x] Undo support with JSON persistence
-- [x] Batch database updates
-
-### Phase 4: Enrichment ✅
-
-- [x] **AcoustID Integration**: Audio fingerprinting via fpcalc + API lookup
-- [x] **Smart Matching**: Prefers correct album based on path/metadata hints
-- [x] **MusicBrainz Lookup**: Fetch detailed metadata by recording ID
-- [x] **Cover Art**: Download from Cover Art Archive
-- [x] **Enrichment Service**: High-level orchestration with rate limiting
-
-### Phase 5: CLI Integration ✅
-
-- [x] **CLI `identify` command**: Single file identification with smart matching
-- [x] **CLI `write-tags` command**: Write metadata to files with preview mode
-- [x] **Metadata Writing**: `--write` and `--fill-only` flags on identify
-- [x] **CLI `enrich` command**: Batch enrichment with health tracking, dry-run, recursive scan
-
-### Phase 6: Playback & UX ✅
-
-- [x] **Audio playback**: Play tracks from library
-- [x] **Now Playing view**: Track info, progress bar, queue display
-- [x] **Cover art resolution**: Embedded, sidecar, cached, remote (non-blocking)
-- [x] **Cover art display**: Album art in Now Playing view (200x200 with source indicator)
-- [x] **Visualization modes**: Spectrum, Waveform, VU Meter
-
-### Phase 7: System Integration ✅
-
-- [x] **OS media controls**: Windows SMTC / Linux MPRIS / macOS via `souvlaki` crate
-- [x] **Refactored playback architecture**: Single command path, event-driven state
+| Target | Purpose |
+| ------ | ------- |
+| `player::events` | Audio thread events |
+| `ui::commands` | UI command dispatch |
+| `scanner::progress` | Scan progress |
+| `enrichment::api` | External API calls |
+| `cover::resolver` | Cover art resolution |
 
 ---
 
-## 🎯 Current Phase: Library UX & Queue Management
+## Archive
 
-This phase focuses on making the library actually usable for large collections.
-
-### 7.1 Smart Background Scanning ⚠️
-
-Never interrupt playback. Keep the library fresh automatically.
-
-- [x] **Watch directories**: Use `notify` crate to detect file changes
-- [x] **Incremental updates**: Only rescan changed/new files (mtime-based)
-- [x] **Background thread**: Watcher runs on dedicated thread, events via channel
-- [x] **Startup scan**: Watch paths auto-start on app launch
-- [x] **Scan indicator**: Subtle "● Watching" / "⟳ Syncing" in sidebar
-- [x] **Never interrupt audio**: File changes queued, processed in batches
-- [x] **CLI command**: `music-minder watch <path> -v --db <db> --scan-first`
-- [x] **Manual refresh**: Button to force full rescan if needed
-- [x] **Re-architect watcher subscription**: Migrated to `tokio::sync::mpsc` with async `.recv().await` to avoid blocking the runtime
-
-### 7.2 Library Search & Filter (High Priority)
-
-- [x] **Search bar**: Filter tracks by typing (searches title, artist, album)
-- [x] **Instant filtering**: Results update as you type (no Enter needed)
-- [x] **Column sorting**: Click column headers to sort (Artist, Album, Title, Duration)
-- [x] **Sort indicator**: Visual arrow showing sort direction
-- [x] **Filter chips**: Quick filters for format (FLAC/MP3), lossless, etc.
-
-### 7.3 Queue Management (High Priority) ✅
-
-- [x] **Queue panel**: Visible queue in Now Playing view (scrollable list)
-- [x] **Current track highlight**: Visual indicator of what's playing
-- [x] **Click to jump**: Click any queued track to play it immediately
-- [x] **Remove from queue**: X button to remove tracks
-- [ ] **Reorder queue**: Drag-and-drop to rearrange → see **7.7 Queue Reordering**
-- [x] **Clear queue**: Button to clear entire queue
-- [x] **Repeat modes**: Off / All / One with visual toggle
-- [x] **Shuffle toggle**: Shuffle on/off button
-- [x] **Play next**: Right-click → "Play Next" (add_next exists)
-
-### 7.4 Keyboard Shortcuts (Medium Priority) ✅
-
-Winamp's global hotkeys were legendary. Start with in-app, then go global.
-
-- [x] **Space**: Play/pause toggle
-- [x] **←/→**: Previous/next track
-- [x] **Shift+←/→**: Seek backward/forward 5s
-- [x] **↑/↓**: Navigate selection (Alt+↑/↓ for volume)
-- [x] **Ctrl+F**: Focus search box (clears search)
-- [x] **Enter**: Play selected track
-- [x] **Delete**: Remove selected from queue
-- [x] **Escape**: Clear search / close panels
-- [ ] **Global hotkeys** (future): Control playback from any app
-
-### 7.5 Now Playing Enhancements (Medium Priority) ✅
-
-- [x] **Queue count display**: "Track 3 of 25" indicator
-- [x] **Track info panel**: Format, bitrate, file path display
-- [x] **Read metadata from file**: Decoder reads tags and sends via `TrackLoaded` event
-- [x] **Metadata fallback chain**: DB → file tags → filename (via `current_track_display()`)
-
-### 7.6 Code Cleanup (Low Priority)
-
-Remove or wire up unused code identified in review:
-
-**Queue/Player API:**
-
-- [x] Wire up `PlayQueue::cycle_repeat()` to UI button
-- [x] Wire up `PlayQueue::set_shuffle()` to UI toggle
-- [x] Wire up `PlayQueue::remove()` to queue panel
-- [ ] Wire up `PlayQueue::reorder()` to queue panel → see **7.7 Queue Reordering**
-- [x] ~~Remove or use `Visualizer::set_bands()`, `set_smoothing()`, `reset()`~~ → Marked as future API with `#[allow(dead_code)]`
-- [x] ~~Remove or use `AudioDecoder::metadata()`~~ → Now used for fallback metadata (plays before DB sync)
-
-**Duplicate Functions:**
-
-- [x] Consolidate 3× `format_duration()` variants → `format_duration()` and `format_duration_secs()` in `player::state`
-- [x] Extract `AUDIO_EXTENSIONS` constant, consolidate 3× `is_audio_file()` → `scanner::AUDIO_EXTENSIONS` and `scanner::is_audio_file()`
-- [x] Move `is_lossless()` to shared utility → `ui::views::helpers::is_lossless()`
-- [x] Move `format_from_path()` to shared utility → `ui::views::helpers::format_from_path()`
-
-**Dead Code Audit:**
-
-- [x] ~~Review 10× `#[allow(dead_code)]` annotations~~ → Reviewed; intentional items documented, unused removed
-- [x] Remove `_truncate_with_ellipsis` and `_MAX_DEVICE_NAME_LEN` from player.rs
-- [x] Implement shuffle order logic (queue.rs) - Fisher-Yates on indices
-
-### 7.7 Queue Reordering (Medium Priority)
-
-Allow users to reorder the play queue via keyboard shortcuts and drag-and-drop.
-
-**Philosophy**: Keyboard-first (quick win, accessible), then drag-drop as polish.
-
-#### 7.7.1: Keyboard Reordering (Quick Win)
-
-Move selected queue item up/down with keyboard shortcuts.
-
-**Shortcuts:**
-
-- `Alt+↑` — Move selected track up one position
-- `Alt+↓` — Move selected track down one position
-
-**Behavior:**
-
-- Works on the currently selected queue item
-- If shuffle is ON, reorders `shuffle_order[]` (what user sees)
-- If shuffle is OFF, reorders underlying `items[]`
-- Selection follows the moved item
-- Currently playing track can be moved (position indicator follows)
-
-**Tasks:**
-
-- [x] Add `selected_queue_index: Option<usize>` to queue panel state (already existed as `queue_selection`)
-- [x] Handle `Alt+↑` / `Alt+↓` in keyboard handler (context-sensitive: queue focused → reorder, else → volume)
-- [x] Add `PlayQueue::move_up(index)` / `move_down(index)` methods
-- [x] Add `PlayQueue::reorder_shuffle(from, to)` for shuffle mode
-- [x] Visual selection highlight in queue panel (already existed)
-
-#### 7.7.2: Drag Handle UI
-
-Add a grip handle to queue items for drag initiation.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  ⠿  1. Back in Black           AC/DC           4:15    ✕   │
-│  ⠿  2. Highway to Hell         AC/DC           3:28    ✕   │
-│  ⠿  3. Thunderstruck           AC/DC           4:52    ✕   │
-└─────────────────────────────────────────────────────────────┘
-     ↑ Drag handle (only this initiates drag)
-```
-
-**Rationale**: Separates "click to play" from "drag to reorder" — no deadband ambiguity.
-
-**Tasks:**
-
-- [x] Add grip icon (Font Awesome `GRIP_VERTICAL` U+F58E) to left of queue items
-- [x] Style: `TEXT_MUTED` color
-- [x] `Grab` cursor on hover (via MouseArea with `interaction()`)
-- [x] Only the handle responds to drag events (not full row)
-
-#### 7.7.3: Drag-and-Drop Reordering
-
-Full mouse-based reordering with visual feedback.
-
-**State Model:**
-
-```rust
-struct QueueDragState {
-    /// Item being dragged (index + start position)
-    dragging: Option<DragInfo>,
-    /// Current drop target index (for insertion line)
-    drop_target: Option<usize>,
-    /// Scroll velocity for edge auto-scroll (-1, 0, +1)
-    auto_scroll: i8,
-}
-
-struct DragInfo {
-    index: usize,           // Original position in queue
-    origin_y: f32,          // Y position at drag start
-    current_y: f32,         // Current cursor Y position
-    is_shuffle_mode: bool,  // Snapshot of shuffle state at drag start
-}
-```
-
-**Messages:**
-
-```rust
-enum Message {
-    // Drag lifecycle
-    QueueDragStart { index: usize, y: f32 },
-    QueueDragMove { y: f32 },
-    QueueDragEnd,
-    QueueDragCancel,
-    
-    // Auto-scroll tick (fired by subscription while dragging at edge)
-    QueueAutoScrollTick,
-}
-```
-
-**Visual Feedback:**
-
-| State | Visual |
-|-------|--------|
-| Hovering handle | Cursor: `Grab` |
-| Dragging | Cursor: `Grabbing`, source item dimmed (50% opacity) |
-| Over drop zone | Insertion line (2px accent color) between items |
-| At edge (auto-scroll) | Subtle gradient fade at top/bottom edge |
-
-**Drop Target Calculation:**
-
-```text
-┌─────────────────────┐ ← y=0
-│  Item 0 (40px)      │
-├─────────────────────┤ ← y=40  → drop at 1
-│  Item 1 (40px)      │
-├─────────────────────┤ ← y=80  → drop at 2
-│  Item 2 (40px)      │
-├─────────────────────┤ ← y=120 → drop at 3
-│  Item 3 (40px)      │
-└─────────────────────┘ ← y=160
-
-drop_index = ((cursor_y - list_top + scroll_offset) / item_height).floor()
-```
-
-**Auto-Scroll at Edges:**
-
-When cursor is within 40px of top/bottom edge during drag:
-
-```rust
-const SCROLL_ZONE_HEIGHT: f32 = 40.0;
-const SCROLL_SPEED: f32 = 100.0; // pixels per second
-
-fn calculate_auto_scroll(cursor_y: f32, list_bounds: Rectangle) -> i8 {
-    if cursor_y < list_bounds.y + SCROLL_ZONE_HEIGHT {
-        -1  // Scroll up
-    } else if cursor_y > list_bounds.y + list_bounds.height - SCROLL_ZONE_HEIGHT {
-        1   // Scroll down
-    } else {
-        0   // No scroll
-    }
-}
-```
-
-- Use `iced::time::every(Duration::from_millis(16))` subscription while `auto_scroll != 0`
-- Each tick adjusts `scroll_offset` by `SCROLL_SPEED * 0.016`
-- Clamp to valid scroll range
-
-**Tasks:**
-
-- [x] Add `QueueDragState` to `UiState`
-- [x] Wrap drag handle in `MouseArea` with `on_press`, `on_move`, `on_release`
-- [x] Calculate `drop_target` from cursor Y position delta
-- [x] Render insertion line at `drop_target` position
-- [x] Dim source item during drag (muted colors)
-- [x] Change cursor to `Grabbing` during drag
-- [ ] Implement auto-scroll subscription at edges (future enhancement)
-- [x] Handle `Escape` key to cancel drag
-- [ ] Handle window focus loss → cancel drag (future enhancement)
-- [x] Call `queue.reorder(from, to)` or `queue.reorder_shuffle(from, to)` on drop
-
-**Edge Cases:**
-
-| Case | Behavior |
-|------|----------|
-| Drop on same position | No-op, no reorder call |
-| Single-item queue | Drag handle hidden or disabled |
-| Currently playing track dragged | Allowed, current index follows |
-| Shuffle mode ON | Reorder `shuffle_order[]`, not `items[]` |
-| Scroll while dragging | Drop target updates with scroll |
-| Escape during drag | Cancel, restore original state |
-| Focus lost during drag | Cancel drag |
-| Right-click during drag | Cancel drag |
-
-#### Implementation Order
-
- | Step | Task | Time Est. |
- | --- | --- | --- |
- | 1 | Keyboard reordering (`Alt+↑/↓`) | 30 min |
- | 2 | Queue selection state + highlight | 15 min |
- | 3 | Drag handle UI (grip icon) | 15 min |
- | 4 | Basic drag state + messages | 30 min |
- | 5 | Drop target calculation + insertion line | 30 min |
- | 6 | Visual feedback (dimming, cursor) | 15 min |
- | 7 | Auto-scroll at edges | 45 min |
- | 8 | Edge cases (cancel, focus, shuffle) | 30 min |
- | **Total** | | **~3.5 hours** |
-
-**Files to Modify:**
-
-| File | Changes |
-|------|---------|
-| `src/ui/state.rs` | Add `QueueDragState`, `selected_queue_index` |
-| `src/ui/messages.rs` | Add drag messages |
-| `src/ui/views/now_playing.rs` | Drag handle, visual feedback, insertion line |
-| `src/ui/update/mod.rs` | Handle drag messages, keyboard shortcuts |
-| `src/ui/streams.rs` | Auto-scroll subscription |
-| `src/player/queue.rs` | Add `reorder_shuffle()`, `move_up()`, `move_down()` |
-
----
-
-## Phase 8: GUI Enrichment & Batch Operations ✅
-
-- [x] **Enrichment tab in UI**: Select tracks, identify, preview changes
-- [x] **Batch progress**: Progress bar for multi-file enrichment
-- [x] **Write tags button**: Apply metadata changes to files
-
-**Implementation Notes (Phase 8):**
-
-- Enrich pane created in `src/ui/views/enrich/` with 4 submodules
-- Batch handlers in `src/ui/update/enrichment.rs` with `handle_enrich_pane()`
-- Sequential processing with 500ms delay between tracks for rate limiting
-- Auto-confirms high-confidence matches (≥70%), manual review for lower scores
-- "Fill Only" option to preserve existing tags
-- Results stored with full `TrackIdentification` for metadata writing
-- Export report logs to tracing output
-
----
-
-## Phase 8.25: Match Review & Cover Art Preview
-
-**Philosophy**: High-confidence matches auto-apply (current behavior), but give users easy escape hatches when the auto-pick is wrong—without drowning them in choices.
-
-### 8.25.1: Alternative Matches (Low-Effort Corrections)
-
-When identification returns multiple candidates, keep the top 3-4 alternatives available for quick switching.
-
-**Current State:**
-
-- AcoustID returns multiple recordings per fingerprint (same song on different albums)
-- `to_identifications()` in adapter.rs already expands recordings to multiple `TrackIdentification` objects
-- Service picks "best" via `calculate_match_score()` (confidence + metadata hints)
-- Alternatives are discarded
-
-**Goal:** Keep alternatives, surface them when user clicks "Review"
-
-**Data Model Changes:**
-
-```rust
-// In EnrichmentResult (state.rs)
-pub struct EnrichmentResult {
-    // ... existing fields ...
-    
-    /// The chosen identification (best match)
-    pub identification: Option<TrackIdentification>,
-    
-    /// Alternative matches (top 2-3, for quick switching)
-    /// Sorted by score, excludes the chosen one
-    pub alternatives: Vec<TrackIdentification>,
-    
-    /// If true, show expanded view with alternatives
-    pub show_alternatives: bool,
-}
-```
-
-**Service Changes:**
-
-```rust
-// New return type that preserves alternatives
-pub struct IdentificationWithAlternatives {
-    pub best: TrackIdentification,
-    pub alternatives: Vec<TrackIdentification>, // Top 3, filtered
-}
-
-// In EnrichmentService
-pub async fn identify_track_with_alternatives(
-    &self,
-    path: &Path,
-) -> Result<IdentificationWithAlternatives, EnrichmentError>
-```
-
-**UI Flow:**
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ ✓ Back in Black                              92%  [Review]  │
-│   Artist: AC/DC  •  Album: Back in Black (1980)             │
-└─────────────────────────────────────────────────────────────┘
-                           ↓ Click Review
-┌─────────────────────────────────────────────────────────────┐
-│ ✓ Back in Black                              92%  [Collapse]│
-│   Artist: AC/DC  •  Album: Back in Black (1980)    ◉ USE    │
-├─────────────────────────────────────────────────────────────┤
-│   Also found on:                                            │
-│   ○ AC/DC Live (1992)                             88%       │
-│   ○ Who Made Who (1986)                           85%       │
-│   ○ [Search manually...]                                    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Tasks:**
-
-- [ ] Add `alternatives: Vec<TrackIdentification>` to `EnrichmentResult`
-- [ ] Add `show_alternatives: bool` to `EnrichmentResult`  
-- [ ] Create `identify_track_with_alternatives()` that returns best + top 3
-- [ ] Filter alternatives: skip if score < 0.5, skip duplicates, max 3
-- [ ] UI: Expand/collapse alternatives on "Review" click
-- [ ] UI: Radio buttons to switch selection
-- [ ] Message: `EnrichSwitchAlternative(result_index, alt_index)`
-- [ ] "Search manually" link → future manual search feature
-
-### 8.25.2: Cover Art Preview
-
-Show cover art thumbnail during review, before writing tags.
-
-**Current State:**
-
-- Cover art is fetched on-demand via `get_cover_art(release_id)`
-- Requires MusicBrainz release ID (from `identification.track.release_id`)
-- Not shown during enrichment preview
-
-**Goal:** Fetch and display cover thumbnail when user reviews a result
-
-**Approach:** Lazy loading - don't fetch covers for all results, only when user expands to review.
-
-**Data Model Changes:**
-
-```rust
-// In EnrichmentResult
-pub struct EnrichmentResult {
-    // ... existing fields ...
-    
-    /// Cover art for the chosen identification (lazy loaded)
-    pub cover_art: Option<CoverArtPreview>,
-    
-    /// Cover loading state
-    pub cover_loading: bool,
-}
-
-pub struct CoverArtPreview {
-    pub thumbnail: Vec<u8>,  // Small size (250px)
-    pub release_id: String,  // For cache key
-}
-```
-
-**UI Flow:**
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ ┌──────┐  ✓ Back in Black                    92%  [Collapse]│
-│ │      │    Artist: AC/DC                                   │
-│ │ 🖼️  │    Album: Back in Black (1980)           ◉ USE     │
-│ │      │                                                    │
-│ └──────┘  Also found on:                                    │
-│           ○ AC/DC Live (1992)                   88%         │
-│           ○ Who Made Who (1986)                 85%         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Tasks:**
-
-- [ ] Add `cover_art: Option<CoverArtPreview>` to `EnrichmentResult`
-- [ ] Add `cover_loading: bool` to `EnrichmentResult`
-- [ ] On "Review" expand, trigger cover fetch if `release_id` exists
-- [ ] Message: `EnrichCoverArtLoaded(result_index, Result<CoverArtPreview, String>)`
-- [ ] UI: Show 64x64 thumbnail in expanded review section
-- [ ] Show placeholder/spinner while loading
-- [ ] Cache covers by release_id (reuse existing cover cache)
-
-### 8.25.3: Manual Search (For Edge Cases)
-
-For rare editions, wrong matches, or obscure tracks - let user search manually.
-
-**Approach:** Simple MusicBrainz recording search, not full fingerprinting.
-
-**UI Flow:**
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Search MusicBrainz:                                         │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ back in black ac/dc                                     │ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                                              [Search]       │
-├─────────────────────────────────────────────────────────────┤
-│ Results:                                                    │
-│ ○ Back in Black - AC/DC - Back in Black (1980)      [Use]  │
-│ ○ Back in Black - AC/DC - Live at Donington (1992)  [Use]  │
-│ ○ Back in Black - AC/DC - Iron Man 2 OST (2010)     [Use]  │
-│                                     [Load More] [Cancel]    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Tasks:**
-
-- [ ] Add MusicBrainz search endpoint to `MusicBrainzClient`
-- [ ] Message: `EnrichManualSearchOpen(result_index)`
-- [ ] Message: `EnrichManualSearchQuery(String)`
-- [ ] Message: `EnrichManualSearchSelect(result_index, recording_id)`
-- [ ] UI: Modal or inline search panel
-- [ ] Pre-populate search with existing title/artist from result
-- [ ] Rate limit: 1 req/sec to MusicBrainz
-
-### Implementation Priority
-
-| Feature | Complexity | Value | Order |
-|---------|------------|-------|-------|
-| Alternative matches (data) | Low | High | 1st |
-| Alternative matches (UI) | Medium | High | 2nd |
-| Cover art preview | Medium | Medium | 3rd |
-| Manual search | Medium | Medium | 4th |
-
-**Phase 8.25 can be tackled incrementally:**
-
-1. First, just preserve alternatives in data model + show in results
-2. Then add cover preview when reviewing  
-3. Manual search is a "power user" escape hatch, lowest priority
-
-## Phase 8.5: Library Gardener (Metadata Quality Nurturing) ✅
-
-A background "gardener" that tends to your music library over time, identifying files
-that could benefit from enrichment without being intrusive.
-
-- [x] **Quality assessment types**: `QualityFlags` bitflags, `TrackQuality` struct
-- [x] **Quality scorer**: Evaluates metadata completeness (missing artist/album/year, filename-as-title, generic placeholders)
-- [x] **Database schema**: Added `quality_score`, `quality_flags`, `quality_checked_at` to tracks
-- [x] **Background gardener**: `QualityGardener` processes tracks gradually during idle time
-- [x] **UI indicators**: Quality badge (★●◐○?) in track list with tooltip showing issues
-- [x] **Verification system**: Compare metadata against fingerprint results to detect mislabeled files
-- [x] **Alternative matches storage**: DB tables for candidate matches and releases
-- [x] **Watcher integration**: Auto-queue quality checks when files are added/modified
-- [x] **Verification flags**: `TITLE_MISMATCH`, `ARTIST_MISMATCH`, `ALBUM_MISMATCH`, `POSSIBLY_MISLABELED`, `VERIFIED`, `MULTI_ALBUM`
-
-**Quality Scoring:**
-
-| Score  | Tier        | Meaning                       |
-| ------ | ----------- | ----------------------------- |
-| 90-100 | ★ Excellent | Fully tagged, high confidence |
-| 70-89  | ● Good      | Minor gaps but usable         |
-| 50-69  | ◐ Fair      | Significant metadata missing  |
-| 0-49   | ○ Poor      | Needs attention               |
-| null   | ?           | Not yet analyzed              |
-
-**Quality Flags (Metadata):**
-
-- `MISSING_ARTIST`, `MISSING_ALBUM`, `MISSING_YEAR`, `MISSING_TRACK_NUM`
-- `TITLE_IS_FILENAME` - Title matches filename
-- `GENERIC_METADATA` - "Unknown Artist", "Track 01", etc.
-- `NO_MUSICBRAINZ_ID` - No verified ID
-- `LOW_CONFIDENCE` - Fingerprint match <70%
-- `NEVER_CHECKED` - Not yet analyzed
-
-**Quality Flags (Verification):**
-
-- `TITLE_MISMATCH` - Title doesn't match fingerprint result
-- `ARTIST_MISMATCH` - Artist doesn't match fingerprint result
-- `ALBUM_MISMATCH` - Album differs (may be compilation)
-- `POSSIBLY_MISLABELED` - Significant mismatch, needs review
-- `VERIFIED` - Metadata confirmed against fingerprint
-- `AMBIGUOUS_MATCH` - Multiple good matches exist
-- `MULTI_ALBUM` - Recording appears on multiple albums
-
----
-
-## Phase 9: Audio Features (Winamp-inspired)
-
-- [ ] **Equalizer**: 10-band EQ with presets (Rock, Pop, Jazz, etc.)
-- [ ] **Gapless playback**: Seamless album playback without gaps
-- [ ] **ReplayGain**: Volume normalization across tracks
-- [ ] **Crossfade**: Smooth transitions between tracks (configurable 0-12s)
-- [ ] **Playlist management**: Save/load playlists (.m3u8 format)
-
-## Phase 10: UI Polish & UX Excellence
-
-**Design philosophy**: Winamp's *spirit* (fast, fun, focused on audio) with a *modern* premium aesthetic. No retro skeuomorphism—instead, clean lines, thoughtful spacing, and small delightful surprises.
-
-**Reference**: See `ENRICHMENT_UI_DESIGN.md` for detailed specs.
-
-### 10.1 Design System Foundation ✅
-
-- [x] **Theme constants file**: Colors, spacing, typography in `src/ui/theme.rs`
-- [x] **Dark theme default**: Deep grays (#121215 base, #1a1a1f surfaces)
-- [x] **Accent color**: Indigo primary (#6366f1)
-- [x] **Consistent spacing**: 4px base unit system (XS/SM/MD/LG/XL scale)
-- [x] **Typography scale**: Clear hierarchy (Hero → Tiny)
-- [x] **Button variants**: Primary, Secondary, Ghost styles
-
-### 10.2 Player Bar ✅
-
-- [x] **72px bottom bar**: Fixed height, always visible
-- [x] **Mini cover art**: 48x48 with rounded corners, clipped
-- [x] **Track info**: Title + "Artist • Album" stacked
-- [x] **Transport controls**: Prev/Play-Pause/Next with styled buttons
-- [x] **Flexible seek bar**: Stretches to fill available space
-- [x] **Volume section**: Icon (mute/low/high) + slider
-- [x] **Device picker**: Dynamic icon (headphones/speaker) + dropdown, fixed width
-- [x] **Shuffle/Repeat**: Icon buttons in player bar
-
-### 10.3 Now Playing Pane ✅
-
-- [x] **Cover art display**: Large cover with track info beside it
-- [x] **Queue section**: Scrollable list with current track highlighted
-- [x] **Queue controls**: Shuffle, repeat, clear in header
-- [x] **Track position**: "Track X of Y" indicator
-- [x] **Remove from queue**: X button per track (with scrollbar spacing)
-
-### 10.4 Sidebar Polish ✅
-
-- [x] **Styled nav items**: Icon + label, active state with Primary bg
-- [x] **Hover states**: Surface-2 background on hover
-- [x] **Status section**: "● Watching" indicator, track count stats
-- [x] **Dividers**: Subtle separators between sections
-- [x] **Collapsible mode**: 60px icon-only mode (toggle button)
-
-### 10.5 Library Pane Refresh ✅
-
-- [x] **Prominent search bar**: Styled input with search icon, always visible
-- [x] **Filter chips**: Pill-shaped toggles (FLAC, MP3, Lossless)
-- [x] **Track count display**: "3,428 tracks (showing 1,247)" when filtered
-- [x] **Sort dropdown**: Replace column header clicks with clean dropdown
-- [x] **Row hover states**: Subtle background change
-- [x] **Format badges**: FLAC (green), MP3 (muted) inline badges
-- [x] **Collapsible Organize section**: Hide by default, expand when needed
-
-### 10.6 Settings Pane Cleanup ✅
-
-- [x] **Organized sections**: Audio, Library, Enrichment, Appearance, About
-- [x] **Section dividers**: Clear visual separation
-- [x] **Input styling**: Consistent text inputs, dropdowns
-- [x] **Toggle switches**: Styled boolean settings (status indicators)
-- [x] **Version/tagline**: "Music Minder v0.1.4" with whimsical tagline
-
-### 10.7 Enrich Pane (New) ✅
-
-- [x] **Status indicators**: fpcalc ready, API key configured, rate limit status
-- [x] **Track selection list**: Checkboxes, remove buttons, selection count
-- [x] **Options section**: Fill-only vs overwrite, fetch cover art toggle
-- [x] **Progress display**: Determinate bar with "2/4" count
-- [x] **Results list**: Success/warning/error states with confidence scores
-- [x] **Batch actions**: "Write All Confirmed", "Export Report"
-
-### 10.8 Context Panel (Future)
-
-- [ ] **Slide-in panel**: 320px from right edge
-- [ ] **Selection summary**: "2 tracks selected"
-- [ ] **Quick actions**: Identify, Write Tags, Play Next
-- [ ] **Before/After preview**: Show metadata changes
-- [ ] **Close button**: X to dismiss
-
-### 10.9 Feedback & Polish
-
-- [ ] **Toast notifications**: Non-blocking success/error messages
-- [ ] **Confirmation dialogs**: Destructive action warnings
-- [ ] **Empty states**: Helpful messages for empty library/queue/search
-- [ ] **Loading states**: Spinners for async operations
-- [ ] **Error states**: Friendly messages with recovery suggestions
-
-### 10.10 Interaction Polish
-
-- [ ] **Hover states**: All interactive elements respond
-- [ ] **Focus indicators**: Keyboard navigation support
-- [ ] **Smooth transitions**: 100-200ms for state changes
-- [ ] **Playing indicator**: Gentle pulse on current track (subtle)
-
-### 10.11 Delightful Touches
-
-- [x] **Volume goes to 11**: Keep the Spinal Tap reference
-- [ ] **Startup tagline**: Random "It really whips..." in console
-- [ ] **Easter egg**: Hidden classic green theme unlock
-
-## Backlog
-
-### Winamp Nostalgia Features
-
-- [ ] **Skin support**: Load classic Winamp skins (.wsz) or custom themes
-- [ ] **Marquee scrolling**: Long titles scroll like the original
-- [ ] **EQ presets**: Rock, Pop, Jazz, Classical, etc.
-- [ ] **Milkdrop-style viz**: Advanced procedural visualizations
-- [ ] **"Winamp, it really whips..."**: Easter egg on startup
-
-### Audio Quality
-
-- [ ] Bit-perfect / exclusive mode (WASAPI Exclusive, CoreAudio Integer)
-- [ ] Hi-res audio indicator (24-bit, >48kHz)
-- [ ] Dithering options for bit-depth conversion
-- [ ] ASIO support (Windows, for pro audio interfaces)
-
-### Library Features
-
-- [ ] Duplicate detection
-- [ ] Bulk metadata editing
-- [ ] MusicBrainz release ID in database (for remote cover fetching)
-- [ ] Smart playlists (auto-generated based on rules)
-- [ ] Album view with grid layout
-- [ ] Artist/Album grouping with collapsible sections (needs custom iced widget)
-- [ ] Queue drag-and-drop reorder (needs custom iced widget)
-
-### Integration
-
-- [ ] Streaming radio (SHOUTcast/Icecast)
-- [ ] Lyrics display (via external API)
-- [ ] Scrobbling (Last.fm / ListenBrainz)
-- [ ] Discord Rich Presence
-
----
-
-## Phase 11: Streaming Service Integration (Future)
-
-**Vision**: Bridge your legacy library with modern streaming—use your actual music taste (not just streaming history) to drive discovery, and always play the best quality source available.
-
-### The Problem We're Solving
-
-1. **"Spotify doesn't know my taste"**: 20 years of curated MP3s/FLACs represent real preferences, but streaming services only know what you've streamed
-2. **"My old MP3s are 128kbps garbage"**: Some legacy files are worse than streaming quality
-3. **"AI DJ is lame"**: Spotify's DJX optimizes for engagement, not genuine discovery based on your actual collection
-4. **"Discovery feels disconnected"**: Recommendations don't account for what you already own and love
-
-### Phase 11.1: Local Library as Taste Profile (Foundation)
-
-Build the intelligence layer that understands your musical taste from your library.
-
-- [ ] **Taste analysis engine**: Analyze library for genre/mood/era distribution
-- [ ] **Audio feature extraction**: Tempo, energy, danceability, key (local analysis or via API)
-- [ ] **Artist graph**: Build relationship map from your library (shared albums, collaborations)
-- [ ] **Listening weight**: Track play counts/skips to weight preferences
-- [ ] **Taste vector**: Generate embeddings representing your musical identity
-
-### Phase 11.2: Spotify Discovery Integration
-
-Use Spotify's API to find music you'll love based on your *actual* library.
-
-- [ ] **Spotify OAuth flow**: Connect account via PKCE flow
-- [ ] **Library matching**: Match local tracks to Spotify IDs (via ISRC, MusicBrainz, fuzzy search)
-- [ ] **Audio features fetch**: Get Spotify's audio features for matched tracks
-- [ ] **Recommendation engine**: Query Spotify recs seeded by your library's taste profile
-- [ ] **Discovery queue**: "New music you might like" based on library analysis
-- [ ] **"I own this" indicator**: Show which recommendations you already have locally
-- [ ] **Wishlist**: Save discoveries for later acquisition
-
-### Phase 11.3: Quality-Based Source Routing
-
-Always play the best available version of a track.
-
-- [ ] **Quality comparison**: Compare local quality vs Spotify lossless
-  - Local FLAC 24-bit > Spotify Lossless > Local FLAC 16-bit > Spotify Lossless > Local 320kbps > Local 128kbps
-- [ ] **Source indicator**: Show "Playing: Local FLAC" or "Playing: Spotify" in UI
-- [ ] **Auto-upgrade**: Option to prefer Spotify when local < streaming quality
-- [ ] **Manual override**: "Always play local" / "Always play Spotify" per-track
-- [ ] **Quality report**: "47 tracks in your library have better versions on Spotify"
-
-### Phase 11.4: Hybrid Playback (Experimental)
-
-Seamless switching between local and Spotify playback.
-
-- [ ] **Spotify Connect control**: Send playback commands to Spotify app/device
-- [ ] **Queue handoff**: When queue transitions Local→Spotify, hand off gracefully
-- [ ] **Crossfade bridge**: Use 1-2s crossfade to mask player switches
-- [ ] **Unified queue view**: Single queue showing both local and Spotify tracks
-- [ ] **Playback mode toggle**: "Local Only" / "Spotify Only" / "Hybrid (Best Quality)"
-
-**Known Limitations:**
-
-- No true gapless across player boundary
-- Requires Spotify Premium for playback control
-- Two "now playing" states to synchronize
-- Media controls may behave unexpectedly during handoff
-
-### Phase 11.5: AI DJ (Better Than DJX)
-
-A DJ that actually knows your taste because it's trained on your real library.
-
-- [ ] **Library-seeded generation**: Build playlists from "70% owned, 30% discovery"
-- [ ] **Mood/energy flow**: Sequence tracks for energy arc (build up, peak, cool down)
-- [ ] **Time-aware**: Morning chill, afternoon energy, evening wind-down
-- [ ] **Context-aware**: "More like this" based on current track
-- [ ] **Avoid overplay**: Don't repeat recent plays, diversify within taste
-- [ ] **Explanation**: "Playing this because you have 12 albums by similar artists"
-- [ ] **Feedback loop**: Thumbs up/down to refine taste model
-
-### Architecture
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      Music Minder                           │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
-│  │ Local Library │    │ Spotify API  │    │   AI DJ       │ │
-│  │ + MusicBrainz │◄──►│ + Features   │◄──►│ Taste Model   │ │
-│  │ + Quality DB  │    │ + Recs       │    │ + Sequencing  │ │
-│  └──────┬───────┘    └──────┬───────┘    └───────┬───────┘ │
-│         │                   │                    │         │
-│         ▼                   ▼                    ▼         │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │              Unified Playback Router                    ││
-│  │  • Compare quality scores (local vs streaming)          ││
-│  │  • Route to local player OR Spotify Connect             ││
-│  │  • Crossfade handoff at source boundaries               ││
-│  │  • Single queue abstraction                             ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Alternative Services
-
-Spotify isn't the only option—architecture should be service-agnostic:
-
-| Service | API Quality | Lossless | Notes |
-|---------|-------------|----------|-------|
-| **Spotify** | Excellent | Yes (2025) | Largest catalog, best recs API |
-| **Tidal** | Good | Yes (MQA/FLAC) | Audiophile-focused |
-| **Qobuz** | Good | Yes (Hi-Res) | Best quality, smaller catalog |
-| **YouTube Music** | Decent | No | Huge catalog including obscure |
-| **ListenBrainz** | Open | N/A | Open-source recs, no playback |
-
-### Implementation Priority
-
-| Feature | Difficulty | Value | Priority |
-|---------|------------|-------|----------|
-| Taste analysis from library | Medium | High | 1st |
-| Spotify OAuth + matching | Medium | High | 2nd |
-| Recommendations API | Easy | Very High | 3rd |
-| Quality comparison | Easy | High | 4th |
-| Source routing (manual) | Medium | High | 5th |
-| Hybrid playback | Hard | Medium | 6th |
-| AI DJ | Hard | Very High | 7th |
-| Gapless handoff | Very Hard | Low | Later |
-
-### Open Questions
-
-- [ ] **Spotify TOS**: Is quality-based routing (avoiding Spotify playback) acceptable?
-- [ ] **Offline taste model**: Can we do audio feature extraction locally (no API)?
-- [ ] **Plugin architecture**: Should streaming services be plugins?
-- [ ] **ListenBrainz integration**: Use open-source recs as Spotify alternative?
-
-### Advanced
-
-- [ ] Waveform seek preview
-- [ ] Audio device hot-swap detection
-- [ ] Headphone/speaker profiles
-- [ ] DSP plugin architecture
-
----
-
-## Technical Debt: Safe File Writing (Atomic Writes & Rollback)
-
-**Status**: 🔄 Partial (metadata write implemented, cover art pending)
-
-### The Problem
-
-Writing to audio files (metadata, embedded cover art) and sidecar images risks corruption if:
-
-- Process crashes mid-write
-- Disk runs out of space
-- Power failure during write
-- Antivirus locks the file
-
-### The Solution: Atomic Write Pattern
-
-Write to a temp file, validate, then atomically replace the original.
-
-**Pattern (5-step):**
-
-```text
-1. Write changes to .tmp file
-2. Validate .tmp file (can be read back, audio intact)
-3. Rename original to .bak (atomic on same filesystem)
-4. Rename .tmp to original (atomic)
-5. Delete .bak on success
-```
-
-**Rollback on failure:**
-
-- If step 4 fails: restore .bak → original
-- If step 2 fails: delete .tmp, original untouched
-- .bak serves as automatic backup during the critical window
-
-### Implementation Status
-
-| Operation | Atomic Write | Rollback | Retry |
-|-----------|--------------|----------|-------|
-| Metadata write (`write_metadata()`) | ✅ | ✅ | ❌ |
-| Embedded cover art | ❌ | ❌ | ❌ |
-| Sidecar cover art (folder.jpg) | ❌ | ❌ | ❌ |
-
-### Tasks
-
-- [x] **Metadata writing**: Atomic pattern in `metadata/mod.rs`
-- [ ] **Embedded cover art**: Apply same pattern in `cover/embedded.rs`
-- [ ] **Sidecar images**: Apply pattern in `cover/sidecar.rs`
-- [ ] **Retry mechanism**: Configurable retry with backoff for transient failures
-- [ ] **Cleanup stale temps**: On startup, remove orphaned `.tmp` files
-- [ ] **Restore from .bak**: CLI command to restore `.bak` files if found
-
-### Retry Mechanism Design
-
-For transient failures (file locked, network hiccup), retry with exponential backoff:
-
-```rust
-const MAX_RETRIES: u32 = 3;
-const BASE_DELAY_MS: u64 = 100;
-
-async fn with_retry<T, F, Fut>(operation: F) -> Result<T>
-where
-    F: Fn() -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    for attempt in 0..MAX_RETRIES {
-        match operation().await {
-            Ok(result) => return Ok(result),
-            Err(e) if is_transient(&e) => {
-                let delay = BASE_DELAY_MS * 2u64.pow(attempt);
-                tokio::time::sleep(Duration::from_millis(delay)).await;
-            }
-            Err(e) => return Err(e),
-        }
-    }
-    operation().await // Final attempt
-}
-
-fn is_transient(err: &Error) -> bool {
-    matches!(
-        err.kind(),
-        ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted
-    )
-}
-```
-
-**Retryable errors:**
-
-- `WouldBlock` / `TimedOut` - temporary lock
-- `PermissionDenied` - antivirus scanning (retry once)
-- Network errors for remote fetches
-
-**Non-retryable:**
-
-- `NotFound` - file doesn't exist
-- `InvalidData` - corrupt source
-- `OutOfMemory` / `StorageFull` - resource exhaustion
-
-### Embedded Cover Art Safety
-
-Apply atomic pattern to `cover/embedded.rs`:
-
-```rust
-pub fn embed_cover_art(path: &Path, image_data: &[u8]) -> Result<()> {
-    let tmp_path = path.with_extension("tmp");
-    let bak_path = path.with_extension("bak");
-    
-    // 1. Copy original to tmp
-    fs::copy(path, &tmp_path)?;
-    
-    // 2. Write cover to tmp file
-    let mut tagged = Probe::open(&tmp_path)?.read()?;
-    // ... add picture to tag ...
-    tagged.save_to_path(&tmp_path)?;
-    
-    // 3. Validate tmp (can read, has audio)
-    validate_audio_file(&tmp_path)?;
-    
-    // 4. Atomic swap
-    fs::rename(path, &bak_path)?;
-    match fs::rename(&tmp_path, path) {
-        Ok(_) => { let _ = fs::remove_file(&bak_path); Ok(()) }
-        Err(e) => { let _ = fs::rename(&bak_path, path); Err(e.into()) }
-    }
-}
-```
-
-### Sidecar Image Safety
-
-Apply atomic pattern to `cover/sidecar.rs`:
-
-```rust
-pub fn write_sidecar_cover(folder: &Path, image_data: &[u8]) -> Result<PathBuf> {
-    let target = folder.join("folder.jpg");
-    let tmp_path = folder.join("folder.jpg.tmp");
-    let bak_path = folder.join("folder.jpg.bak");
-    
-    // 1. Write to tmp
-    fs::write(&tmp_path, image_data)?;
-    
-    // 2. Validate (is valid JPEG/PNG)
-    validate_image(&tmp_path)?;
-    
-    // 3. Backup existing (if any)
-    if target.exists() {
-        fs::rename(&target, &bak_path)?;
-    }
-    
-    // 4. Atomic swap
-    match fs::rename(&tmp_path, &target) {
-        Ok(_) => { let _ = fs::remove_file(&bak_path); Ok(target) }
-        Err(e) => { 
-            if bak_path.exists() { let _ = fs::rename(&bak_path, &target); }
-            Err(e.into()) 
-        }
-    }
-}
-```
-
-### Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/cover/embedded.rs` | Add atomic write pattern to `embed_cover_art()` |
-| `src/cover/sidecar.rs` | Add atomic write pattern to sidecar functions |
-| `src/error.rs` | Add `is_transient()` error classification |
-| `src/lib.rs` or new `src/util/retry.rs` | Shared retry helper |
-
----
-
-## Technical Debt: Duplicate Load+Play Paths
-
-**Status**: ✅ Fixed
-
-### The Solution
-
-Created a single `load_and_play_current()` method in `Player` that is the ONLY place sending `Load` + `Play` commands:
-
-```rust
-fn load_and_play_current(&mut self) -> Result<(), PlayerError> {
-    if let Some(item) = self.queue.current() {
-        self.command_tx
-            .send(PlayerCommand::Load(item.path.clone()))
-            .map_err(|_| PlayerError::ChannelClosed)?;
-        self.command_tx
-            .send(PlayerCommand::Play)
-            .map_err(|_| PlayerError::ChannelClosed)?;
-    }
-    Ok(())
-}
-```
-
-All three entry points now use this single method:
-
-- `play_file()` → clear, add, `jump_to(0)`, `load_and_play_current()`
-- `skip_forward()` → `queue.skip_forward()`, `load_and_play_current()`
-- `previous()` → `queue.previous()` (or seek if >3s), `load_and_play_current()`
-
----
-
-## Technical Debt: Background Service Initialization Pattern
-
-**Status**: 🔄 Partial (Gardener uses new pattern, Watcher/Diagnostics use old)
-
-### The Problem
-
-Background services (watcher, gardener, diagnostics) use inconsistent initialization patterns:
-
-1. **Watcher**: Uses Iced subscription pattern, complex stream-based lifecycle
-2. **Gardener**: Starts during app init, stores `command_tx` in state (simpler)
-3. **Diagnostics**: Ad-hoc, manual lifecycle management
-
-### The Solution
-
-Standardize on the Gardener pattern:
-
-```rust
-// During app initialization
-let gardener = QualityGardener::new(pool.clone());
-let gardener_tx = gardener.command_sender();
-gardener.start();
-
-// Store in state
-state.gardener_state.command_tx = Some(gardener_tx);
-```
-
-### Refactoring Tasks
-
-- [ ] **Watcher**: Refactor from subscription to init-time start pattern
-  - Move `FileWatcher::new_async()` to `init_db_and_services()`
-  - Store `watcher` handle and event receiver in state
-  - Use simple `Task::stream` to poll events (not `iced::Subscription`)
-- [ ] **Diagnostics**: Add background diagnostics service
-  - Periodic system checks (audio device changes, CPU load)
-  - Command channel for on-demand full diagnosis
-- [ ] **Unified service manager**: Consider `ServiceManager` struct
-  - Single place to start/stop all background services
-  - Graceful shutdown coordination
-
----
-
-## Deferred & Incomplete Items
-
-Items marked complete at the phase level but with outstanding sub-tasks. These are tracked here for visibility and prioritization.
-
-### From Phase 7: Library UX & Queue Management
-
-**7.3 Queue Management:**
-
-- [ ] **Reorder queue**: Drag-and-drop to rearrange *(needs custom Iced widget)*
-
-**7.4 Keyboard Shortcuts** *(complete)*:
-
-- [x] **Space**: Play/pause toggle
-- [x] **←/→**: Previous/next track  
-- [x] **Shift+←/→**: Seek backward/forward 5s
-- [x] **↑/↓**: Navigate selection (Alt+↑/↓ for volume)
-- [x] **Ctrl+F**: Focus search box (clears search)
-- [x] **Enter**: Play selected track
-- [x] **Delete**: Remove selected from queue
-- [x] **Escape**: Clear search / close panels
-- [ ] **Global hotkeys**: Control playback from any app *(future)*
-
-**7.5 Now Playing Enhancements** *(complete)*:
-
-- [x] **Queue count display**: "Track 3 of 25" indicator
-- [x] **Track info panel**: Format, bitrate, file path display
-- [x] **Read metadata from file**: Decoder reads tags via `TrackLoaded` event
-- [x] **Metadata fallback chain**: DB → file tags → filename
-
-**7.6 Code Cleanup:**
-
-- [ ] Wire up `PlayQueue::reorder()` *(needs drag-drop)*
-- [x] ~~Visualizer methods~~ → Marked as future API
-- [x] ~~AudioDecoder::metadata()~~ → Now used for fallback
-- [x] Consolidated `format_duration()` variants
-- [x] Extracted `AUDIO_EXTENSIONS` constant
-- [x] Moved `is_lossless()`/`format_from_path()` to helpers
-- [x] Audited `#[allow(dead_code)]` annotations
-- [x] Removed `_truncate_with_ellipsis`, `_MAX_DEVICE_NAME_LEN`
-- [x] Implemented shuffle order logic (Fisher-Yates in `queue.rs`)
-
-### From Phase 10: UI Polish
-
-**10.8 Context Panel:**
-
-- [ ] **Slide-in panel**: 320px from right edge
-- [ ] **Selection summary**: "2 tracks selected"
-- [ ] **Quick actions**: Identify, Write Tags, Play Next
-- [ ] **Before/After preview**: Show metadata changes
-- [ ] **Close button**: X to dismiss
-
-**10.9 Feedback & Polish:**
-
-- [ ] **Toast notifications**: Non-blocking success/error messages
-- [ ] **Confirmation dialogs**: Destructive action warnings
-- [ ] **Empty states**: Helpful messages for empty library/queue/search
-- [ ] **Loading states**: Spinners for async operations
-- [ ] **Error states**: Friendly messages with recovery suggestions
-
-**10.10 Interaction Polish:**
-
-- [ ] **Hover states**: All interactive elements respond
-- [ ] **Focus indicators**: Keyboard navigation support
-- [ ] **Smooth transitions**: 100-200ms for state changes
-- [ ] **Playing indicator**: Gentle pulse on current track
-
-**10.11 Delightful Touches:**
-
-- [ ] **Startup tagline**: Random "It really whips..." in console
-- [ ] **Easter egg**: Hidden classic green theme unlock
-
-### Technical Debt (Partial)
-
-- [ ] **Watcher refactor**: Migrate from Iced subscription to init-time start pattern
-- [ ] **Diagnostics service**: Background service with periodic checks
-- [ ] **Unified service manager**: Single ServiceManager for all background services
-- [ ] **DB schema**: Make `duration` NOT NULL DEFAULT 0 (currently Option<i64> for legacy reasons)
-
----
-
-## Priority Matrix: Incomplete Items
-
-Ranked by impact vs effort for deciding what to tackle next.
-
-### Quick Wins (Low Effort, High Impact)
-
-| Item | Effort | Notes |
-| --- | --- | --- |
-| ~~Keyboard: Space for play/pause~~ | ~~Low~~ | ✅ Done |
-| ~~Keyboard: ←/→ for prev/next~~ | ~~Low~~ | ✅ Done |
-| Startup tagline | Low | Fun, adds personality |
-| ~~Consolidate `format_duration()`~~ | ~~Low~~ | ✅ Done |
-| ~~Extract `AUDIO_EXTENSIONS`~~ | ~~Low~~ | ✅ Done |
-| ~~Move `is_lossless()`/`format_from_path()`~~ | ~~Low~~ | ✅ Done |
-| ~~Remove unused prefixed fns~~ | ~~Low~~ | ✅ Done |
-| ~~Implement shuffle logic~~ | ~~Low~~ | ✅ Done |
-| Toast notifications | Medium | Useful for all actions |
-
-### Medium Effort, High Value
-
-| Item | Effort | Notes |
-| --- | --- | --- |
-| ~~All keyboard shortcuts~~ | ~~Medium~~ | ✅ Done (8/9 - global hotkeys deferred) |
-| Empty states | Medium | Better UX for new users |
-| Loading/error states | Medium | Polish across app |
-| Alternative matches (8.25.1) | Medium | Already scoped above |
-
-### Harder But Important
-
-| Item | Effort | Notes |
-| --- | --- | --- |
-| Queue reordering (7.7) | Medium | Scoped in 7.7 - keyboard + drag-drop |
-| Context panel | Hard | New UI surface |
-| ~~Metadata fallback chain~~ | ~~Medium~~ | ✅ Done |
-| Cover art preview (8.25.2) | Medium | Async + caching |
-
-### Lower Priority / Future
-
-| Item | Effort | Notes |
-| --- | --- | --- |
-| Global hotkeys | Hard | Platform-specific |
-| Visualizer API cleanup | Low | Only if we extend viz |
-| Service manager unification | Medium | Architectural cleanup |
-| Easter egg theme | Low | Fun but not urgent |
+Detailed implementation notes for completed phases have been archived to [ROADMAP_OLD.md](ROADMAP_OLD.md).
