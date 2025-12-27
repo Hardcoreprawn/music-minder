@@ -54,6 +54,13 @@ fn convert_recording_to_identifications(
 
     let title = recording.title.clone();
     let recording_id = recording.id.clone();
+
+    eprintln!(
+        "[DEBUG ACOUSTID] Recording ID from AcoustID: {}",
+        recording_id
+    );
+    eprintln!("[DEBUG ACOUSTID] Title: {:?}", title);
+
     let duration = recording
         .duration
         .map(|d| std::time::Duration::from_secs(d as u64));
@@ -68,15 +75,20 @@ fn convert_recording_to_identifications(
                     recording_id: Some(recording_id.clone()),
                     title: title.clone(),
                     artist: artist_name.clone(),
+                    album_artist: None, // Will be populated by MusicBrainz lookup
                     album: rg.title.clone(),
                     track_number: None,
                     total_tracks: None,
+                    disc_number: None,
+                    total_discs: None,
                     year: None,
                     duration,
                     artist_id: artist_id.clone(),
-                    release_id: Some(rg.id),
+                    release_id: None, // Let MusicBrainz fill this with correct release ID
+                    release_group_id: Some(rg.id), // AcoustID returns release group ID
                     release_type: rg.release_type,
                     secondary_types: rg.secondarytypes,
+                    genres: vec![], // Will be populated by MusicBrainz lookup
                 };
 
                 TrackIdentification {
@@ -94,15 +106,20 @@ fn convert_recording_to_identifications(
                 recording_id: Some(recording_id),
                 title,
                 artist: artist_name,
+                album_artist: None,
                 album: None,
                 track_number: None,
                 total_tracks: None,
+                disc_number: None,
+                total_discs: None,
                 year: None,
                 duration,
                 artist_id,
                 release_id: None,
+                release_group_id: None,
                 release_type: None,
                 secondary_types: vec![],
+                genres: vec![],
             },
             source: EnrichmentSource::AcoustId,
         }]

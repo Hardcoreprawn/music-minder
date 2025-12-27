@@ -110,10 +110,14 @@ impl AcoustIdClient {
             .map_err(|e| EnrichmentError::Network(e.to_string()))?;
 
         if !response.status().is_success() {
+            // Try to get the response body for more details
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
             return Err(EnrichmentError::Network(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
+                "HTTP {}: {} - {}",
+                status,
+                status.canonical_reason().unwrap_or("Unknown"),
+                body.chars().take(200).collect::<String>()
             )));
         }
 
