@@ -157,7 +157,7 @@ pub fn handle_selection(s: &mut LoadedState, message: Message) -> Task<Message> 
             }
         }
 
-        Message::QueueDragStart { index, y } => {
+        Message::QueueDragStart { index, y: _ } => {
             // Start dragging a queue item
             let count = queue_count(s);
             if index >= count {
@@ -170,33 +170,56 @@ pub fn handle_selection(s: &mut LoadedState, message: Message) -> Task<Message> 
                 .unwrap_or(false);
             s.queue_drag.dragging = Some(DragInfo {
                 index,
-                origin_y: y,
-                current_y: y,
+                origin_y: None, // Will be captured on first move event
+                current_y: 0.0,
                 is_shuffle_mode: is_shuffle,
             });
             s.queue_drag.drop_target = Some(index);
             s.queue_selection = Some(index);
             s.focused_list = FocusedList::Queue;
-            tracing::debug!(target: "ui::selection", "Drag start: index={}, y={:.1}", index, y);
+            tracing::debug!(target: "ui::selection", "Drag start: index={}", index);
         }
 
         Message::QueueDragMove { y } => {
             // Update drag position and calculate drop target
             // Get count first to avoid borrow conflict
             let count = queue_count(s);
+            if count == 0 {
+                return Task::none();
+            }
+
             if let Some(ref mut drag) = s.queue_drag.dragging {
+                // Capture origin_y on first move event (on_press doesn't give us coordinates)
+                let origin = match drag.origin_y {
+                    Some(o) => o,
+                    None => {
+                        drag.origin_y = Some(y);
+                        y
+                    }
+                };
                 drag.current_y = y;
 
-                // Calculate drop target based on cursor position
-                // Each item is ~30px high, calculate which slot we're over
-                let delta = y - drag.origin_y;
-                let items_moved = (delta / 30.0).round() as i32;
+                // Calculate drop target based on cursor position delta
+                // Item height is approximately 30px (XS padding * 2 + font size)
+                const ITEM_HEIGHT: f32 = 30.0;
+                let delta = y - origin;
+
+                // Simple approach: round delta to nearest item slot
+                // Positive delta = moving down, negative = moving up
+                // Use rounding for smooth, predictable behavior
+                let items_moved = (delta / ITEM_HEIGHT).round() as i32;
+
+                // Calculate new target position
+                // When moving down: target is where the item will END UP (after items shift up)
+                // When moving up: target is where the item will END UP (after items shift down)
                 let new_target =
                     (drag.index as i32 + items_moved).clamp(0, count as i32 - 1) as usize;
 
                 if s.queue_drag.drop_target != Some(new_target) {
                     s.queue_drag.drop_target = Some(new_target);
-                    tracing::trace!(target: "ui::selection", "Drag move: y={:.1}, target={}", y, new_target);
+                    tracing::trace!(target: "ui::selection", 
+                        "Drag move: y={:.1}, delta={:.1}, items_moved={}, target={}", 
+                        y, delta, items_moved, new_target);
                 }
             }
         }
