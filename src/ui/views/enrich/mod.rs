@@ -80,7 +80,7 @@ pub fn enrich_pane(s: &LoadedState) -> Element<'_, Message> {
 
     // Progress section (visible during identification)
     let progress = if enrich.is_identifying || !enrich.results.is_empty() {
-        progress_section(enrich)
+        progress_section(enrich, s.animation_tick)
     } else {
         Space::new(0, 0).into()
     };
@@ -155,8 +155,13 @@ fn options_section(enrich: &crate::ui::state::EnrichmentPaneState) -> Element<'_
     .into()
 }
 
-/// Progress section with determinate bar
-fn progress_section(enrich: &crate::ui::state::EnrichmentPaneState) -> Element<'_, Message> {
+/// Progress section with determinate bar and fun messages
+fn progress_section(
+    enrich: &crate::ui::state::EnrichmentPaneState,
+    tick: u32,
+) -> Element<'_, Message> {
+    use super::loading::LoadingContext;
+
     let total = enrich.selected_tracks.len();
     let completed = enrich.results.len();
     let progress_pct = if total > 0 {
@@ -165,7 +170,13 @@ fn progress_section(enrich: &crate::ui::state::EnrichmentPaneState) -> Element<'
         0.0
     };
 
-    let progress_text = format!("Progress: {}/{}", completed, total);
+    // Use fun message if still identifying, otherwise show completion
+    let progress_text = if enrich.is_identifying {
+        let fun_msg = LoadingContext::Identifying.message_for_tick(tick);
+        format!("{} ({}/{})", fun_msg, completed, total)
+    } else {
+        format!("Complete: {}/{}", completed, total)
+    };
 
     // Simple progress bar using containers
     let bar_width = 300.0;

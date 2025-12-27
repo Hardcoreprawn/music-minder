@@ -318,6 +318,11 @@ fn handle_player_inner(player: &mut Player, s: &mut LoadedState, msg: Message) -
                 }
             }
 
+            // === PHASE 5: Clean up expired toasts (every ~1s = 60 ticks) ===
+            if s.animation_tick.is_multiple_of(60) {
+                s.toasts.remove_expired();
+            }
+
             // Return any tasks from event processing (e.g., cover art resolution)
             if !tasks.is_empty() {
                 return Task::batch(tasks);

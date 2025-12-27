@@ -12,6 +12,7 @@ use super::enrich::enrich_pane;
 use super::library::library_pane;
 use super::player::player_controls;
 use super::settings::settings_pane;
+use super::toast::toast_overlay;
 use super::track_detail::track_detail_modal;
 
 /// Main loaded state view - integrated layout with sidebar
@@ -43,11 +44,23 @@ pub fn loaded_view(s: &LoadedState) -> Element<'_, Message> {
             .spacing(0)
             .into();
 
-    // If track detail modal is open, overlay it
+    // Build stack of overlays
+    let mut layers: Vec<Element<'_, Message>> = vec![base_layout];
+
+    // Track detail modal (if open)
     if let Some(modal) = track_detail_modal(s) {
-        iced::widget::stack![base_layout, modal].into()
+        layers.push(modal);
+    }
+
+    // Toast notifications (always on top)
+    if let Some(toasts) = toast_overlay(&s.toasts) {
+        layers.push(toasts);
+    }
+
+    if layers.len() == 1 {
+        layers.pop().unwrap()
     } else {
-        base_layout
+        iced::widget::stack(layers).into()
     }
 }
 

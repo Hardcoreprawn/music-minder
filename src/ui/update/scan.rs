@@ -20,11 +20,14 @@ pub fn handle_scan(s: &mut LoadedState, msg: &Message) -> Task<Message> {
         Message::ScanStopped => {
             s.is_scanning = false;
             s.status_message = "Scan stopped by user.".to_string();
+            s.toasts.warning("Scan stopped");
             load_tracks_task(s.pool.clone())
         }
         Message::ScanFinished => {
             s.is_scanning = false;
             s.status_message = format!("Scan Complete. Processed {} files.", s.scan_count);
+            s.toasts
+                .success(format!("Scan complete: {} files", s.scan_count));
             load_tracks_task(s.pool.clone())
         }
         Message::ScanEventReceived(event) => {

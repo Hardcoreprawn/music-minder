@@ -15,6 +15,16 @@ use crate::ui::views::helpers::{calc_visible_range, format_from_path, is_lossles
 
 /// Renders virtualized track list with play buttons
 pub fn track_list(state: &LoadedState) -> Element<'_, Message> {
+    // Check for empty library state first
+    if state.tracks.is_empty() && !state.tracks_loading {
+        return empty_library_state();
+    }
+
+    // Check for loading state
+    if state.tracks_loading {
+        return loading_state(state.animation_tick);
+    }
+
     // Use filtered indices if filtering is active, otherwise show all tracks
     let display_indices: &[usize] = if state.filtered_indices.is_empty()
         && state.search_query.is_empty()
@@ -33,6 +43,11 @@ pub fn track_list(state: &LoadedState) -> Element<'_, Message> {
     } else {
         display_indices.len()
     };
+
+    // Check for empty search/filter results
+    if total_count == 0 {
+        return empty_search_state(&state.search_query);
+    }
 
     let (start, end, top, bottom) = calc_visible_range(
         state.scroll_offset,
@@ -502,4 +517,70 @@ fn quality_badge(t: &TrackWithMetadata) -> Element<'_, Message> {
         ..Default::default()
     })
     .into()
+}
+
+/// Empty state when library has no tracks
+fn empty_library_state() -> Element<'static, Message> {
+    use crate::ui::icons;
+
+    container(
+        column![
+            icon_sized(icons::MUSIC, 48).color(color::TEXT_MUTED),
+            Space::with_height(spacing::MD),
+            text("No tracks in library")
+                .size(typography::SIZE_HEADING)
+                .color(color::TEXT_PRIMARY),
+            Space::with_height(spacing::SM),
+            text("Scan a folder to add your music collection")
+                .size(typography::SIZE_BODY)
+                .color(color::TEXT_MUTED),
+            Space::with_height(spacing::LG),
+            text("Use the path field above and click 'Scan' to get started")
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_MUTED),
+        ]
+        .align_x(iced::Alignment::Center)
+        .spacing(0),
+    )
+    .padding(spacing::XXL)
+    .center_x(Length::Fill)
+    .center_y(Length::Fill)
+    .into()
+}
+
+/// Empty state when search/filter returns no results
+fn empty_search_state(query: &str) -> Element<'_, Message> {
+    use crate::ui::icons;
+
+    let message = if query.is_empty() {
+        "No tracks match the current filters".to_string()
+    } else {
+        format!("No results for \"{}\"", query)
+    };
+
+    container(
+        column![
+            icon_sized(icons::SEARCH, 32).color(color::TEXT_MUTED),
+            Space::with_height(spacing::MD),
+            text(message)
+                .size(typography::SIZE_BODY)
+                .color(color::TEXT_MUTED),
+            Space::with_height(spacing::SM),
+            text("Try a different search term or clear filters")
+                .size(typography::SIZE_SMALL)
+                .color(color::TEXT_MUTED),
+        ]
+        .align_x(iced::Alignment::Center)
+        .spacing(0),
+    )
+    .padding(spacing::XL)
+    .center_x(Length::Fill)
+    .center_y(Length::Fill)
+    .into()
+}
+
+/// Loading state when tracks are being fetched
+fn loading_state(tick: u32) -> Element<'static, Message> {
+    use super::super::loading::{LoadingContext, loading_state_large};
+    loading_state_large(LoadingContext::Library, tick, None)
 }

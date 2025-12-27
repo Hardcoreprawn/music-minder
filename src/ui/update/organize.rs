@@ -118,14 +118,17 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
 fn finish_organize(s: &mut LoadedState) -> Task<Message> {
     let errors = s.organize_errors.len();
     let success = s.organize_total - errors;
-    s.status_message = if errors == 0 {
-        format!("Organized {} files successfully.", success)
+    if errors == 0 {
+        s.status_message = format!("Organized {} files successfully.", success);
+        s.toasts.success(format!("Organized {} files", success));
     } else {
-        format!(
+        s.status_message = format!(
             "Organized {} of {} files. {} errors.",
             success, s.organize_total, errors
-        )
-    };
+        );
+        s.toasts
+            .warning(format!("{} files organized, {} errors", success, errors));
+    }
     s.organize_view = OrganizeView::Input;
     s.organize_preview.clear();
     s.can_undo = organizer::UndoLog::has_undo();
@@ -173,10 +176,12 @@ pub fn handle_undo(s: &mut LoadedState, msg: Message) -> Task<Message> {
             match result {
                 Ok(n) => {
                     s.status_message = format!("Undo complete. Restored {} files.", n);
+                    s.toasts.success(format!("Restored {} files", n));
                     s.can_undo = false;
                 }
                 Err(e) => {
                     s.status_message = format!("Undo failed: {}", e);
+                    s.toasts.error("Undo failed");
                 }
             }
             load_tracks_task(s.pool.clone())

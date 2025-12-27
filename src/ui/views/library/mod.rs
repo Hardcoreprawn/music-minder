@@ -93,6 +93,8 @@ fn scan_controls(state: &LoadedState, path_display: String) -> Element<'_, Messa
 
 /// Renders the scan progress indicator (only visible during scanning)
 fn scan_progress(state: &LoadedState) -> Element<'_, Message> {
+    use super::loading::LoadingContext;
+
     if !state.is_scanning {
         return Space::with_height(0).into();
     }
@@ -100,19 +102,14 @@ fn scan_progress(state: &LoadedState) -> Element<'_, Message> {
     // Animated spinner character
     let spinner_char = spinner_frame(state.animation_tick);
 
+    // Fun message that rotates
+    let fun_message = LoadingContext::Scanning.message_for_tick(state.animation_tick);
+
     // Progress info
     let progress_text = if state.scan_count == 0 {
-        "Starting scan...".to_string()
+        fun_message.to_string()
     } else {
-        format!("Found {} audio files...", state.scan_count)
-    };
-
-    // Status message (shows last file processed)
-    let status_detail = if state.status_message.contains("Last:") {
-        // Extract just the filename part
-        state.status_message.clone()
-    } else {
-        state.status_message.clone()
+        format!("{} • {} files found", fun_message, state.scan_count)
     };
 
     container(
@@ -126,15 +123,10 @@ fn scan_progress(state: &LoadedState) -> Element<'_, Message> {
             .width(Length::Fixed(20.0))
             .center_x(Length::Fixed(20.0)),
             Space::with_width(spacing::SM),
-            // Progress count
+            // Progress count with fun message
             text(progress_text)
                 .size(typography::SIZE_BODY)
                 .color(color::TEXT_PRIMARY),
-            Space::with_width(spacing::LG),
-            // Status detail (truncated if too long)
-            text(status_detail)
-                .size(typography::SIZE_SMALL)
-                .color(color::TEXT_MUTED),
         ]
         .align_y(iced::Alignment::Center),
     )
