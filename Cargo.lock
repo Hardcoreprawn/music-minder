@@ -3306,10 +3306,18 @@ name = "musicographer"
 version = "0.1.7"
 dependencies = [
  "anyhow",
+ "crossbeam-channel",
+ "futures",
+ "notify",
+ "notify-debouncer-full",
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]

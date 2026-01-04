@@ -1,16 +1,16 @@
-//! # Musicographer
+//! # Music Journo
 //!
-//! Enrichment services for music metadata.
+//! File management and library scanning utilities for music collections.
 //!
 //! This crate provides:
-//! - Fingerprinting coordination
-//! - Track identification via AcoustID and MusicBrainz
-//! - Cover art retrieval via Cover Art Archive
+//! - Directory scanning for audio files
+//! - Real-time file system watching with debouncing
+//! - Support for MP3, FLAC, OGG, M4A, WAV formats
 //!
 //! # Architecture
 //!
-//! - `fingerprinter/` - Acoustic fingerprinting
-//! - `identifier/` - Track identification
-//! - `enricher/` - Full enrichment pipeline
+//! - `scanner/` - Directory traversal and audio file discovery
 
-// Placeholder module structure
+pub mod scanner;
+
+pub use scanner::{is_audio_file, scan, AUDIO_EXTENSIONS, FileWatcher, WatchError, WatchEvent};
