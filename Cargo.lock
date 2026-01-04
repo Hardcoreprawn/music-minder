@@ -1397,6 +1397,9 @@ dependencies = [
  "camino",
  "lofty",
  "serde",
+ "serde_json",
+ "soundstore",
+ "tempfile",
  "tracing",
  "walkdir",
 ]
@@ -5293,6 +5296,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.10.0",
  "chrono",
+ "lofty",
  "serde",
  "serde_json",
  "smallvec",

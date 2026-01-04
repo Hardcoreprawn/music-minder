@@ -17,23 +17,11 @@
 
 use std::path::PathBuf;
 
+use crate::metadata::TrackMetadata;
 use crate::model::Track;
 use sqlx::migrate::MigrateDatabase;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use std::time::Instant;
-
-/// Track metadata for database insertion.
-///
-/// Simple data structure for passing track information to database operations.
-/// Uses String for SQLx compatibility.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrackMetadata {
-    pub title: String,
-    pub artist: String,
-    pub album: String,
-    pub duration: u64,
-    pub track_number: Option<u32>,
-}
 
 /// Default database filename.
 pub const DEFAULT_DB_NAME: &str = "music_minder.db";

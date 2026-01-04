@@ -29,10 +29,11 @@
 //! ```
 
 pub mod db;
+pub mod metadata;
 pub mod model;
 pub mod quality;
 
 // Re-export commonly used types
-pub use db::TrackMetadata;
+pub use metadata::TrackMetadata;
 pub use model::{Album, Artist, Track};
 pub use quality::{QualityFlags, QualityTier, TrackQuality};

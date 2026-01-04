@@ -3,6 +3,7 @@
 ## Completed (7 commits total)
 
 ### Phase A.4 Foundation (Commits 1-5)
+
 - ADR documentation with architecture decisions
 - Workspace structure with 5 crates
 - Enhanced .gitignore for development
@@ -10,6 +11,7 @@
 - Cleanup of old source files in music-minder
 
 ### Phase A.5 - Scanner Migration (Commits 6-7)
+
 - **✅ Commit 41c3113**: Migrated `scanner/mod.rs` and `scanner/watcher.rs` to `crates/music_journo`
   - Async directory traversal with tokio streams
   - File system watcher with debounced notify events
@@ -28,38 +30,48 @@
 Given interdependencies, Phase A.5 is being done in stages:
 
 ### Stage 1: Metadata Foundations (Next 2-3 commits)
+
 **Challenge**: metadata.rs depends on `enrichment::domain::IdentifiedTrack` which isn't migrated yet
-**Solution**: 
+**Solution**:
+
 1. Create `soundstore::metadata` module with `TrackMetadata` struct (no enrichment)
 2. Implement basic read() function (lofty integration)
 3. Create `discographer::metadata` placeholder that will eventually call soundstore
 
 **Files to migrate**:
+
 - `crates/music-minder/src/metadata/mod.rs` → soundstore + discographer (split)
 - Dependencies to add: lofty (already in workspace)
 
 ### Stage 2: Organizer Layer (1-2 commits)
+
 **Challenge**: depends on metadata
 **Solution**: Migrate after metadata foundations are complete
 
 **Files to migrate**:
+
 - `crates/music-minder/src/organizer/mod.rs` → `crates/discographer/src/organizer/`
 
 ### Stage 3: Database Layer (1-2 commits)
+
 **Challenge**: Large and self-contained, but referenced by other modules
 **Solution**: Implement fully in soundstore (tests already written)
 
 **Files to migrate**:
+
 - `crates/music-minder/src/db/mod.rs` → `crates/soundstore/src/db/`
 - **Note**: This file was deleted in earlier cleanup; reconstruct from test requirements
 
 ### Stage 4: Player/Symphony Integration (0-1 commits)
+
 **Status**: 90% already in `crates/symphonium`, just needs re-export
 **Actions**:
+
 - Verify symphonium builds independently
 - Add to music-minder imports as external crate
 
 ### Stage 5: Final Integration (1 commit)
+
 - Update `music-minder/src/lib.rs` and `main.rs` to import from new crates
 - Remove old source files from music-minder/src (except ui, cli which stay for now)
 - Run full workspace tests
@@ -69,7 +81,7 @@ Given interdependencies, Phase A.5 is being done in stages:
 
 ## Dependency Graph (as of now)
 
-```
+```text
 symphonium (DONE: self-contained audio)
   ↓ (music-minder will import)
   

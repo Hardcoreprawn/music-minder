@@ -22,6 +22,7 @@ bitflags = "2.9"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 clap = { version = "4.5.53", features = ["derive", "env"] }
 dirs = "6.0"
+discographer = { path = "crates/discographer" }
 futures = "0.3.31"
 iced = { version = "0.13.1", features = ["tokio", "canvas", "image"] }
 image = "0.25"
@@ -33,6 +34,7 @@ rfd = "0.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 smallvec = { version = "1.13", features = ["serde"] }
+soundstore = { path = "crates/soundstore" }
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite"] }
 sha2 = "0.10"
 thiserror = "2.0.17"
