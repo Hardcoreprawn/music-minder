@@ -46,310 +46,342 @@ What made Winamp special:
 
 ---
 
-## 🚧 Current Sprint: Polish Release (v0.2.0)
+## 🚧 Next Sprint: v0.2.0 (Architecture & Performance)
 
-### Priority 1: User Feedback (Quick Wins)
-
-These are missing UX essentials that make the app feel unfinished.
-
-#### 1.1 Toast Notifications ✅
-
-Non-blocking feedback for async operations.
-
-- [x] Toast component (horizontal bar at bottom, auto-dismiss after 4s)
-- [x] Success states: "Tags written", "Scan complete", "Organized X files"
-- [x] Error states: "Failed to write tags"
-- [x] Warning states: "Scan stopped", "Low confidence matches"
-- [x] Info states: Batch enrichment results
-
-**Files:** `src/ui/views/toast.rs`, `src/ui/state.rs`, `src/ui/mod.rs`, `src/ui/update/*.rs`
-
-#### 1.2 Empty States ✅
-
-Helpful messages when lists are empty.
-
-- [x] Library: "No tracks in library. Scan a folder to get started!"
-- [x] Library search: "No results for '{query}'"
-- [x] Queue: "Queue is empty — add tracks from the Library"
-- [x] Enrich selection: "No tracks selected. Add tracks from the Library"
-
-**Files:** `src/ui/views/library/track_list.rs`, `src/ui/views/layout.rs`, `src/ui/views/enrich/selection.rs`
-
-#### 1.3 Loading States ✅
-
-Visual feedback during async operations with fun, personality-filled messages.
-
-- [x] Loading module with `LoadingContext` enum (Library, Scanning, Identifying, etc.)
-- [x] Serious messages: "Loading library...", "Generating audio fingerprint..."
-- [x] Silly messages (SimCity/Winamp inspired): "Reticulating splines...", "Whipping the llama's ass..."
-- [x] Message rotation: alternates serious/silly every ~3 seconds
-- [x] Spinner animation with context-appropriate icons
-- [x] Library loading state with rotating messages
-- [x] Scan progress with fun messages + file count
-- [x] Enrich progress with fun messages
-
-**Files:** `src/ui/views/loading.rs` (new), `src/ui/views/library/track_list.rs`, `src/ui/views/library/mod.rs`, `src/ui/views/enrich/mod.rs`
+> **Strategy:** Extract reusable components into a monorepo workspace while maintaining v0.1 functionality. This unblocks performance optimizations and enables new architectures (CLI tools, servers, headless player).
 
 ---
 
-### Priority 2: Alternative Matches UI ✅
+## 🏗️ Phase A: Architecture Refactoring (Current Priority)
 
-**COMPLETED** - When enrichment returns multiple album matches, users can now review and select the correct version.
+See [ADR_ARCHITECTURE_EXTRACTION.md](ADR_ARCHITECTURE_EXTRACTION.md) for detailed decisions.
 
-#### Implementation Summary
+**Testing-First Approach:** For each extraction task:
 
-**Data Model** (`src/ui/state.rs`):
+1. **Write CLI tests first** — Verify current behavior via CLI commands (`music-minder scan`, `music-minder identify`, etc.)
+2. **Add tracing** — Enable `RUST_LOG=debug` to see what's happening
+3. **Extract code** — Move to new crate with minimal behavior change
+4. **Verify tests pass** — Same CLI behavior + tests should still pass
+5. **Add crate-level tests** — Test extracted crate independently without GUI/DB
 
-- `AlternativeMatch` struct with album, year, confidence, release_type, and full identification
-- Extended `EnrichmentResult` with `alternatives`, `show_alternatives`, and `selected_alternative` fields
+This ensures we have a safety net and can incrementally refactor without breaking functionality.
 
-**Service Layer** (`src/enrichment/service.rs`):
+### A.1 Monorepo Workspace Setup (Week 1)
 
-- New `identify_track_with_alternatives()` method that:
-  - Scores all matches using smart path/metadata hints
-  - Returns best + 2-3 alternatives per session
-  - Enriches all with MusicBrainz (respecting rate limits)
+- [ ] Create root `Cargo.toml` with workspace definition
+- [ ] Move existing code to `crates/music-minder/`
+- [ ] Create skeleton crates: `symphonium/`, `discography/`, `librarian/`, `soundstore/`
+- [ ] Verify all existing tests pass in workspace context
 
-**State Management** (`src/ui/update/enrichment.rs`):
+**Deliverable:** Workspace that compiles and tests identically to v0.1.7
 
-- New message `EnrichBatchIdentifyWithAlts` carries best + alternatives
-- `EnrichToggleAlternatives(idx)` - expand/collapse alternatives list
-- `EnrichSelectAlternative(result_idx, alt_idx)` - switch to different album
-- Smart selection: auto-picks best match, considers folder names and file metadata
-
-**UI Component** (`src/ui/views/enrich/results.rs`):
-
-- Review button shows "▼" when alternatives exist, "▲" when expanded
-- Click to expand shows alternatives with confidence scores (color-coded)
-- "Select" button on each alternative switches the identification
-- Smooth expand/collapse with nested panel styling
-
-#### User Flow
+**Files to create:**
 
 ```text
-Identify → Best match + alternatives displayed
-         → Click "Review ▼" → Alternatives expand
-         → Click "Select" on different album → Updates display
-         → Click "Write" → Writes selected version's metadata
+Cargo.toml (workspace)
+crates/
+  symphonium/Cargo.toml
+  discography/Cargo.toml
+  librarian/Cargo.toml
+  soundstore/Cargo.toml
+  music-minder/Cargo.toml (moved from root)
 ```
 
-#### Smart Matching Logic
+---
 
-- Boosts matches where album name appears in folder path
-- Boosts matches aligning with existing file metadata
-- Penalizes undesirable types (karaoke, remixes) unless expected
-- Prioritizes original studio albums
+### A.2 Extract Audio Pipeline as `symphonium` (Week 2)
 
-#### Session-Only Storage
+**Testing approach:**
 
-- Alternatives generated only during batch identification
-- Kept to 2-3 best options
-- Discarded when batch finishes (no persistence)
-- Recreated fresh on next identify cycle
+1. [ ] Write CLI integration test: `music-minder play <file>` produces audio output
+2. [ ] Add tracing for decode/resample/output pipeline
+3. [ ] Extract audio code to symphonium crate
+4. [ ] Verify CLI test still passes with new structure
+5. [ ] Add symphonium unit tests for Decoder, Resampler, AudioPipeline
 
-**Files:** `src/ui/state.rs`, `src/enrichment/service.rs`, `src/ui/views/enrich/results.rs`, `src/ui/update/enrichment.rs`, `src/ui/messages.rs`, `src/ui/mod.rs`
+**Scope:** ~2000 LOC from `src/player/{audio.rs, decoder.rs, resampler.rs, state.rs, simd.rs}`
 
-**Tests:** 207 tests passing, all enrichment tests validated
+**What to extract:**
+
+- `AudioSharedState` — Lock-free atomic playback state
+- `Decoder` — Symphonia-based format detection and decoding
+- `Resampler` — Rubato sample rate conversion
+- `AudioCallback` — CPAL stream callback and ring buffer consumer
+- `PlayerEvent` and `PlayerCommand` — Communication protocol
+- `AudioPipeline` — Orchestrates full decode→resample→output flow
+
+**What stays in music-minder:**
+
+- Queue management (application layer)
+- Visualization binding (UI layer)
+- Media controls (OS integration)
+
+**Tests:** All existing audio tests pass in symphonium crate; no behavior changes
+
+**Benefits:** Can be published standalone; enables headless audio server; performance auditing without UI overhead
 
 ---
 
-### Priority 3: Startup Performance ⚡ Phase 1-2 Complete
+### A.3 Create Database Schema Crate `soundstore` (Week 2)
 
-"Instant startup — ready before you blink" is core to the Winamp DNA. Current startup is sluggish.
+**Testing approach:**
 
-#### Phase 1: Deferred Initialization & Instrumentation ✅ COMPLETE
+1. [ ] Write CLI test: `music-minder list` returns correct tracks
+2. [ ] Add tracing for database queries
+3. [ ] Extract database code to soundstore crate
+4. [ ] Verify CLI test still passes
+5. [ ] Add soundstore unit tests for repository traits
 
-- [x] Add detailed timing instrumentation to startup path
-- [x] Defer audio device enumeration to background task
-- [x] Parallelize DB, diagnostics, and device enumeration tasks
-- [x] Add tracing to database and track loading operations
-- [x] Compile and validate changes
+**Scope:** ~1000 LOC from `src/db/`, `src/model/`
 
-See [STARTUP_OPTIMIZATION_PHASE_1.md](STARTUP_OPTIMIZATION_PHASE_1.md) for implementation details.
+**What to extract:**
 
-#### Phase 2: Progressive Library Loading ✅ COMPLETE
+- Database initialization and migrations (`migrations/`)
+- Entity models: `Track`, `Artist`, `Album`, `TrackHealth`
+- Repository trait definitions
+- SQLite implementation of repositories
 
-- [x] Add `get_tracks_paginated(limit, offset)` database function
-- [x] Add `count_tracks()` to determine total library size
-- [x] Modify UI to load first batch of tracks (200) immediately
-- [x] Load remaining tracks in background after initial batch
-- [x] Test with large libraries (11k+ tracks verified)
+**New trait:**
 
-**Results (11,638 track library):**
+```rust
+pub trait TrackRepository: Send + Sync {
+    async fn get_track(&self, id: i64) -> Result<Track>;
+    async fn get_tracks_paginated(&self, limit: i64, offset: i64) -> Result<Vec<Track>>;
+    async fn insert_track(&self, track: Track) -> Result<()>;
+}
+```
 
-- Initial 200 tracks loaded in **14.5ms** (UI responsive immediately)
-- Remaining 11,438 tracks loaded in **118.3ms** (background)
-- Total time: ~133ms vs previous ~58ms for all-at-once
+**Benefits:** Can evolve schema independently; enables PostgreSQL support later; database testable in isolation
 
-**Implementation:**
+---
 
-- New messages: `TracksLoadedInitial`, `TracksLoadedMore`
-- New state field: `tracks_total` for progress tracking
-- Progressive loading tasks: `load_tracks_initial_task`, `load_tracks_remaining_task`
+### A.4 Extract File Management as `discographer` (Week 3)
 
-#### Phase 3: Further Optimization (Future)
+**Testing approach:**
 
-- [ ] Profile startup with `cargo build --timings` and runtime tracing
-- [ ] Lazy player initialization (defer audio until first play)
-- [ ] Demand-based loading (load more on scroll for very large libraries)
+1. [ ] Write CLI test: `music-minder scan <path>` produces correct library
+2. [ ] Write CLI test: `music-minder organize --dry-run` shows correct operations
+3. [ ] Add tracing for scanner and organizer
+4. [ ] Extract file management code to discographer crate
+5. [ ] Verify CLI tests still pass
+6. [ ] Add discographer unit tests for Scanner, Organizer, MetadataReader
+
+**Scope:** ~1500 LOC from `src/scanner/`, `src/organizer/`, `src/metadata/`, `src/library/`
+
+**What to extract:**
+
+- File discovery via `walkdir`
+- Metadata reading via `lofty`
+- File organization and pattern matching
+- Path handling with **`camino::Utf8Path`** (enforced UTF-8)
+
+**New trait:**
+
+```rust
+pub trait Scanner {
+    fn scan(path: &Utf8Path) -> Result<impl Iterator<Item = TrackMetadata>>;
+}
+```
+
+**Ecosystem adoption:** Add `camino = "1.1"` for UTF-8 paths throughout
+
+**Benefits:** CLI tools can scan/organize without database; UTF-8 type safety; reusable in backup tools
+
+---
+
+### A.5 Extract Enrichment Services as `music_journo` (Week 4)
+
+**Testing approach:**
+
+1. [ ] Write CLI test: `music-minder identify <file>` returns correct identification
+2. [ ] Write CLI test: `music-minder enrich --dry-run <path>` shows enrichment results
+3. [ ] Add tracing for fingerprinting, API calls, matching
+4. [ ] Extract enrichment code to music_journo crate
+5. [ ] Verify CLI tests still pass
+6. [ ] Add music_journo unit tests for Fingerprinter, Identifier, EnrichmentService
+
+**Scope:** ~2500 LOC from `src/enrichment/`, `src/cover/`
+
+**What to extract:**
+
+- Fingerprinting coordination (`fingerprint::Service`)
+- Identification service (`identification::Service` for AcoustID + smart matching)
+- Enrichment pipeline (`EnrichmentService` for MusicBrainz + Cover Art)
+- API clients with rate limiting and caching
+
+**New trait:**
+
+```rust
+pub trait EnrichmentService {
+    async fn identify(&self, file: &Path) -> Result<TrackIdentification>;
+    async fn enrich(&self, track: &Track) -> Result<EnrichedMetadata>;
+}
+```
+
+**Benefits:** Standalone metadata server; batch enrichment tools; testable without GUI/DB coupling
+
+---
+
+### A.6 Refactor UI State Handlers (Week 5)
+
+**Testing approach:**
+
+1. [ ] Write UI integration test for each domain (library scan, player control, enrichment, organize)
+2. [ ] Add tracing for message dispatch and state transitions
+3. [ ] Split update/ into focused modules
+4. [ ] Verify all UI tests still pass
+5. [ ] Add unit tests for each update module's state transitions
+
+**Scope:** Reorganize `src/ui/update/` into focused modules
+
+**Current:** Single `mod.rs` handles all message types (mixing concerns)
+
+**Target:**
+
+```text
+update/
+├── mod.rs       # Router
+├── library.rs   # Scan, Watcher, Track loading
+├── player.rs    # Play/Pause, Seek, Queue management
+├── enrichment.rs # Identify, Enrich, Write tags
+└── organizer.rs # Organize, Preview, Execute
+```
+
+**Benefit:** Each module handles one domain's state transitions; easier to test; scales as new commands added
+
+---
+
+### A.7 Add Repository Pattern to Main App (Week 5)
+
+**Testing approach:**
+
+1. [ ] Write unit test mocking TrackRepository
+2. [ ] Verify UI/enrichment tests still pass with mock repo
+3. [ ] Replace direct SQLx calls with repository interface
+4. [ ] Verify all tests still pass
+
+**Scope:** Replace direct SQLx calls with repository interface
+
+**Current:** UI code calls `sqlx::query!()` directly
+
+**Target:**
+
+```rust
+let repo = SqliteTrackRepository::new(pool);
+let track = repo.get_track(id).await?;
+let all = repo.get_all_tracks_paginated(200, 0).await?;
+```
+
+**Benefit:** Type-safe queries; can add caching layer later; easier to test
+
+---
+
+### A.8 Benchmarking Infrastructure (Week 4)
+
+**Ecosystem adoption:** Add `criterion` for performance tracking
+
+**Benchmarks to add:**
+
+- `benches/decode.rs` — MP3/FLAC decode speed for typical files
+- `benches/resample.rs` — Sample rate conversion throughput
+- `benches/fft.rs` — Spectrum visualization FFT performance
+
+**Usage:**
+
+```bash
+cargo bench -p symphonium
+cargo bench -p symphonium -- --compare  # Compare to baseline
+```
+
+**Benefit:** Track performance regressions across releases; publish benchmarks with crate
+
+---
+
+## Phase B: Performance Optimization 🚀 (After A.1-A.8)
+
+### B.1 Startup Performance (Parallel with Phase A)
+
+- [ ] Profile with `cargo build --timings` and runtime tracing
+- [ ] Lazy player initialization (defer audio device enumeration until first play)
 - [ ] Measure time-to-first-paint vs time-to-interactive
 
-#### Current Performance Metrics
+**Current metrics (Phase 2 complete):**
 
-| Metric | Before | After | Notes |
-| -------- | ------- | ------ | ------- |
-| Startup to GUI ready | ~2-3s | ~2ms | Time to `application()` call |
-| Database init | ~3.5ms | ~3.5ms | Already fast |
-| Initial tracks visible | ~58ms | ~14.5ms | 200 tracks immediately |
-| Full library loaded | ~58ms | ~133ms | Split across 2 loads |
-| UI responsive | After full load | After 14.5ms | User can interact immediately |
+- Startup to GUI: ~2ms
+- Initial 200 tracks: 14.5ms
+- Full library load: ~133ms for 11.6k tracks
 
-#### Likely Remaining Culprits
-
-| Area | Issue | Status |
-| ------ | ------- | -------- |
-| Audio device enumeration | CPAL enumerates synchronously in Player::new() | Could defer player init |
-| Iced window creation | ~1s between main() and first paint | Framework limitation |
-| Font/theme loading | Iced resource loading | Embedded fonts help |
-
-**Files:** `src/main.rs`, `src/ui/mod.rs`, `src/ui/update/mod.rs`, `src/ui/update/db.rs`, `src/ui/messages.rs`, `src/ui/state.rs`, `src/db/mod.rs`
+**Target:** <100ms time-to-interactive even for 50k+ track libraries
 
 ---
 
-### Priority 4: Async & Throughput Optimization
+### B.2 Scanning Speed (After A.4)
 
-Make scanning and external APIs as fast as possible through proper concurrency.
+**Current:** ~200-500 files/second  
+**Target:** 1000+ files/second on SSD
 
-#### 4.1 Scanning Speed
-
-Current: Sequential file processing. Goal: Maximize disk throughput.
-
-| Task | Description |
-| ---- | ----------- |
-| [ ] Profile current scanner | Measure time in I/O vs metadata parsing vs DB writes |
-| [ ] Parallel file discovery | Use `rayon` or `tokio::spawn_blocking` for directory walks |
-| [ ] Batch DB inserts | Collect 50-100 tracks, single transaction instead of per-file |
-| [ ] Streaming metadata reads | Start processing files before walk completes |
-| [ ] Progress granularity | Report files/second, show ETA |
-
-**Current architecture:** `scanner/mod.rs` uses `walkdir` synchronously, sends batches via channel.
-
-**Target:** 1000+ files/second on SSD (currently ~200-500 depending on metadata complexity).
-
-#### 4.2 External API Throughput
-
-AcoustID, MusicBrainz, and CoverArt Archive all have rate limits. Maximize throughput within limits.
-
-| API | Rate Limit | Current | Optimization |
-| --- | ---------- | ------- | ------------ |
-| AcoustID | 3 req/s | Sequential, 500ms delay | Pipeline: fingerprint while waiting for previous response |
-| MusicBrainz | 1 req/s | On-demand | Cache responses, batch lookups where possible |
-| CoverArt Archive | 1 req/s | On-demand | Pre-fetch during enrichment, aggressive caching |
-
-**Tasks:**
-
-- [ ] Pipeline fingerprinting with lookups (fingerprint track N+1 while waiting for API response for track N)
-- [ ] Connection pooling for HTTP client (reuse TCP connections)
-- [ ] Request coalescing: batch MusicBrainz lookups by release group
-- [ ] Smarter retry: exponential backoff, circuit breaker for API outages
-- [ ] Offline mode: queue requests when API unavailable, process when back
-
-#### 4.3 Async Best Practices Audit
-
-Ensure we're not blocking the async runtime anywhere.
-
-| Area | Check |
-| ---- | ----- |
-| [ ] File I/O | All file reads via `spawn_blocking`, never in async context |
-| [ ] Metadata parsing | `lofty`/`symphonia` calls wrapped in `spawn_blocking` |
-| [ ] Database | All SQLx queries are truly async (no blocking calls) |
-| [ ] UI updates | Heavy computations don't block the render loop |
-| [ ] Thread pool sizing | `spawn_blocking` pool sized appropriately for workload |
-
-**Files:** `src/scanner/mod.rs`, `src/enrichment/service.rs`, `src/metadata/mod.rs`
+- [ ] Profile I/O vs metadata parsing vs DB writes
+- [ ] Parallel metadata extraction via Rayon
+- [ ] Batch database inserts (50-100 tracks per transaction)
 
 ---
 
-### Priority 5: Queue Drag-Drop Polish
+### B.3 API Throughput (After A.5)
 
-Keyboard reordering works (Alt+↑/↓). Drag-drop needs finishing touches:
+**Current rate limits:**
 
-- [x] Keyboard reordering (Alt+↑/↓)
-- [x] Drag handle UI (grip icon)
-- [x] Basic drag state + drop target calculation
-- [x] Visual feedback (dimming, cursor)
-- [ ] Auto-scroll at edges during drag
-- [ ] Cancel drag on focus loss / Escape / right-click
+- AcoustID: 3 req/s
+- MusicBrainz: 1 req/s
+- CoverArt: 1 req/s
 
-**Files:** `src/ui/views/player.rs`, `src/ui/update/selection.rs`, `src/ui/streams.rs`
+**Target:** Pipelined requests (fingerprint N+1 while fetching API response for N)
+
+---
+
+## Phase C: Feature Polish (Parallel with Phase B)
+
+### C.1 Queue Drag-Drop Finishing Touches
+
+- [ ] Auto-scroll at drag edges
+- [ ] Cancel drag on Escape / focus loss
+- [ ] Smooth visual feedback
+
+**Current:** Keyboard reordering (Alt+↑/↓) works; drag handle UI exists
 
 ---
 
 ## 📋 Backlog
 
-### Phase 9: Audio Features
+### Audio Features
 
-| Feature | Complexity | Notes |
-| --------- | ------------ | ------- |
-| Gapless playback | Medium | Pre-buffer next track, seamless transition |
-| Equalizer (10-band) | Medium | Rock/Pop/Jazz/Classical presets |
-| ReplayGain | Medium | Volume normalization scanning |
-| Crossfade | Medium | 0-12s configurable transitions |
-| Playlist save/load | Low | .m3u8 format support |
+- Gapless playback (pre-buffer next track)
+- 10-band equalizer with presets
+- ReplayGain normalization
+- Crossfade (0-12s configurable)
+- Playlist save/load (.m3u8)
 
-### Phase 10: Remaining UI Polish
+### UI Polish
 
-| Feature | Complexity | Notes |
-| ------- | ---------- | ----- |
-| Context panel (slide-in) | Medium | Bulk selection actions, before/after preview |
-| Smooth transitions | Low | 100-200ms for state changes |
-| Focus indicators | Low | Keyboard navigation support |
-| Startup tagline | Low | Random "It really whips..." messages |
-| Easter egg theme | Low | Hidden classic green Winamp unlock |
+- Context panel (bulk selection actions)
+- Smooth transitions (100-200ms)
+- Keyboard navigation focus indicators
+- Random startup taglines
+- Easter egg theme (classic green Winamp unlock)
 
-### Phase 11: Streaming Integration (Future Vision)
+### Streaming Integration (Vision)
 
-Bridge your local library with streaming services for discovery:
+- Spotify recommendation seeding
+- Quality routing (local FLAC vs streaming)
+- AI DJ mode
 
-- **Taste analysis**: Genre/mood/era distribution from your collection
-- **Spotify recommendations**: Seeded by your actual music taste, not just streaming history
-- **Quality routing**: Always play the best available version (local FLAC vs streaming)
-- **AI DJ**: Playlists built from "70% owned, 30% discovery"
-
-### Library Features (Backlog)
+### Maintenance
 
 - Duplicate detection
 - Bulk metadata editing
-- Album view with grid layout
-- Artist/Album grouping (collapsible sections)
-- Smart playlists (rule-based auto-generation)
-
-### Integration (Backlog)
-
-- Global hotkeys (platform-specific implementation)
-- Lyrics display (external API integration)
+- Album grid layout
+- Smart playlists (rule-based)
+- Global hotkeys
 - Last.fm / ListenBrainz scrobbling
-- Discord Rich Presence
-
----
-
-## 🔧 Technical Debt
-
-### Medium Priority
-
-| Item | Notes |
-| ---- | ----- |
-| Atomic writes for cover art | `embed_cover_art()` and sidecar writes need atomic write-swap pattern |
-| Retry mechanism | Exponential backoff for file locks, network timeouts |
-| Cleanup stale temps | Remove orphaned `.tmp` files on startup |
-
-### Low Priority
-
-| Item | Notes |
-| ----- | ----- |
-| Watcher refactor | Migrate from Iced subscription to init-time start pattern |
-| Duration nullability | Make `NOT NULL DEFAULT 0` (currently `Option<i64>`) |
-| Dead code audit | 19 `#[allow(dead_code)]` annotations, mostly intentional |
 
 ---
 
@@ -371,11 +403,8 @@ music-minder organize <path>       # Organize files by pattern
 music-minder check [path]          # Check file health status
 
 # Diagnostics
-music-minder check-tools           # Verify fpcalc is installed
 music-minder diagnose              # Audio system diagnostics
 ```
-
-**Common flags:** `--dry-run`, `--verbose`, `--json`, `--quiet`
 
 ---
 
@@ -383,38 +412,19 @@ music-minder diagnose              # Audio system diagnostics
 
 ### CLI-First Development
 
-Every feature should be testable from the command line:
+Every feature should work from command line first, then wire GUI as thin layer over the same logic.
 
-1. Build the feature as a library function
-2. Expose via CLI with `--verbose`/`--json` flags
-3. Add tracing at key decision points
-4. Wire GUI as thin layer over the same logic
+### Metadata: File-First, Database for Search
 
-### Metadata: File-First, DB for Library
-
-**The audio file is the source of truth.** The database is an index for fast browsing:
-
-- Playback reads metadata directly from file tags
-- Enrichment writes to file tags, not just database
-- Database rebuilds on rescan (cache, not canonical store)
-
-### Tracing Targets
-
-```powershell
-$env:RUST_LOG="player::events=debug,ui::commands=debug"
-cargo run --release
-```
-
-| Target | Purpose |
-| ------ | ------- |
-| `player::events` | Audio thread events |
-| `ui::commands` | UI command dispatch |
-| `scanner::progress` | Scan progress |
-| `enrichment::api` | External API calls |
-| `cover::resolver` | Cover art resolution |
+- Audio file is canonical source (metadata read directly from tags)
+- Database is fast index for browsing and searching
+- Enrichment writes to both file tags and database
+- Database rebuilds on rescan (cache, not source of truth)
 
 ---
 
-## Archive
+## See Also
 
-Detailed implementation notes for completed phases have been archived to [ROADMAP_OLD.md](ROADMAP_OLD.md).
+- [ADR_ARCHITECTURE_EXTRACTION.md](ADR_ARCHITECTURE_EXTRACTION.md) — Detailed architecture decisions
+- [STATUS.md](STATUS.md) — Current implementation status
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Design patterns and module organization

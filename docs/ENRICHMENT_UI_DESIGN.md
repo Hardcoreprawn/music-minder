@@ -239,14 +239,14 @@ Match Low:      Error - <70% confidence
 │  └────────┘                                                     │
 │                                                                 │
 │  PROGRESS                                                       │
-│  ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░ 50%                                      │
+│  ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░ 50%                                       │
 │  bg: Surface-3, fill: Primary, height: 4px                      │
 │  For longer operations: add percentage text                     │
 │                                                                 │
 │  CONFIDENCE SCORE                                               │
-│  ████████░░ 82%  (Warning color for 70-90%)                    │
-│  ██████████ 97%  (Success color for 90%+)                      │
-│  ████░░░░░░ 42%  (Error color for <70%)                        │
+│  ████████░░ 82%  (Warning color for 70-90%)                     │
+│  ██████████ 97%  (Success color for 90%+)                       │
+│  ████░░░░░░ 42%  (Error color for <70%)                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
