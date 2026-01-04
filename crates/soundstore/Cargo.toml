@@ -1,0 +1,25 @@
+[package]
+name = "soundstore"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Database schema and repository layer for Music Minder"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bitflags = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smallvec = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "sqlite"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.23.0"

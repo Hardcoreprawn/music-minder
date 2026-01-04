@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Minder - Open Source Music Library Manager</title>
+    <meta name="description" content="A fast, native music library manager built with Rust. Organize, enrich, and play your music collection.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79b8ff;
+            --success: #3fb950;
+            --purple: #a371f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            font-size: 1.8rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Hero */
+        .hero {
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--text-secondary);
+            transform: translateY(-2px);
+        }
+
+        /* Features */
+        .features {
+            padding: 80px 0;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 48px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            transition: border-color 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+        }
+
+        /* Downloads */
+        .downloads {
+            padding: 80px 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .downloads h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .downloads > .container > p {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+        }
+
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .download-card {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+        }
+
+        .download-card .os-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .download-card h3 {
+            margin-bottom: 8px;
+        }
+
+        .download-card .version {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 20px;
+        }
+
+        .download-card .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .download-card.coming-soon {
+            opacity: 0.6;
+        }
+
+        .download-card.coming-soon .btn {
+            pointer-events: none;
+            background: var(--border);
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            padding: 80px 0;
+        }
+
+        .tech-stack h2 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 48px;
+        }
+
+        .tech-badges {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .tech-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: var(--accent);
+        }
+
+        .copyright {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <nav>
+                <a href="#" class="logo">
+                    <span class="logo-icon">🎵</span>
+                    Music Minder
+                </a>
+                <ul class="nav-links">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#downloads">Downloads</a></li>
+                    <li><a href="https://github.com/Hardcoreprawn/music-minder">GitHub</a></li>
+                    <li><a href="https://github.com/Hardcoreprawn/music-minder/blob/master/docs/ROADMAP.md">Roadmap</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Your Music, Organized</h1>
+                <p>A fast, native music library manager built with Rust. Scan, organize, enrich metadata, and play your entire collection with a beautiful, responsive interface.</p>
+                <div class="cta-buttons">
+                    <a href="#downloads" class="btn btn-primary">
+                        ⬇️ Download
+                    </a>
+                    <a href="https://github.com/Hardcoreprawn/music-minder" class="btn btn-secondary">
+                        ⭐ View on GitHub
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2>Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📂</div>
+                        <h3>Smart Library Scanning</h3>
+                        <p>Recursively scan directories for MP3, FLAC, OGG, WAV, and M4A files. Handles 10,000+ tracks with virtualized scrolling.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🏷️</div>
+                        <h3>Metadata Enrichment</h3>
+                        <p>Audio fingerprinting via AcoustID, MusicBrainz lookups, and automatic cover art from Cover Art Archive.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📁</div>
+                        <h3>File Organization</h3>
+                        <p>Pattern-based organization (Artist/Album/Track) with preview, undo support, and batch operations.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎧</div>
+                        <h3>Audio Playback</h3>
+                        <p>Low-latency playback with queue management, volume control, and real-time visualization (spectrum, waveform, VU meter).</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎛️</div>
+                        <h3>OS Integration</h3>
+                        <p>Media key support (play/pause/next/prev), system tray integration, and native notifications on Windows, macOS, and Linux.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Built with Rust</h3>
+                        <p>Native performance, low memory usage, and cross-platform support. No Electron, no web views—pure native code.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="downloads" id="downloads">
+            <div class="container">
+                <h2>Downloads</h2>
+                <p>Download the latest release for your platform</p>
+                <div class="download-grid">
+                    <div class="download-card">
+                        <div class="os-icon">🪟</div>
+                        <h3>Windows</h3>
+                        <p class="version">x64 • Windows 10+</p>
+                        <a href="https://github.com/Hardcoreprawn/music-minder/releases/latest" class="btn btn-primary">
+                            Download .exe
+                        </a>
+                    </div>
+                    <div class="download-card coming-soon">
+                        <div class="os-icon">🐧</div>
+                        <h3>Linux</h3>
+                        <p class="version">x64 • AppImage</p>
+                        <a href="#" class="btn btn-primary">
+                            Coming Soon
+                        </a>
+                    </div>
+                    <div class="download-card coming-soon">
+                        <div class="os-icon">🍎</div>
+                        <h3>macOS</h3>
+                        <p class="version">Universal • macOS 11+</p>
+                        <a href="#" class="btn btn-primary">
+                            Coming Soon
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="tech-stack">
+            <div class="container">
+                <h2>Built With</h2>
+                <div class="tech-badges">
+                    <div class="tech-badge">🦀 Rust</div>
+                    <div class="tech-badge">🧊 Iced GUI</div>
+                    <div class="tech-badge">🎵 Symphonia</div>
+                    <div class="tech-badge">🔊 CPAL</div>
+                    <div class="tech-badge">🗄️ SQLite</div>
+                    <div class="tech-badge">⚡ Tokio</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/Hardcoreprawn/music-minder">Source Code</a>
+                <a href="https://github.com/Hardcoreprawn/music-minder/issues">Report Issues</a>
+                <a href="https://github.com/Hardcoreprawn/music-minder/blob/master/docs/ROADMAP.md">Roadmap</a>
+                <a href="https://github.com/Hardcoreprawn/music-minder/blob/master/LICENSE">License</a>
+            </div>
+            <p class="copyright">
+                Music Minder is open source software released under the MIT License.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

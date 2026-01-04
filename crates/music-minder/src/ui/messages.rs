@@ -1,0 +1,213 @@
+//! Message types for the Music Minder UI.
+
+use super::state::{ActivePane, LoadedCoverArt, SortColumn, VisualizationMode};
+use crate::{db, diagnostics, enrichment, library, organizer, player, scanner};
+use iced::keyboard;
+use iced::widget::scrollable::Viewport;
+use sqlx::SqlitePool;
+use std::path::PathBuf;
+
+/// All possible messages that can be sent in the application
+#[derive(Debug, Clone)]
+pub enum Message {
+    /// No-op message (for callbacks that don't need to update state)
+    Noop,
+
+    // Initialization
+    DbInitialized(Result<SqlitePool, String>),
+    AudioDevicesEnumerated(Vec<String>), // Deferred audio device list
+    FontLoaded,
+
+    // Navigation
+    SwitchPane(ActivePane),
+
+    // Keyboard shortcuts
+    KeyPressed(keyboard::Key, keyboard::Modifiers),
+
+    // Scan messages
+    PathChanged(String),
+    PickPath,
+    PathPicked(Option<PathBuf>),
+    ScanPressed,
+    ScanStopped,
+    ScanEventReceived(library::ScanEvent),
+    ScanFinished,
+    TracksLoaded(Result<Vec<db::TrackWithMetadata>, String>),
+    /// Progressive loading: first batch of tracks with total count
+    TracksLoadedInitial(Result<(Vec<db::TrackWithMetadata>, i64), String>),
+    /// Progressive loading: subsequent batch of tracks
+    TracksLoadedMore(Result<Vec<db::TrackWithMetadata>, String>),
+
+    // Scroll messages
+    ScrollChanged(Viewport),
+    PreviewScrollChanged(Viewport),
+
+    // Search and filter messages
+    SearchQueryChanged(String),
+    SortByColumn(SortColumn),
+    FilterByFormat(Option<String>),
+    FilterByLossless(Option<bool>),
+    ClearFilters,
+
+    // Organize messages
+    OrganizeDestinationChanged(String),
+    OrganizePatternChanged(String),
+    PickOrganizeDestination,
+    OrganizeDestinationPicked(Option<PathBuf>),
+    OrganizePreviewPressed,
+    OrganizePreviewBatch(Vec<organizer::OrganizePreview>),
+    OrganizePreviewComplete,
+    OrganizeConfirmPressed,
+    OrganizeFileComplete(Result<(i64, String), String>),
+    OrganizeFinished,
+    OrganizeCancelPressed,
+
+    // Undo messages
+    UndoPressed,
+    UndoComplete(Result<usize, String>),
+
+    // Enrichment messages
+    EnrichmentApiKeyChanged(String),
+    EnrichmentApiKeySave,  // Save API key to database
+    EnrichmentApiKeySaved, // API key was saved successfully
+    EnrichmentTrackSelected(usize),
+    EnrichmentIdentifyPressed,
+    EnrichmentIdentifyResult(Result<enrichment::TrackIdentification, String>),
+    EnrichmentClearResult,
+    EnrichmentWriteTagsPressed,
+    EnrichmentWriteTagsResult(Result<usize, String>),
+
+    // Enrich pane messages (batch operations)
+    EnrichAddFromLibrary,             // Open library selection
+    EnrichAddTracks(Vec<usize>),      // Add tracks by index
+    EnrichRemoveTrack(usize),         // Remove track from selection
+    EnrichClearTracks,                // Clear all selected tracks
+    EnrichTrackChecked(usize, bool),  // Toggle track checkbox
+    EnrichFillOnlyToggled(bool),      // Toggle fill-only option
+    EnrichFetchCoverArtToggled(bool), // Toggle fetch cover art option
+    EnrichBatchIdentify,              // Start batch identification
+    EnrichBatchIdentifyResult(usize, Result<enrichment::TrackIdentification, String>), // Single track result
+    EnrichBatchIdentifyWithAlts(
+        usize,
+        Result<
+            (
+                enrichment::TrackIdentification,
+                Vec<enrichment::TrackIdentification>,
+            ),
+            String,
+        >,
+    ), // With alternatives
+    EnrichBatchComplete,                   // All tracks processed
+    EnrichReviewResult(usize),             // Open result for review (show/hide alternatives)
+    EnrichWriteResult(usize),              // Write single result
+    EnrichWriteAllConfirmed,               // Write all confirmed results
+    EnrichExportReport,                    // Export results to file
+    EnrichToggleAlternatives(usize),       // Toggle alternatives list for result at index
+    EnrichSelectAlternative(usize, usize), // Select alternative for result (result_idx, alt_idx)
+
+    // Player messages
+    PlayerPlay,
+    PlayerPause,
+    PlayerToggle,
+    PlayerStop,
+    PlayerNext,
+    PlayerPrevious,
+    PlayerSeekPreview(f32), // While dragging - updates display only
+    PlayerSeekRelease,      // On release - performs actual seek using stored preview position
+    PlayerVolumeChanged(f32),
+    PlayerPlayTrack(usize),     // Play track at index from library
+    PlayerQueueTrack(usize),    // Add track to queue
+    PlayerShuffleRandom,        // Shuffle 20-30 random tracks
+    PlayerSelectDevice(String), // Switch audio output device
+    PlayerTick,                 // Timer tick for updating UI
+
+    // Queue management messages
+    QueueJumpTo(usize),      // Jump to track at index in queue
+    QueueRemove(usize),      // Remove track at index from queue
+    QueueClear,              // Clear entire queue
+    QueueToggleShuffle,      // Toggle shuffle mode
+    QueueCycleRepeat,        // Cycle repeat mode (Off -> All -> One -> Off)
+    PlayerVisualizationTick, // Fast tick for visualization
+    PlayerVisualizationModeChanged(VisualizationMode),
+    PlayerEvent(player::PlayerEvent), // Event from audio thread (state changed, track loaded, etc.)
+
+    // OS Media control messages (from SMTC/MPRIS)
+    MediaControlCommand(player::MediaControlCommand),
+    MediaControlPoll, // Timer tick to poll for media control events
+
+    // Diagnostics messages
+    DiagnosticsRunPressed,
+    DiagnosticsComplete(diagnostics::DiagnosticReport),
+    DiagnosticsToggleCheck(String), // Toggle expanded state of a check by name
+
+    // Cover art messages (background, non-blocking)
+    CoverArtResolved(PathBuf, Result<LoadedCoverArt, String>),
+
+    // Background scanner messages
+    WatcherEvent(scanner::WatchEvent),
+    WatcherStarted,
+    WatcherStopped,
+    LibraryFileChanged(PathBuf), // A file in the library changed, may need refresh
+    RescanLibrary,               // Force a full library rescan
+
+    // Quality gardener messages
+    GardenerStarted,
+    GardenerStopped,
+    QueueQualityCheck(i64),        // Queue a track for quality checking by ID
+    QualityCheckComplete(i64, u8), // Track ID and quality score
+
+    // Sidebar messages
+    ToggleSidebar, // Toggle sidebar collapsed/expanded state
+
+    // Library pane messages
+    ToggleOrganizeSection, // Toggle organize section collapsed/expanded
+
+    // Selection / keyboard navigation messages
+    LibrarySelectPrevious,     // Move library selection up
+    LibrarySelectNext,         // Move library selection down
+    LibrarySelectIndex(usize), // Select specific library index
+    QueueSelectPrevious,       // Move queue selection up
+    QueueSelectNext,           // Move queue selection down
+    QueueSelectIndex(usize),   // Select specific queue index
+    QueueMoveUp,               // Move selected queue item up (Alt+Up)
+    QueueMoveDown,             // Move selected queue item down (Alt+Down)
+
+    // Queue drag-and-drop messages
+    QueueDragStart {
+        index: usize,
+        y: f32,
+    }, // Start dragging item at index
+    QueueDragMove {
+        y: f32,
+    }, // Mouse moved while dragging
+    QueueDragEnd,    // Mouse released - complete the drop
+    QueueDragCancel, // Drag cancelled (Escape, focus lost, etc.)
+
+    PlaySelected,            // Play the selected track (Enter key)
+    RemoveSelectedFromQueue, // Remove selected from queue (Delete key)
+
+    // Easter egg messages
+    PlaceholderClicked, // User clicked the empty album art placeholder
+
+    // Track detail messages
+    TrackDetailOpen(usize), // Open detail view for track at index
+    TrackDetailClose,       // Close detail view
+    TrackDetailIdentify,    // Start identification for detailed track
+    TrackDetailIdentifyResult(Result<enrichment::TrackIdentification, String>),
+    TrackDetailWriteTags, // Write identified metadata to file
+    TrackDetailWriteResult(Result<usize, String>),
+    TrackDetailRefresh, // Refresh current file's metadata from disk
+    TrackDetailRefreshed(
+        Result<
+            (
+                crate::metadata::TrackMetadata,
+                crate::metadata::FullMetadata,
+            ),
+            String,
+        >,
+    ),
+
+    // Toast notification messages
+    ToastDismiss(u64), // Dismiss a specific toast by ID
+    ToastExpireTick,   // Periodic tick to remove expired toasts
+}
