@@ -1,10 +1,26 @@
+# Rust build artifacts
 /target
 /target_win
+**/target/
 **/*.rs.bk
-# Cargo.lock is committed for binary applications to ensure reproducible builds
-.env
 
-# Database files
+# Workspace lock file (shared across all crates)
+# Cargo.lock is committed to ensure reproducible builds for binary applications
+
+# Environment variables
+.env
+.env.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Database files (test/development)
 *.db
 *.db-shm
 *.db-wal
@@ -13,9 +29,17 @@
 /test_music/
 /organized_music/
 
-# Added by cargo
-#
-# already existing elements were commented out
+# Build and compilation artifacts
+Cargo.lock.bak
+**/.cargo/
+**/incremental/
 
-#/target
+# Test logs
 startup_test.log
+*.log
+
+# Platform-specific
+*.exe
+*.o
+*.so
+*.dylib
