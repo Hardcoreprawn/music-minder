@@ -13,4 +13,4 @@
 
 pub mod scanner;
 
-pub use scanner::{is_audio_file, scan, AUDIO_EXTENSIONS, FileWatcher, WatchError, WatchEvent};
+pub use scanner::{AUDIO_EXTENSIONS, FileWatcher, WatchError, WatchEvent, is_audio_file, scan};
