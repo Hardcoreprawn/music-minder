@@ -3388,6 +3388,8 @@ dependencies = [
  "bitflags 2.10.0",
  "chrono",
  "clap",
+ "cpal",
+ "criterion",
  "crossbeam-channel",
  "dirs 6.0.0",
  "discographer",

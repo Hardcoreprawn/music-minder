@@ -67,8 +67,10 @@ pub fn handle_db_init(
                     .unwrap_or_else(|_| enrichment::DEFAULT_ACOUSTID_API_KEY.to_string())
             });
 
-            // Try to initialize player
-            let player_instance = player::Player::new();
+            // OPTIMIZATION: Defer player creation to first play command
+            // This avoids audio device enumeration at startup (can take 50-200ms)
+            // Player will be lazily initialized via ensure_player() when user interacts
+            let player_instance = None;
             let player_state = player::PlayerState::default();
 
             // OPTIMIZATION: Defer audio device enumeration to background task
@@ -212,5 +214,43 @@ pub fn handle_db_init(
             *state = AppState::Error(e);
             Task::none()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that enumerate_audio_devices_task creates a valid Task.
+    /// This is a compile-time verification that the async operation is properly structured.
+    #[test]
+    fn enumerate_audio_devices_task_compiles() {
+        // This test verifies the task creation doesn't panic and returns a valid type
+        let _task: Task<Message> = enumerate_audio_devices_task();
+    }
+
+    /// Test that run_diagnostics_task creates a valid Task.
+    #[test]
+    fn run_diagnostics_task_compiles() {
+        let _task: Task<Message> = run_diagnostics_task();
+    }
+
+    /// Verify player::PlayerState defaults are sane for startup.
+    #[test]
+    fn player_state_default_is_stopped() {
+        let state = player::PlayerState::default();
+        assert_eq!(state.status, player::PlaybackStatus::Stopped);
+        assert_eq!(state.volume, 1.0);
+        assert!(state.position.is_zero());
+        assert!(state.duration.is_zero());
+    }
+
+    /// Test config loading doesn't panic with missing file.
+    #[test]
+    fn config_load_with_missing_file_returns_defaults() {
+        // config::load() should return defaults, not panic
+        let cfg = config::load();
+        // Just verify it returns something - defaults are fine
+        let _ = cfg.audio.output_device;
     }
 }

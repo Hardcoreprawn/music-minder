@@ -50,6 +50,12 @@ proptest = "1.9.0"
 tempfile = "3.23.0"
 wiremock = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+criterion = { workspace = true }
+cpal = { workspace = true }
 
 [build-dependencies]
 winresource = "0.1"
+
+[[bench]]
+name = "startup"
+harness = false

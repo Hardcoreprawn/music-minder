@@ -96,3 +96,10 @@ lto = "fat"
 codegen-units = 1
 strip = true
 panic = "abort"
+
+# Profiling profile: release performance with debug symbols for flamegraph
+[profile.profiling]
+inherits = "release"
+debug = true           # Full debug symbols for flame graphs
+strip = false          # Keep symbols for profiling tools
+lto = "thin"           # Keep thin LTO for better inlining visibility

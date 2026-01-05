@@ -83,7 +83,7 @@ jobs:
           cache-on-failure: true
 
       - name: License & supply chain check
-        uses: EmbarkStudios/cargo-deny-action@8a8607842d8e9e8dff9a60066e84b6d555b89470 # v1
+        uses: EmbarkStudios/cargo-deny-action@76cd80eb775d7bbbd2d80292136d74d39e1b4918 # v2.0.14
         continue-on-error: true
         # Non-blocking: allows visibility into license/supply-chain issues without blocking CI
         # B.6.1: Initial integration for visibility; can be made blocking in Phase B.6.3

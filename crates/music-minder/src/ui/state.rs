@@ -552,3 +552,138 @@ pub struct GardenerState {
     /// Tracks needing attention
     pub tracks_needing_attention: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that AppState starts in Loading state (not yet loaded).
+    #[test]
+    fn app_state_starts_as_loading() {
+        // This is the default state before DB initialization completes
+        let state = AppState::Loading;
+        assert!(matches!(state, AppState::Loading));
+    }
+
+    /// Test that ActivePane defaults to Library.
+    #[test]
+    fn active_pane_defaults_to_library() {
+        let pane = ActivePane::default();
+        assert_eq!(pane, ActivePane::Library);
+    }
+
+    /// Test that VisualizationMode implements Display correctly.
+    #[test]
+    fn visualization_mode_display() {
+        assert_eq!(format!("{}", VisualizationMode::Spectrum), "Spectrum");
+        assert_eq!(format!("{}", VisualizationMode::Waveform), "Waveform");
+        assert_eq!(format!("{}", VisualizationMode::VuMeter), "VU Meter");
+        assert_eq!(format!("{}", VisualizationMode::Off), "Off");
+    }
+
+    /// Test virtualization constants are reasonable.
+    #[test]
+    fn virtualization_constants_valid() {
+        // Compile-time assertions for constants
+        const _: () = assert!(virtualization::TRACK_ROW_HEIGHT > 0.0);
+        const _: () = assert!(virtualization::PREVIEW_ROW_HEIGHT > 0.0);
+        const _: () = assert!(virtualization::DEFAULT_VIEWPORT_HEIGHT > 0.0);
+        const _: () = assert!(virtualization::SCROLL_BUFFER > 0);
+    }
+
+    /// Test that ResultStatus defaults to Pending.
+    #[test]
+    fn result_status_defaults_to_pending() {
+        let status = ResultStatus::default();
+        assert_eq!(status, ResultStatus::Pending);
+    }
+
+    /// Test EnrichmentState default values.
+    #[test]
+    fn enrichment_state_defaults() {
+        let state = EnrichmentState::default();
+        assert!(state.api_key.is_empty());
+        assert!(!state.api_key_saved);
+        assert!(state.selected_track.is_none());
+        assert!(!state.is_identifying);
+        assert!(state.last_result.is_none());
+        assert!(state.last_error.is_none());
+    }
+
+    /// Test EnrichmentPaneState has_confirmed_results logic.
+    #[test]
+    fn enrichment_pane_has_confirmed_results() {
+        let mut state = EnrichmentPaneState::default();
+
+        // Empty results should return false
+        assert!(!state.has_confirmed_results());
+
+        // Add a pending result - still false
+        state.results.push(EnrichmentResult {
+            status: ResultStatus::Pending,
+            confirmed: true,
+            ..Default::default()
+        });
+        assert!(!state.has_confirmed_results());
+
+        // Add a success but not confirmed - still false
+        state.results.push(EnrichmentResult {
+            status: ResultStatus::Success,
+            confirmed: false,
+            ..Default::default()
+        });
+        assert!(!state.has_confirmed_results());
+
+        // Add a confirmed success - now true
+        state.results.push(EnrichmentResult {
+            status: ResultStatus::Success,
+            confirmed: true,
+            ..Default::default()
+        });
+        assert!(state.has_confirmed_results());
+    }
+
+    /// Test CoverArtState defaults.
+    #[test]
+    fn cover_art_state_defaults() {
+        let state = CoverArtState::default();
+        assert!(state.current.is_none());
+        assert!(state.for_track.is_none());
+        assert!(!state.loading);
+        assert!(state.error.is_none());
+    }
+
+    /// Test WatcherState defaults.
+    #[test]
+    fn watcher_state_defaults() {
+        let state = WatcherState::default();
+        assert!(!state.active);
+        assert!(state.watch_paths.is_empty());
+        assert_eq!(state.pending_changes, 0);
+        assert!(state.last_error.is_none());
+    }
+
+    /// Test GardenerState defaults.
+    #[test]
+    fn gardener_state_defaults() {
+        let state = GardenerState::default();
+        assert!(!state.active);
+        assert!(state.command_tx.is_none());
+        assert_eq!(state.tracks_assessed, 0);
+        assert_eq!(state.tracks_needing_attention, 0);
+    }
+
+    /// Test TrackDetailState defaults.
+    #[test]
+    fn track_detail_state_defaults() {
+        let state = TrackDetailState::default();
+        assert!(state.track_index.is_none());
+        assert!(state.file_metadata.is_none());
+        assert!(state.full_metadata.is_none());
+        assert!(state.format_info.is_none());
+        assert!(!state.is_identifying);
+        assert!(state.identification.is_none());
+        assert!(state.error.is_none());
+        assert!(!state.tags_written);
+    }
+}

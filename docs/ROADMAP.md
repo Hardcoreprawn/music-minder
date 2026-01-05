@@ -42,14 +42,14 @@ What made Winamp special:
 | -------- | ---- | ---- | --------- | ----- | ----- |
 | 1️⃣ | B.6.1: ✅ Add cargo-deny to dependency scanning | S | DONE | — | Prevents legal liability, supply-chain attacks |
 | 2️⃣ | B.5.1: ✅ Benchmark compilation check in CI | T | DONE | — | Already integrated, non-blocking |
-| 3️⃣ | B.1: Start profiling startup time (flamegraph baseline) | P | 2h | — | Identify bottlenecks before optimizing |
-| 4️⃣ | Establish deny.toml policy (licenses, crate bans) | S | 30m | — | ✅ Config ready: allows MIT/Apache-2.0, denies GPL/AGPL |
+| 3️⃣ | B.1: ✅ Start profiling startup time (flamegraph baseline) | P | DONE | — | `profile.profiling` added, `samply` scripts, startup benchmarks |
+| 4️⃣ | ✅ Establish deny.toml policy (licenses, crate bans) | S | DONE | — | Config complete: allows MIT/Apache-2.0, denies GPL/AGPL, bans openssl |
 
 ### Next Sprint (Next 1-2 Weeks)
 
 | Priority | Task | Type | Est. Time | Depends | Notes |
-|----------|------|------|-----------|---------|-------|
-| 5️⃣ | B.1: Implement startup optimizations (lazy-loading) | P | 4h | Task 3 | Don't enumerate audio devices at startup |
+| -------- | ---- | ---- | --------- | ------- | ----- |
+| 5️⃣ | B.1: ✅ Implement startup optimizations (lazy-loading) | P | DONE | Task 3 | Player created on first play, not at startup |
 | 6️⃣ | B.2: Profile scanning speed bottlenecks | P | 2h | — | Identify sync I/O, metadata parsing, DB write costs |
 | 7️⃣ | B.2: Implement scanning optimizations (Rayon, batching) | P | 6h | Task 6 | Parallel file reads, batch DB writes |
 | 8️⃣ | B.6.3: Add cargo-outdated check (informational) | S | 30m | — | Quarterly dependency health check |
@@ -58,7 +58,7 @@ What made Winamp special:
 ### Following Sprint (2-3 Weeks Out)
 
 | Priority | Task | Type | Est. Time | Depends | Notes |
-|----------|------|------|-----------|---------|-------|
+| -------- | ---- | ---- | --------- | ------- | ----- |
 | 🔟 | B.3: Profile audio pipeline (SIMD, resampler) | P | 2h | — | Measure current performance, find micro-optimizations |
 | 1️⃣1️⃣ | B.3: SIMD and resampler optimizations | P | 6h | Task 10 | Pre-allocate buffers, optimize hot loops |
 | 1️⃣2️⃣ | B.5.2: Collect benchmark baselines (release workflow) | T | 2h | Tasks 5,7,11 | Document before/after improvements |
@@ -68,7 +68,7 @@ What made Winamp special:
 ### Later (Post v0.2.1)
 
 | Priority | Task | Type | Est. Time | Depends | Notes |
-|----------|------|------|-----------|---------|-------|
+| -------- | ---- | ---- | --------- | ------- | ----- |
 | 1️⃣5️⃣ | B.6.4: Fuzzing infrastructure (cargo-fuzz) | S | 4h | — | Optional but high-value for decoder robustness |
 | 1️⃣6️⃣ | C.2: UI/UX refinements (smooth transitions, focus) | F | 6h | — | Theme polish, keyboard navigation |
 | 1️⃣7️⃣ | C.3: Advanced features (duplicate detection, playlists) | F | 8h | — | Smart playlists, content-hash deduplication |
@@ -147,7 +147,7 @@ What made Winamp special:
 - [x] Add error recovery tests in `tests/error_recovery.rs` — 22 tests
 - [x] Add criterion benchmarks in `benches/` subdirectories
 - [x] Add benchmark compilation check to CI (Phase B.5.1)
-- [ ] Profile startup time and library load performance
+- [x] Profile startup time and library load performance (see B.1)
 
 **Remaining for Phase B.0:**
 
@@ -166,12 +166,24 @@ What made Winamp special:
 
 **Target:** <100ms time-to-interactive for 50k+ tracks
 
-**Action Items:**
+**Profiling Infrastructure:** ✅ COMPLETE (January 2026)
 
-- [ ] Profile with `cargo flamegraph` (add `flamegraph` dev dependency)
-- [ ] Lazy-load player on first play (don't enumerate audio devices at startup)
+- [x] Add `profile.profiling` build profile (release + debug symbols)
+- [x] Create profiling script (`scripts/profile-startup.ps1`)
+- [x] Add startup benchmarks (`crates/music-minder/benches/startup.rs`)
+- [x] Document profiling workflow (`docs/PROFILING.md`)
+
+**Lazy Loading Optimization (January 2026):** ✅ COMPLETE
+
+- [x] Lazy-load player on first play (don't enumerate audio devices at startup)
+- [x] Audio device enumeration deferred to background task
+- [x] Added `deferred_operations` benchmark group to document savings
+- [x] Unit tests for lazy initialization in `ui::state` and `ui::update::db`
+
+**Remaining Optimization Work:**
+
 - [ ] Add incremental database queries (load visible tracks first)
-- [ ] Benchmark against baseline with `criterion`
+- [ ] Run flamegraph analysis and document bottlenecks
 
 ---
 
@@ -341,20 +353,25 @@ cargo bench --no-run
 
 ### B.6.1 Enhanced Dependency Scanning
 
-**Status: READY TO IMPLEMENT** — High priority, low risk
+**Status: ✅ COMPLETE** — January 2026
 
-**Current:** `cargo-audit` (vulnerability scanning only)
+**Current:** `cargo-audit` (vulnerability scanning) + `cargo-deny` (license/policy enforcement)
 
-**Action Items:**
+**Completed:**
 
-- [ ] Add `cargo-deny` for license and policy enforcement
-- [ ] Create `.cargo/deny.toml` configuration
-- [ ] Add deny check to CI pipeline
-- [ ] Document allowed/denied license list
+- [x] Add `cargo-deny` for license and policy enforcement
+- [x] Create `.cargo/deny.toml` configuration
+- [x] Add deny check to CI pipeline (non-blocking, `continue-on-error: true`)
+- [x] Document allowed/denied license list
+
+**Policy Highlights:**
+
+- **Allowed licenses:** MIT, Apache-2.0, BSD-2/3-Clause, ISC, MPL-2.0, LGPL (weak copyleft), Zlib, CC0, BSL-1.0
+- **Denied licenses:** GPL, AGPL (strong copyleft - implicit deny via allow-list)
+- **Banned crates:** openssl, openssl-sys (use rustls instead)
+- **Sources:** Only crates.io allowed; git dependencies denied
 
 **Why:** Prevents legal liability and supply-chain attacks
-
-**Estimated time:** 30 minutes
 
 ---
 

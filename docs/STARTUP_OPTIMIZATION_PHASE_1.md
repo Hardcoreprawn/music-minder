@@ -146,11 +146,47 @@ Remaining 11438 tracks loaded in 118.3ms
 
 ## Next Steps
 
-### Phase 3: Further Optimization (Future)
+### Phase 3: Flamegraph Profiling Infrastructure ✅ (January 2026)
 
-- [ ] Profile startup with `cargo build --timings` and `perf`
+**Status:** COMPLETE
+
+**Infrastructure Added:**
+
+1. **Profiling build profile** (`Cargo.toml`):
+   - `[profile.profiling]` — Release optimizations + debug symbols
+   - Enables flame graph generation with symbol resolution
+
+2. **Startup benchmarks** (`crates/music-minder/benches/startup.rs`):
+   - Config parsing: ~9.7 µs
+   - Icon loading: ~10.1 µs
+   - Path resolution: ~2.5 µs
+   - Allocation overhead: 31-187 ns depending on size
+
+3. **Profiling documentation** (`docs/PROFILING.md`):
+   - Tool setup (samply, flamegraph)
+   - Workflow for capturing profiles
+   - Interpretation guide
+
+4. **Profiling script** (`scripts/profile-startup.ps1`):
+   - Automated build + profile capture
+   - Output to `target/profiles/`
+
+**How to Profile:**
+
+```powershell
+# Quick profiling
+.\scripts\profile-startup.ps1
+
+# Or manually
+cargo build --profile profiling
+samply record target\profiling\music-minder.exe
+```
+
+### Phase 4: Further Optimization (Future)
+
 - [ ] Lazy player initialization (defer audio until first play)
 - [ ] Demand-based loading for very large libraries (100k+ tracks)
+- [ ] Analyze flame graphs and optimize bottlenecks
 
 ---
 
@@ -169,6 +205,15 @@ Remaining 11438 tracks loaded in 118.3ms
 
 1. **src/ui/state.rs** — Added `tracks_total` field
 2. **src/ui/messages.rs** — Added progressive loading messages
+
+### Phase 3: Profiling Infrastructure (January 2026)
+
+1. **Cargo.toml** — Added `[profile.profiling]`
+2. **crates/music-minder/Cargo.toml** — Added criterion dev-dependency and `[[bench]]`
+3. **crates/music-minder/benches/startup.rs** — Startup benchmarks
+4. **scripts/profile-startup.ps1** — Profiling automation script
+5. **docs/PROFILING.md** — Comprehensive profiling guide
+6. **docs/ROADMAP.md** — Updated task status
 
 ---
 
