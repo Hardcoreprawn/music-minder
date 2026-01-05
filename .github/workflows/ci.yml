@@ -52,6 +52,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Build benchmarks
+        run: cargo bench --no-run
+        continue-on-error: true
+        # Ensures benchmarks compile, but doesn't block CI if they fail
+        # (actual benchmark execution happens separately)
+
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -67,6 +73,20 @@ jobs:
         
       - name: Security audit
         run: cargo audit --ignore unmaintained
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          cache-on-failure: true
+
+      - name: License & supply chain check
+        uses: EmbarkStudios/cargo-deny-action@8a8607842d8e9e8dff9a60066e84b6d555b89470 # v1
+        continue-on-error: true
+        # Non-blocking: allows visibility into license/supply-chain issues without blocking CI
+        # B.6.1: Initial integration for visibility; can be made blocking in Phase B.6.3
 
   test-linux:
     name: Test (Linux)

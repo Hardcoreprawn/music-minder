@@ -48,6 +48,8 @@ windows-sys = { workspace = true }
 [dev-dependencies]
 proptest = "1.9.0"
 tempfile = "3.23.0"
+wiremock = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [build-dependencies]
 winresource = "0.1"

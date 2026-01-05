@@ -43,6 +43,9 @@ pub mod musicbrainz;
 pub mod service;
 pub mod traits;
 
+#[cfg(test)]
+pub mod test_mocks;
+
 pub use coverart::{CoverArt, CoverArtClient, CoverSize};
 pub use domain::{
     AudioFingerprint, EnrichmentError, EnrichmentSource, IdentifiedTrack, TrackIdentification,

@@ -5,7 +5,7 @@
 Music Minder is a fast, native music library manager built with Rust. Scan, organize, enrich metadata, and play your entire collection with a beautiful, responsive interface. No Electron. No cloud. Just music.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.92+-orange.svg)](https://www.rust-lang.org/)
 
 > *"It really whips the llama's ass"* — Winamp, 1997
 
@@ -37,7 +37,7 @@ Download the latest release for your platform from the [Releases page](https://g
 
 Requirements:
 
-- Rust 1.75+
+- Rust 1.92+
 - On Windows: Visual Studio Build Tools
 - On Linux: `libasound2-dev libdbus-1-dev pkg-config`
 

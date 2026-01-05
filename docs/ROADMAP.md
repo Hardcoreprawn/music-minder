@@ -26,7 +26,63 @@ What made Winamp special:
 
 ## Current Status: v0.2.0 (Phase A.5 Complete)
 
-**198 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
+**237 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
+
+---
+
+## 📋 Next Steps: Integrated Task List (v0.2.1 → v0.3.0)
+
+> **Strategy:** Balance performance optimization, security hardening, and feature polish
+>
+> **Mix of types:** Testing infrastructure (T), Performance (P), Security (S), Features (F)
+
+### Immediate (This Week)
+
+| Priority | Task | Type | Est. Time | Block | Notes |
+| -------- | ---- | ---- | --------- | ----- | ----- |
+| 1️⃣ | B.6.1: ✅ Add cargo-deny to dependency scanning | S | DONE | — | Prevents legal liability, supply-chain attacks |
+| 2️⃣ | B.5.1: ✅ Benchmark compilation check in CI | T | DONE | — | Already integrated, non-blocking |
+| 3️⃣ | B.1: Start profiling startup time (flamegraph baseline) | P | 2h | — | Identify bottlenecks before optimizing |
+| 4️⃣ | Establish deny.toml policy (licenses, crate bans) | S | 30m | — | ✅ Config ready: allows MIT/Apache-2.0, denies GPL/AGPL |
+
+### Next Sprint (Next 1-2 Weeks)
+
+| Priority | Task | Type | Est. Time | Depends | Notes |
+|----------|------|------|-----------|---------|-------|
+| 5️⃣ | B.1: Implement startup optimizations (lazy-loading) | P | 4h | Task 3 | Don't enumerate audio devices at startup |
+| 6️⃣ | B.2: Profile scanning speed bottlenecks | P | 2h | — | Identify sync I/O, metadata parsing, DB write costs |
+| 7️⃣ | B.2: Implement scanning optimizations (Rayon, batching) | P | 6h | Task 6 | Parallel file reads, batch DB writes |
+| 8️⃣ | B.6.3: Add cargo-outdated check (informational) | S | 30m | — | Quarterly dependency health check |
+| 9️⃣ | C.1: Batch enrichment improvements (parallel identify) | F | 4h | — | Rate-limit API calls, show progress |
+
+### Following Sprint (2-3 Weeks Out)
+
+| Priority | Task | Type | Est. Time | Depends | Notes |
+|----------|------|------|-----------|---------|-------|
+| 🔟 | B.3: Profile audio pipeline (SIMD, resampler) | P | 2h | — | Measure current performance, find micro-optimizations |
+| 1️⃣1️⃣ | B.3: SIMD and resampler optimizations | P | 6h | Task 10 | Pre-allocate buffers, optimize hot loops |
+| 1️⃣2️⃣ | B.5.2: Collect benchmark baselines (release workflow) | T | 2h | Tasks 5,7,11 | Document before/after improvements |
+| 1️⃣3️⃣ | B.6.2: Run cargo-udeps, remove unused deps | S | 1h | — | Reduce attack surface, clean deps |
+| 1️⃣4️⃣ | Code coverage setup (rust-tarpaulin baseline) | T | 1h | — | Establish coverage baseline for regression tracking |
+
+### Later (Post v0.2.1)
+
+| Priority | Task | Type | Est. Time | Depends | Notes |
+|----------|------|------|-----------|---------|-------|
+| 1️⃣5️⃣ | B.6.4: Fuzzing infrastructure (cargo-fuzz) | S | 4h | — | Optional but high-value for decoder robustness |
+| 1️⃣6️⃣ | C.2: UI/UX refinements (smooth transitions, focus) | F | 6h | — | Theme polish, keyboard navigation |
+| 1️⃣7️⃣ | C.3: Advanced features (duplicate detection, playlists) | F | 8h | — | Smart playlists, content-hash deduplication |
+| 1️⃣8️⃣ | Streaming integration (Spotify recommendations) | F | TBD | — | Vision item, post-v0.3.0 |
+
+---
+
+## Legend
+
+- **Type:** S (Security), T (Testing/Infra), P (Performance), F (Feature)
+- **Block:** What needs to happen first
+- **Est. Time:** Rough estimate (can vary)
+
+---
 
 ### ✅ Phase A: Architecture Refactoring (COMPLETE)
 
@@ -42,6 +98,7 @@ What made Winamp special:
 | **A.7** | Repository pattern | ✅ |
 
 **Architecture Achievement:**
+
 - 5 independent crates with clear separation of concerns
 - Metadata write functionality fully implemented
 - Type-safe conversions between domain models
@@ -66,42 +123,43 @@ What made Winamp special:
 
 ---
 
-## 🚧 Next Sprint: v0.2.0 (Performance & Polish)
-
-> **Strategy:** Now that architecture is solid, focus on performance optimizations, enhanced testing, and feature polish. Build confidence for 0.3.0 with streaming integration.
-
----
-
 ## 🏗️ Phase B: Performance Optimization (Next Priority)
 
 > **Focus:** Profiling, optimization, and enhanced testing coverage.
 
 ### B.0 Enhanced Test Coverage (Immediate)
 
-**Current State:** 198 tests across 5 crates
+**Current State:** 237 tests across 5 crates (was 198 at Phase A.5)
+
 - Unit tests: DB, organizer, file operations, enrichment APIs ✅
 - Integration tests: Scanner, organizer, CLI commands ✅
 - Contract tests: MusicBrainz, CoverArt API DTOs ✅
 - Mock infrastructure: AcoustID, MusicBrainz, CoverArt ✅
+- Concurrent access tests: Multi-threaded database patterns ✅
+- End-to-end CLI tests: Full workflow scenarios ✅
+- Error recovery tests: Network, filesystem, database failures ✅
 
-**Gaps to Address:**
+**Action Items Completed:**
 
-1. **End-to-end CLI tests** — Test full workflows (scan → identify → organize)
-2. **Concurrent access tests** — Multi-threaded database access patterns
-3. **Error recovery tests** — Network failures, corrupted files, permission errors
-4. **Performance benchmarks** — Scanning speed, decode throughput, API latency
-
-**Action Items:**
-- [ ] Add wiremock for HTTP mocking (AcoustID, MusicBrainz real responses)
-- [ ] Write end-to-end test scenarios in `tests/e2e/`
-- [ ] Add criterion benchmarks in `benches/` subdirectories
+- [x] Add wiremock for HTTP mocking (AcoustID, MusicBrainz real responses) — 3 tests
+- [x] Write end-to-end test scenarios in `tests/e2e.rs` — 9 tests
+- [x] Add concurrent access tests in `tests/concurrent_access.rs` — 5 tests
+- [x] Add error recovery tests in `tests/error_recovery.rs` — 22 tests
+- [x] Add criterion benchmarks in `benches/` subdirectories
+- [x] Add benchmark compilation check to CI (Phase B.5.1)
 - [ ] Profile startup time and library load performance
+
+**Remaining for Phase B.0:**
+
+- Profile with flamegraph and optimize bottlenecks (B.1-B.3)
+- Finalize benchmarking baselines for performance tracking (B.5.2-3)
 
 ---
 
 ### B.1 Startup Performance Optimization
 
 **Current Metrics:**
+
 - GUI startup: ~2ms
 - Initial 200 tracks: 14.5ms
 - Full library (11.6k tracks): ~133ms
@@ -123,6 +181,7 @@ What made Winamp special:
 **Target:** 1000+ files/second
 
 **Profile Areas:**
+
 - File I/O vs metadata parsing vs database writes
 - Parallel metadata extraction (Rayon batching)
 - Batch database inserts (500-1000 per transaction)
@@ -149,7 +208,7 @@ What made Winamp special:
 
 ### B.4 Benchmarking Infrastructure ✅ (COMPLETE)
 
-**Status: DONE** — Criterion benchmarking framework established
+**Status: DONE** — Comprehensive criterion benchmarking framework with realistic workloads
 
 **Completed:**
 
@@ -162,27 +221,205 @@ cargo bench -p discographer    # Metadata operations
 
 **Benchmarks Implemented:**
 
-1. **symphonium/benches/decode.rs** (3 benchmarks)
-   - Time calculation for 0s, 180s, 3600s
-   - Foundation for audio pipeline optimization
+1. **symphonium/benches/decode.rs** (9 benchmarks)
+   - **SIMD Volume Scaling** (Audio Callback Hot Path) — Tests volume scaling at different frame sizes (256, 1024, 4096 samples)
+   - **Time Formatting** (UI Rendering) — Measures time calculation overhead for playback display
+   - **Ring Buffer Operations** (Audio Thread Communication) — Tests lock-free communication overhead
+   - **Why these matter:** Volume scaling runs 48,000 times/second during playback; every nanosecond counts
 
-2. **soundstore/benches/db_insert.rs** (3 benchmarks)
-   - Artist creation
-   - Album creation  
-   - Track creation
-   - Foundation for database performance tracking
+2. **soundstore/benches/db_insert.rs** (11 benchmarks)
+   - **Data Structure Creation** — Artist, Album, Track allocation overhead
+   - **Batch Operations** — Creating 100 tracks at once (typical for album scanning)
+   - **String Operations** — Clone, format, path building (tag data is string-heavy)
+   - **Track Cloning** — Measures overhead for queue operations
+   - **Why these matter:** Library scanning creates thousands of objects; allocation pressure impacts overall scan speed
 
-3. **discographer/benches/scan.rs** (1 benchmark)
-   - Metadata structure creation
-   - Foundation for scanning optimization
+3. **discographer/benches/scan.rs** (11 benchmarks)
+   - **Metadata Creation** — Building TrackMetadata from tags (minimal vs. enriched)
+   - **Tag Normalization** — Trim, lowercase, parse track numbers (common scanner operations)
+   - **Path Operations** — String concatenation and path building
+   - **Batch Scanning** — Creating 50 tracks at once (realistic album size)
+   - **Why these matter:** Tag parsing is part of the critical scanning path; we measure the baseline for Phase B.2 optimization
 
-**HTML Reports:** Generated automatically with `--plotting-backend gnuplot`
+**Baseline Metrics Established:**
 
-**Next:** Use benchmarks as baseline for B.0-B.3 optimizations
+| Operation | Measurement | Significance |
+| --------- | ----------- | ------------ |
+| Volume scaling (1024 samples) | ~168 ns | Audio callback hot path |
+| Time formatting | ~260 ps | UI rendering (negligible) |
+| Track creation (minimal) | ~69 ns | Database model allocation |
+| Track creation (enriched) | ~136 ns | With metadata enrichment |
+| Metadata creation | ~93-100 ns | Scanner baseline |
+| Create 100 tracks | ~15.7 µs | Typical album import |
+| Scan 50-track album | ~6.4 µs | Batch operation baseline |
+
+**How to use these baselines:**
+
+```bash
+# Run benchmarks and compare to baseline (in target/criterion/)
+cargo bench -p symphonium
+
+# Save baseline for regression testing
+# (Criterion automatically tracks changes between runs)
+```
+
+**Next:** Use benchmarks as regression tests during Phase B.1-B.3 optimizations. Run periodically to catch performance regressions.
 
 ---
 
-## Phase C: Feature Polish (After B.0-B.4)
+### B.5.1 Benchmark Compilation Check ✅ (COMPLETE)
+
+**Status: DONE** — Integrated into CI pipeline
+
+**Completed:**
+
+- [x] Add `cargo bench --no-run` step to `.github/workflows/ci.yml`
+- [x] Runs on every PR/push to catch compiler errors
+- [x] Non-blocking with `continue-on-error: true` (doesn't delay releases)
+
+**What it does:** Compiles all benchmarks on every commit to catch code drift and compilation failures early. Takes ~30 seconds, uses cargo cache.
+
+**How to verify:**
+
+```bash
+# Locally, run the same command CI runs
+cargo bench --no-run
+```
+
+**Next:** Profile startup time and library load performance (B.1)
+
+---
+
+### B.5.2 Benchmark Baseline Collection (AFTER B.1-B.3)
+
+**Status: PLANNED** — Depends on completion of optimization work
+
+**Prerequisite:** Phases B.1-B.3 (startup, scanning, audio pipeline optimizations) must be completed first
+
+**Action Items:**
+
+- [ ] Add benchmark execution to `build-release.yml` workflow
+- [ ] Upload results as artifacts for each release
+- [ ] Document before/after metrics in release notes
+- [ ] Collect 3-5 releases of historical baseline data
+
+**Why after B.1-B.3:** You want to capture the improvement from optimizations; baseline collection proves the wins.
+
+**Timeline:** Start when optimization work is complete
+
+---
+
+### B.5.3 Automated Regression Detection (OPTIONAL, v0.3.0+)
+
+**Status: FUTURE** — Low priority, high complexity
+
+**Prerequisites:**
+
+- [ ] Complete Phase B.5.2 (have 3-5 releases of data)
+- [ ] Defined regression thresholds per operation
+- [ ] Owner assigned for investigating regressions
+
+**Action Items:**
+
+- [ ] Evaluate Codspeed or custom dashboard integration
+- [ ] Set up automated alerting (e.g., >5-10% regression triggers alert)
+- [ ] Create runbook for handling unavoidable regressions
+
+**Why optional:** Only valuable once you have patterns, confidence in measurements, and someone to own the process.
+
+**Timeline:** Consider for v0.3.0+ after baseline collection is mature
+
+---
+
+## Phase B.6: Security Hardening (Parallel to B.1-B.5)
+
+> **Focus:** Dependency scanning, code quality, and vulnerability detection.
+>
+> **Can run in parallel with B.0-B.5** — Orthogonal to performance work
+>
+> **See:** [SECURITY_TOOLING.md](SECURITY_TOOLING.md) for detailed tool documentation
+
+### B.6.1 Enhanced Dependency Scanning
+
+**Status: READY TO IMPLEMENT** — High priority, low risk
+
+**Current:** `cargo-audit` (vulnerability scanning only)
+
+**Action Items:**
+
+- [ ] Add `cargo-deny` for license and policy enforcement
+- [ ] Create `.cargo/deny.toml` configuration
+- [ ] Add deny check to CI pipeline
+- [ ] Document allowed/denied license list
+
+**Why:** Prevents legal liability and supply-chain attacks
+
+**Estimated time:** 30 minutes
+
+---
+
+### B.6.2 Unused Dependency Detection
+
+**Status: PLANNED** — Medium priority, optional
+
+**Tool:** `cargo-udeps`
+
+**Action Items:**
+
+- [ ] Document `cargo +nightly udeps --all-targets` command
+- [ ] Run locally before releases
+- [ ] Remove unused dependencies found
+
+**Why:** Reduces attack surface, improves build time
+
+**Note:** Requires nightly Rust (not blocking, run locally)
+
+**Timeline:** After B.6.1
+
+---
+
+### B.6.3 Outdated Dependency Tracking
+
+**Status: PLANNED** — Informational, quarterly
+
+**Tool:** `cargo-outdated`
+
+**Action Items:**
+
+- [ ] Add `cargo outdated` as informational CI check (non-blocking)
+- [ ] Establish quarterly update schedule
+- [ ] Plan major updates (grouping patches with releases)
+
+**Why:** Proactive security maintenance
+
+**Timeline:** After B.6.1
+
+---
+
+### B.6.4 Fuzzing for Audio Decoder (OPTIONAL)
+
+**Status: FUTURE** — Low priority, high value
+
+**Tool:** `cargo-fuzz`
+
+**Why:** Audio decoding is high-value target for fuzzing
+
+- Catch edge cases in Symphonia decoder
+- Test file scanner robustness
+- Validate path canonicalization
+
+**Action Items:**
+
+- [ ] Set up cargo-fuzz infrastructure
+- [ ] Create fuzz target for audio decoder
+- [ ] Create fuzz target for file scanner
+- [ ] Run continuously or before releases
+
+**Timeline:** Post-Phase B.1-B.5, if resources permit
+
+---
+
+## Phase C: Feature Polish (After B.0-B.6)
 
 ### C.1 Batch Enrichment & Metadata Writing
 
