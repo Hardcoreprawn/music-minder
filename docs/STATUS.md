@@ -152,6 +152,30 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --artist "Artist" --alb
 cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 ```
 
+## Phase A.5: Code Migration ✅ (Complete)
+
+> **Status:** COMPLETE - All code successfully extracted into modular crates
+
+- ✅ **symphonium** - Audio pipeline (decode, resample, CPAL output, FFT visualization, media controls)
+- ✅ **soundstore** - Database layer (SQLx/SQLite, schema, TrackMetadata, quality scoring)
+- ✅ **discographer** - File management (metadata reading, file organization, pattern-based moving)
+- ✅ **musicographer** - Scanner & watcher (async directory traversal, file change monitoring)
+- ✅ **music-minder** - Main application (GUI, CLI, enrichment service)
+
+**Test Coverage:** 198 tests across 5 crates
+- discographer: 7 tests
+- music-minder: 102 tests (2 ignored)
+- musicographer: 7 tests
+- soundstore: 13 tests
+- symphonium: 66 tests
+
+**Crate Separation Achieved:**
+- Metadata write functionality restored to soundstore
+- IdentifiedTrack → FullMetadata trait conversion implemented
+- All imports updated to use extracted crates
+- Old module stubs (metadata/, organizer/, scanner/) removed
+- Zero clippy warnings across entire workspace
+
 ## What's Next?
 
 ### Phase 5: Integration (Current)
@@ -159,6 +183,7 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 - [x] CLI `identify` command with smart matching
 - [x] CLI `write-tags` command with preview mode
 - [x] Metadata writing with `--write` and `--fill-only` flags
+- [x] Code migration to workspace crates (Phase A.5)
 - [ ] CLI `enrich` command for batch processing
 - [ ] GUI enrichment improvements (cover art display, batch processing)
 
@@ -170,7 +195,7 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 - ✅ MusicBrainz API client with DTOs and contract tests  
 - ✅ Cover Art Archive client
 - ✅ Enrichment service with rate limiting
-- ✅ 58 tests total
+- ✅ 102+ tests in enrichment subsystem
 
 ### Backlog
 
