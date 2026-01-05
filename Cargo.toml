@@ -27,6 +27,7 @@ futures = "0.3.31"
 iced = { version = "0.13.1", features = ["tokio", "canvas", "image"] }
 image = "0.25"
 lofty = "0.22.4"
+musicographer = { path = "crates/music_journo" }
 rand = "0.9"
 rayon = "1.10"
 reqwest = { version = "0.12.25", default-features = false, features = ["rustls-tls", "json", "gzip"] }

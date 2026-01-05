@@ -151,6 +151,47 @@ impl IdentifiedTrack {
     }
 }
 
+/// Convert IdentifiedTrack to FullMetadata for writing to audio files
+impl From<IdentifiedTrack> for soundstore::metadata::FullMetadata {
+    fn from(track: IdentifiedTrack) -> Self {
+        soundstore::metadata::FullMetadata {
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            album_artist: track.album_artist,
+            year: track.year.map(|y| y as u32),
+            genre: None,
+            track_number: track.track_number,
+            total_tracks: track.total_tracks,
+            disc_number: track.disc_number,
+            total_discs: track.total_discs,
+            composer: None,
+            comment: None,
+            lyrics: None,
+            musicbrainz_recording_id: track.recording_id,
+            musicbrainz_artist_id: track.artist_id,
+            musicbrainz_release_id: track.release_id,
+            musicbrainz_release_group_id: track.release_group_id,
+            musicbrainz_track_id: None,
+            duration_secs: track.duration.map(|d| d.as_secs()).unwrap_or(0),
+            bitrate: None,
+            sample_rate: None,
+            channels: None,
+            bits_per_sample: None,
+            has_cover_art: false,
+            cover_art_size: None,
+            format: String::new(),
+            file_size: 0,
+        }
+    }
+}
+
+impl From<&IdentifiedTrack> for soundstore::metadata::FullMetadata {
+    fn from(track: &IdentifiedTrack) -> Self {
+        track.clone().into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

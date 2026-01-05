@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
-use crate::{db, metadata, organizer};
-use soundstore;
+use crate::db;
+use discographer::organizer;
+use soundstore::metadata;
 
 /// Organize music files based on metadata
 pub fn cmd_organize(

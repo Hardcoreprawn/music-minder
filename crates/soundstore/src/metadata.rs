@@ -232,11 +232,173 @@ pub struct FieldChange {
     pub new_value: String,
 }
 
-/// Preview what changes would be made without actually writing
-pub fn preview_write(path: &Path, _options: &WriteOptions2) -> Result<WritePreview> {
-    let _current = read(path)?;
+/// Write metadata to an audio file
+///
+/// The `track_data` parameter should implement Into<FullMetadata> to allow flexibility
+/// in what metadata structure is passed (e.g., IdentifiedTrack from enrichment module).
+pub fn write<T: Into<FullMetadata>>(
+    path: &Path,
+    track_data: T,
+    options: &WriteOptions2,
+) -> Result<WriteResult> {
+    let metadata = track_data.into();
+    let current = read_full(path)?;
 
-    let changes = Vec::new();
+    let mut fields_updated = 0;
+    let mut fields_skipped = Vec::new();
+
+    // Helper to decide whether to write a field
+    let should_write = |current_val: &Option<String>| -> bool {
+        !options.only_fill_empty || current_val.as_deref().is_none_or(str::is_empty)
+    };
+
+    // Open the file for writing
+    let mut tagged_file = Probe::open(path)
+        .context("Failed to open file for writing")?
+        .read()
+        .context("Failed to read file for metadata writing")?;
+
+    let tag = tagged_file
+        .primary_tag_mut()
+        .ok_or_else(|| anyhow::anyhow!("No tag found in file"))?;
+
+    // Write basic metadata
+    if let Some(ref title) = metadata.title {
+        if should_write(&current.title) {
+            tag.set_title(title.clone());
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("title".to_string());
+        }
+    }
+
+    if let Some(ref artist) = metadata.artist {
+        if should_write(&current.artist) {
+            tag.set_artist(artist.clone());
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("artist".to_string());
+        }
+    }
+
+    if let Some(ref album) = metadata.album {
+        if should_write(&current.album) {
+            tag.set_album(album.clone());
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("album".to_string());
+        }
+    }
+
+    if let Some(track_num) = metadata.track_number {
+        if current.track_number.is_none() || !options.only_fill_empty {
+            tag.set_track(track_num);
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("track_number".to_string());
+        }
+    }
+
+    if let Some(year) = metadata.year {
+        if current.year.is_none() || !options.only_fill_empty {
+            tag.set_year(year);
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("year".to_string());
+        }
+    }
+
+    if let Some(ref genre) = metadata.genre {
+        if should_write(&current.genre) {
+            tag.set_genre(genre.clone());
+            fields_updated += 1;
+        } else {
+            fields_skipped.push("genre".to_string());
+        }
+    }
+
+    // MusicBrainz IDs require custom tag items which we'll skip for now
+    // The accessor trait doesn't provide setters for MB IDs
+    if options.write_musicbrainz_ids && metadata.musicbrainz_recording_id.is_some() {
+        // Note: Writing MB IDs would require direct tag manipulation which lofty
+        // doesn't expose via the Accessor trait. This is acceptable since
+        // MusicBrainz IDs are typically read-only from identification services.
+        fields_skipped.push("musicbrainz_recording_id (unsupported by Accessor)".to_string());
+    }
+
+    // Truncate the file and write changes back
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .context("Failed to open file for writing")?;
+
+    tagged_file
+        .save_to(&mut file, Default::default())
+        .context("Failed to save metadata to file")?;
+
+    Ok(WriteResult {
+        fields_updated,
+        fields_skipped,
+    })
+}
+
+/// Preview what changes would be made without actually writing
+pub fn preview_write<T: Into<FullMetadata>>(
+    path: &Path,
+    track_data: T,
+    options: &WriteOptions2,
+) -> Result<WritePreview> {
+    let metadata = track_data.into();
+    let current = read_full(path)?;
+    let mut changes = Vec::new();
+
+    // Helper to decide whether to write a field
+    let should_write = |current_val: &Option<String>| -> bool {
+        !options.only_fill_empty || current_val.as_deref().is_none_or(str::is_empty)
+    };
+
+    // Check what would change for title
+    if let Some(ref new_title) = metadata.title
+        && should_write(&current.title)
+    {
+        let current_value = current.title.unwrap_or_default();
+        if current_value != *new_title {
+            changes.push(FieldChange {
+                field: "title".to_string(),
+                current_value,
+                new_value: new_title.clone(),
+            });
+        }
+    }
+
+    // Check what would change for artist
+    if let Some(ref new_artist) = metadata.artist
+        && should_write(&current.artist)
+    {
+        let current_value = current.artist.unwrap_or_default();
+        if current_value != *new_artist {
+            changes.push(FieldChange {
+                field: "artist".to_string(),
+                current_value,
+                new_value: new_artist.clone(),
+            });
+        }
+    }
+
+    // Check what would change for album
+    if let Some(ref new_album) = metadata.album
+        && should_write(&current.album)
+    {
+        let current_value = current.album.unwrap_or_default();
+        if current_value != *new_album {
+            changes.push(FieldChange {
+                field: "album".to_string(),
+                current_value,
+                new_value: new_album.clone(),
+            });
+        }
+    }
 
     Ok(WritePreview { changes })
 }
@@ -306,8 +468,9 @@ mod tests {
         writeln!(file, "Not an audio file").expect("Failed to write");
 
         let options = WriteOptions2::default();
+        let metadata = FullMetadata::default();
 
-        let result = preview_write(file.path(), &options);
+        let result = preview_write(file.path(), metadata, &options);
         assert!(result.is_err());
     }
 

@@ -38,6 +38,7 @@ notify-debouncer-full = { workspace = true }
 symphonium = { path = "../symphonium" }
 soundstore = { path = "../soundstore" }
 discographer = { path = "../discographer" }
+musicographer = { path = "../music_journo" }
 souvlaki = { workspace = true }
 async-trait = { workspace = true }
 

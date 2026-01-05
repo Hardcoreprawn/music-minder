@@ -11,9 +11,6 @@ pub mod enrichment;
 pub mod error;
 pub mod health;
 pub mod library;
-pub mod metadata;
-pub mod organizer;
-pub mod scanner;
 #[cfg(test)]
 pub mod test_utils;
 pub mod ui;
@@ -22,3 +19,8 @@ pub mod ui;
 pub use soundstore::{db, model};
 // Also re-export the audio player from symphonium crate
 pub use symphonium as player;
+// Re-export file management from musicographer crate
+pub use musicographer::scanner;
+// Re-export metadata and organizer from respective crates
+pub use discographer::organizer;
+pub use soundstore::metadata;

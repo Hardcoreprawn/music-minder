@@ -8,9 +8,8 @@ use tracing::{debug, info};
 
 use crate::db;
 use crate::library;
-use crate::scanner;
 
-use crate::scanner::is_audio_file;
+use musicographer::scanner::{self, is_audio_file};
 
 /// Scan a directory for music files
 pub fn cmd_scan(rt: &Runtime, path: &PathBuf, pool: sqlx::SqlitePool) -> anyhow::Result<()> {

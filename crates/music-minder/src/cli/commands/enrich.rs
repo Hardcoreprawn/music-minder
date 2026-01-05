@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
-use crate::{enrichment, health, metadata};
+use crate::enrichment;
+use crate::health;
+use crate::metadata;
 
 use super::{collect_audio_files, print_fpcalc_install_instructions};
 

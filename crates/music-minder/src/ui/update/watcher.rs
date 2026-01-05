@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use tracing::{debug, info, warn};
 
 use crate::health::GardenerCommand;
-use crate::scanner::WatchEvent;
+use musicographer::scanner::WatchEvent;
 
 use super::super::messages::Message;
 use super::super::state::LoadedState;

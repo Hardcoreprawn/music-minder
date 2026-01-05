@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
 // Shared audio file detection
-use crate::scanner::is_audio_file;
+use musicographer::scanner::is_audio_file;
 
 pub use enrich::{cmd_check_tools, cmd_enrich, cmd_identify, cmd_write_tags};
 pub use health::{cmd_check, cmd_diagnose, cmd_quality};

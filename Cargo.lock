@@ -3277,6 +3277,7 @@ dependencies = [
  "iced",
  "image 0.25.9",
  "lofty",
+ "musicographer",
  "notify",
  "notify-debouncer-full",
  "proptest",
