@@ -18,3 +18,8 @@ walkdir.workspace = true
 
 [dev-dependencies]
 tempfile = "3.23.0"
+criterion = { workspace = true }
+
+[[bench]]
+name = "scan"
+harness = false

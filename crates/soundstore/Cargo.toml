@@ -24,3 +24,10 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.23.0"
+criterion = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+chrono = { workspace = true }
+
+[[bench]]
+name = "db_insert"
+harness = false

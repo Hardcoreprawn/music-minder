@@ -57,6 +57,7 @@ rtrb = "0.3"
 crossbeam-channel = "0.5"
 parking_lot = "0.12"
 async-trait = "0.1.89"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [workspace.dependencies.windows-sys]
 version = "0.61"
