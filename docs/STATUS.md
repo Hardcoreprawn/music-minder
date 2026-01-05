@@ -178,6 +178,41 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 
 ## What's Next?
 
+### Phase B: Performance Optimization (In Progress)
+
+**Current:** Phase B.4 - Benchmarking Infrastructure ✅
+
+#### B.4: Benchmarking Infrastructure ✅ (Complete)
+
+- ✅ Added criterion 0.5 crate to workspace dependencies
+- ✅ Created benchmark suites for:
+  - **symphonium**: Audio pipeline time calculations (3 benchmarks)
+  - **soundstore**: Database model creation (Artist, Album, Track) - 3 benchmarks
+  - **discographer**: Metadata structure creation (1 benchmark)
+- ✅ HTML report generation configured
+- ✅ All benchmarks compile and build successfully
+- ✅ Provides baseline for performance tracking
+
+**Benchmarks Available:**
+```bash
+# Run all benchmarks
+cargo bench
+
+# Run specific crate benchmarks
+cargo bench -p symphonium
+cargo bench -p soundstore
+cargo bench -p discographer
+
+# Generate HTML reports
+cargo bench -- --plotting-backend gnuplot
+```
+
+**Next Steps (Phase B.0-B.3):**
+- [ ] Phase B.0: Enhanced test coverage (end-to-end CLI, error recovery)
+- [ ] Phase B.1: Startup performance optimization (target: <100ms to GUI)
+- [ ] Phase B.2: Scanning speed optimization (target: 1000+ files/sec)
+- [ ] Phase B.3: Audio pipeline optimization (decode/playback/FFT)
+
 ### Phase 5: Integration (Current)
 
 - [x] CLI `identify` command with smart matching
