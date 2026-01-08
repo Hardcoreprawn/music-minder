@@ -49,6 +49,9 @@ pub fn preview_stream(
 
                     // Use Arc to avoid cloning the full track list on each iteration
                     let tracks = Arc::new(tracks);
+                    // Use Arc for pattern and destination to avoid cloning on each iteration
+                    let pattern = Arc::new(pattern);
+                    let destination = Arc::new(destination);
 
                     // Pre-allocate preview vector capacity hint
                     // Send empty batch to show we started
@@ -78,8 +81,9 @@ pub fn preview_stream(
                     // Process a batch of tracks with parallel file exists checks via rayon
                     let end = (index + batch_size).min(tracks.len());
                     let batch_tracks: Vec<_> = tracks[index..end].to_vec();
-                    let pattern_clone = pattern.clone();
-                    let dest_clone = destination.clone();
+                    // Clone Arc pointers (cheap) instead of the actual String/PathBuf data
+                    let pattern_arc = Arc::clone(&pattern);
+                    let dest_arc = Arc::clone(&destination);
 
                     // Do file checks in blocking task using rayon for parallelism
                     let batch_previews = tokio::task::spawn_blocking(move || {
@@ -102,8 +106,8 @@ pub fn preview_stream(
                                 Some(organizer::preview_organize(
                                     &source,
                                     &meta,
-                                    &pattern_clone,
-                                    &dest_clone,
+                                    &pattern_arc,
+                                    &dest_arc,
                                     track.id,
                                 ))
                             })
@@ -139,8 +143,8 @@ enum PreviewStreamState {
     Processing {
         tracks: Arc<Vec<db::TrackWithMetadata>>,
         index: usize,
-        pattern: String,
-        destination: PathBuf,
+        pattern: Arc<String>,
+        destination: Arc<PathBuf>,
         batch_size: usize,
     },
     Done,
@@ -155,13 +159,16 @@ enum PreviewStreamState {
 /// Iced's cooperative async scheduler. This allows other subscriptions
 /// (like `PlayerTick`) to continue firing normally.
 pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
+    // Use Arc to avoid cloning the paths when transitioning state
+    let watch_paths = Arc::new(watch_paths);
     futures::stream::unfold(
         WatcherStreamState::Init { watch_paths },
         |state| async move {
             match state {
                 WatcherStreamState::Init { watch_paths } => {
                     // Create the file watcher with async channel
-                    match scanner::FileWatcher::new_async(watch_paths.clone()) {
+                    // Clone Arc (cheap) to get a reference for the watcher constructor
+                    match scanner::FileWatcher::new_async((*watch_paths).clone()) {
                         Ok((watcher, rx)) => {
                             tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started (async)");
                             Some((
@@ -204,7 +211,7 @@ pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = 
 /// Internal state machine for watcher streaming
 enum WatcherStreamState {
     Init {
-        watch_paths: Vec<PathBuf>,
+        watch_paths: Arc<Vec<PathBuf>>,
     },
     Running {
         _watcher: scanner::FileWatcher,

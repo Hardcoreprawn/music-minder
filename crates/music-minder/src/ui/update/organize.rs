@@ -2,6 +2,7 @@
 
 use iced::Task;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::{db, metadata, organizer};
 
@@ -62,8 +63,9 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
     s.organize_errors.clear();
 
     let pool = s.pool.clone();
-    let pattern = s.organize_pattern.clone();
-    let destination = s.organize_destination.clone();
+    // Use Arc to avoid cloning pattern and destination for each file
+    let pattern = Arc::new(s.organize_pattern.clone());
+    let destination = Arc::new(s.organize_destination.clone());
     let previews = s.organize_preview.clone();
 
     Task::perform(
@@ -76,8 +78,9 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
 
             for preview in previews {
                 let src = preview.source.clone();
-                let pat = pattern.clone();
-                let dest = destination.clone();
+                // Clone Arc pointers (cheap) instead of the actual data
+                let pat = Arc::clone(&pattern);
+                let dest = Arc::clone(&destination);
 
                 let res = tokio::task::spawn_blocking(move || {
                     let meta = metadata::read(&src)?;

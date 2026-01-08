@@ -416,7 +416,7 @@ pub struct TrackInfo {
 impl TrackInfo {
     /// Get display title (filename if no title tag).
     pub fn display_title(&self, path: &std::path::Path) -> String {
-        self.title.clone().unwrap_or_else(|| {
+        self.title.as_deref().map(|s| s.to_string()).unwrap_or_else(|| {
             path.file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Unknown".to_string())

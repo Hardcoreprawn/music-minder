@@ -31,7 +31,8 @@ impl QueueItem {
     pub fn display_title(&self) -> String {
         self.info
             .as_ref()
-            .and_then(|i| i.title.clone())
+            .and_then(|i| i.title.as_deref())
+            .map(|s| s.to_string())
             .unwrap_or_else(|| {
                 self.path
                     .file_stem()
