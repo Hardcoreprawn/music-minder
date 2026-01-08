@@ -84,7 +84,7 @@ fn start_organize(s: &mut LoadedState) -> Task<Message> {
 
                 let res = tokio::task::spawn_blocking(move || {
                     let meta = metadata::read(&src)?;
-                    organizer::organize_track(&src, &meta, &pat, &dest).map(|p| (src, p))
+                    organizer::organize_track(&src, &meta, &**pat, &**dest).map(|p| (src, p))
                 })
                 .await;
 

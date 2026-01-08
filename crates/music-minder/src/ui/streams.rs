@@ -106,8 +106,8 @@ pub fn preview_stream(
                                 Some(organizer::preview_organize(
                                     &source,
                                     &meta,
-                                    &pattern_arc,
-                                    &dest_arc,
+                                    &**pattern_arc,
+                                    &**dest_arc,
                                     track.id,
                                 ))
                             })
@@ -159,16 +159,13 @@ enum PreviewStreamState {
 /// Iced's cooperative async scheduler. This allows other subscriptions
 /// (like `PlayerTick`) to continue firing normally.
 pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = Message> {
-    // Use Arc to avoid cloning the paths when transitioning state
-    let watch_paths = Arc::new(watch_paths);
     futures::stream::unfold(
         WatcherStreamState::Init { watch_paths },
         |state| async move {
             match state {
                 WatcherStreamState::Init { watch_paths } => {
                     // Create the file watcher with async channel
-                    // Clone Arc (cheap) to get a reference for the watcher constructor
-                    match scanner::FileWatcher::new_async((*watch_paths).clone()) {
+                    match scanner::FileWatcher::new_async(watch_paths.clone()) {
                         Ok((watcher, rx)) => {
                             tracing::info!(target: "ui::watcher", paths = ?watch_paths, "File watcher started (async)");
                             Some((
@@ -211,7 +208,7 @@ pub fn watcher_stream(watch_paths: Vec<PathBuf>) -> impl futures::Stream<Item = 
 /// Internal state machine for watcher streaming
 enum WatcherStreamState {
     Init {
-        watch_paths: Arc<Vec<PathBuf>>,
+        watch_paths: Vec<PathBuf>,
     },
     Running {
         _watcher: scanner::FileWatcher,
