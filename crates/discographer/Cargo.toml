@@ -8,7 +8,6 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-camino = "1.1"
 lofty.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -41,12 +41,12 @@ discographer = { path = "../discographer" }
 musicographer = { path = "../music_journo" }
 souvlaki = { workspace = true }
 async-trait = { workspace = true }
+async-stream = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.9.0"
 tempfile = "3.23.0"
 wiremock = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
