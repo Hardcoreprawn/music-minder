@@ -12,7 +12,7 @@ use super::super::state::{
     ActivePane, AppState, EnrichmentPaneState, EnrichmentState, FocusedList, GardenerState,
     LoadedState, OrganizeView, SortColumn, VisualizationMode, WatcherState,
 };
-use super::load_tracks_initial_task;
+use super::load_tracks_initial_sorted_task;
 
 /// Helper to run diagnostics
 fn run_diagnostics_task() -> Task<Message> {
@@ -202,10 +202,11 @@ pub fn handle_db_init(
                 startup_start.elapsed().as_secs_f64() * 1000.0
             );
 
-            // Progressive loading: load first batch quickly, then rest in background
+            // Progressive loading: use sorted loading for better UX
+            // Load first batch quickly with database-level sorting, then rest in background
             // Also run diagnostics and enumerate audio devices in parallel
             Task::batch([
-                load_tracks_initial_task(pool),
+                load_tracks_initial_sorted_task(pool, SortColumn::Title, true),
                 run_diagnostics_task(),
                 enumerate_audio_devices_task(),
             ])

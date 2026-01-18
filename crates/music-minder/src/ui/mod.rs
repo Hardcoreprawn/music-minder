@@ -233,6 +233,36 @@ impl MusicMinder {
                 s.status_message = format!("Error loading tracks: {}", e);
             }
 
+            // Progressive loading: initial batch with sorting
+            Message::TracksLoadedInitialSorted(Ok((tracks, total, sort_col, ascending))) => {
+                s.tracks = tracks.clone();
+                s.tracks_total = Some(*total);
+                s.sort_column = *sort_col;
+                s.sort_ascending = *ascending;
+                let loaded = s.tracks.len();
+
+                if loaded as i64 >= *total {
+                    // All tracks fit in initial batch
+                    s.tracks_loading = false;
+                    s.status_message = format!("{} tracks loaded.", loaded);
+                    return Task::none();
+                } else {
+                    // More tracks to load - update status and kick off remaining load
+                    s.status_message = format!("Loaded {} of {} tracks...", loaded, total);
+                    return update::load_tracks_remaining_sorted_task(
+                        s.pool.clone(),
+                        loaded as i64,
+                        *total,
+                        *sort_col,
+                        *ascending,
+                    );
+                }
+            }
+            Message::TracksLoadedInitialSorted(Err(e)) => {
+                s.tracks_loading = false;
+                s.status_message = format!("Error loading tracks: {}", e);
+            }
+
             // Progressive loading: remaining tracks
             Message::TracksLoadedMore(Ok(tracks)) => {
                 s.tracks.extend(tracks.iter().cloned());
