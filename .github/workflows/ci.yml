@@ -88,6 +88,15 @@ jobs:
         # Non-blocking: allows visibility into license/supply-chain issues without blocking CI
         # B.6.1: Initial integration for visibility; can be made blocking in Phase B.6.3
 
+      - name: Install cargo-outdated
+        uses: taiki-e/install-action@4ffd29ed97e3dd31e27cd806a36f5af88c11bbbe # cargo-outdated
+
+      - name: Check for outdated dependencies
+        run: cargo outdated --root-deps-only --exit-code 0
+        continue-on-error: true
+        # B.6.3: Informational only - shows outdated deps but doesn't fail CI
+        # Review quarterly and update as needed
+
   test-linux:
     name: Test (Linux)
     runs-on: ubuntu-latest
