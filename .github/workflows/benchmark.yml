@@ -1,0 +1,141 @@
+name: Performance Benchmarks
+
+on:
+  # Run after releases are published
+  release:
+    types: [published]
+  # Manual trigger for ad-hoc benchmarking
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to benchmark (e.g., 0.1.7)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      
+      - name: Get version info
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#music-minder-v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=music-minder-v${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Use Cargo.toml version for manual runs without version input
+            VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=manual-run" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          cache-on-failure: true
+      
+      - name: Build release binaries
+        run: cargo build --release --workspace
+      
+      - name: Run all benchmarks
+        run: |
+          echo "=== Running Performance Benchmarks ==="
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Tag: ${{ steps.version.outputs.tag }}"
+          echo ""
+          
+          # Run benchmarks with bencher output format for parseable results
+          cargo bench --workspace --no-fail-fast -- --output-format bencher | Tee-Object -FilePath benchmark-results.txt
+          
+          echo ""
+          echo "=== Benchmark Summary ==="
+          Get-Content benchmark-results.txt | Select-String "test" | ForEach-Object { Write-Host $_ }
+        continue-on-error: true
+      
+      - name: Generate benchmark summary
+        shell: pwsh
+        run: |
+          # Create a human-readable summary
+          $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC"
+          $version = "${{ steps.version.outputs.version }}"
+          
+          @"
+          # Performance Benchmark Results
+          
+          **Version:** $version
+          **Date:** $timestamp
+          **Platform:** Windows (GitHub Actions)
+          **Rust:** $(rustc --version)
+          
+          ## Results
+          
+          ``````
+          $(Get-Content benchmark-results.txt)
+          ``````
+          
+          ## How to Use These Results
+          
+          1. Download this artifact from GitHub Actions
+          2. Compare with previous releases:
+             ``````bash
+             diff benchmark-results-0.1.7.txt benchmark-results-$version.txt
+             ``````
+          3. Look for regressions (>10% slower) or improvements
+          4. Update release notes with significant changes
+          
+          ## Key Metrics to Track
+          
+          - **Startup:** Time to interactive (target: <20ms)
+          - **Scanning:** Files per second (target: >500/sec)
+          - **SIMD:** Volume scaling latency (target: <100ns)
+          - **Database:** Write operations (target: <1ms/file)
+          
+          "@ | Out-File -FilePath benchmark-summary.md -Encoding utf8
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: benchmark-results-${{ steps.version.outputs.version }}
+          path: |
+            benchmark-results.txt
+            benchmark-summary.md
+          retention-days: 90
+        if: always()
+      
+      - name: Comment on release (if available)
+        uses: actions/github-script@v7
+        if: github.event_name == 'release'
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('benchmark-summary.md', 'utf8');
+            
+            github.rest.repos.createReleaseComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              body: `## 📊 Benchmark Results\n\n${summary}\n\n*Results available in workflow artifacts for 90 days*`
+            }).catch(err => {
+              console.log('Could not post comment (may not have permissions):', err.message);
+            });
+        continue-on-error: true
