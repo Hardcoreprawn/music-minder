@@ -101,21 +101,59 @@ allow-git = []
 - Faster builds
 - Cleaner codebase
 
+**Status:** ✅ Active (Phase B.6.2 - January 2026)
+
 **Installation:**
 
 ```bash
-cargo +nightly install cargo-udeps
+# Install nightly toolchain if not already present
+rustup toolchain install nightly
+
+# Install cargo-udeps
+cargo install cargo-udeps --locked
 ```
 
 **Usage:**
 
 ```bash
+# Check all targets for unused dependencies
 cargo +nightly udeps --all-targets
+
+# Note: Requires nightly toolchain
 ```
 
-**Note:** Requires nightly, so run manually or in separate CI job
+**CI Integration:**
 
-**Timeline:** Add as optional local tool (Phase B.6.2)
+Due to nightly requirement, run manually before releases:
+
+```yaml
+# Manual workflow or pre-release checklist
+- name: Check unused dependencies
+  run: cargo +nightly udeps --all-targets
+  continue-on-error: true
+```
+
+**Results (January 18, 2026):**
+
+Removed 8 unused dependencies across workspace:
+- **discographer:** camino (was only mentioned in comments)
+- **music-minder:** proptest (dev-dependency no longer used)
+- **musicographer:** anyhow, reqwest, serde_json (uses Result/Error from other modules)
+- **soundstore:** async-trait (not needed after refactoring)
+- **symphonium:** anyhow, async-trait, tokio, tempfile (removed after architecture simplification)
+
+**Impact:**
+- Reduced attack surface by removing 8 dependency trees
+- Cleaner Cargo.toml files
+- Faster compilation (fewer crates to build)
+- All 207 tests still passing, 0 clippy warnings
+
+**Maintenance:**
+- Run before each release
+- Review suggested removals carefully (false positives possible for doc-tests)
+- Use `package.metadata.cargo-udeps.ignore` in Cargo.toml to ignore known false positives
+
+**Timeline:** ✅ COMPLETE (Phase B.6.2)
 
 ---
 
@@ -129,6 +167,8 @@ cargo +nightly udeps --all-targets
 - Plan upgrade strategy
 - Avoid falling far behind
 
+**Status:** ✅ Active in CI (Phase B.6.3 - January 2026)
+
 **Installation:**
 
 ```bash
@@ -138,18 +178,43 @@ cargo install cargo-outdated
 **Usage:**
 
 ```bash
+# Check all outdated dependencies
 cargo outdated
+
+# Root dependencies only (recommended for CI)
+cargo outdated --root-deps-only
+
+# Exit with error code if outdated (for blocking CI)
+cargo outdated --exit-code 1
 ```
 
 **CI Integration:**
 
+Integrated into `.github/workflows/ci.yml` in the `audit` job:
+
 ```yaml
+- name: Install cargo-outdated
+  uses: taiki-e/install-action@4ffd29ed97e3dd31e27cd806a36f5af88c11bbbe # cargo-outdated
+
 - name: Check for outdated dependencies
-  run: cargo outdated --exit-code 1 --root-deps-only
-  continue-on-error: true  # Warn but don't fail
+  run: cargo outdated --root-deps-only --exit-code 0
+  continue-on-error: true
+  # B.6.3: Informational only - shows outdated deps but doesn't fail CI
+  # Review quarterly and update as needed
 ```
 
-**Timeline:** Add as informational check (Phase B.6.3)
+**Update Strategy:**
+
+- **Quarterly Review:** Check output every 3 months
+- **Minor/Patch Updates:** Apply proactively if low-risk
+- **Major Updates:** Plan with releases, test thoroughly
+- **Security Updates:** Apply immediately if vulnerability advisory
+
+**Current Status (January 18, 2026):**
+- winresource 0.1.28 → 0.1.29 (build dependency, low priority)
+- All other dependencies up to date
+
+**Timeline:** ✅ COMPLETE (Phase B.6.3)
 
 ---
 

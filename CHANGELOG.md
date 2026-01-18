@@ -1,7 +1,71 @@
 # Changelog
 
-## [0.1.7](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.6...music-minder-v0.1.7) (2025-12-27)
+## [Unreleased]
 
+### ✨ Features
+
+* **benchmarks:** automated baseline collection on every release ([Phase B.5.2](docs/ROADMAP.md))
+  * Integrated into build-release.yml workflow
+  * Captures startup, scanning, SIMD, and database performance metrics
+  * Results uploaded as artifacts with 90-day retention
+  * Enables historical tracking and regression detection
+* **security:** remove 8 unused dependencies with cargo-udeps ([Phase B.6.2](docs/SECURITY_TOOLING.md))
+  * Analyzed entire workspace with `cargo +nightly udeps --all-targets`
+  * Removed: discographer/camino, music-minder/proptest, musicographer/{anyhow,reqwest,serde_json}, soundstore/async-trait, symphonium/{anyhow,async-trait,tokio,tempfile}
+  * **Impact:** Reduced attack surface, faster compilation, cleaner dependency tree
+  * All 207 tests passing, 0 clippy warnings after cleanup
+* **audio:** SIMD validation and optimization analysis ([Phase B.3](docs/AUDIO_SIMD_VALIDATION.md))
+  * Benchmarked manual SIMD vs compiler auto-vectorization
+  * Validated 1.7-2.9x speedup for volume scaling operations
+  * Confirmed Rubato (FFT resampler) and RealFFT already SIMD-optimized
+  * Documented audio pipeline performance characteristics
+  * **Result:** Audio pipeline optimally implemented, no changes needed
+* **enrichment:** parallel batch processing with rate limiting ([Phase C.1](docs/ROADMAP.md))
+  * 4x concurrent fingerprinting (parallel local processing)
+  * Intelligent rate limiting (1.1s delay respecting MusicBrainz 1 req/sec)
+  * Improved progress tracking with timing statistics (files/sec, avg time per file)
+  * 2-3x faster for typical album enrichment (10-15 files)
+* **ci:** add cargo-outdated dependency tracking ([Phase B.6.3](docs/SECURITY_TOOLING.md))
+  * Integrated into audit job as informational check (non-blocking)
+  * Shows outdated dependencies on every push to main
+  * Enables quarterly dependency health reviews
+* **enrichment:** add retry logic with exponential backoff for API calls ([Phase B.7](docs/ENRICHMENT_ROBUSTNESS.md))
+  * 3 attempts with 500ms/1000ms backoff on transient network errors
+  * 30-second timeout protection prevents hanging indefinitely
+  * Smart detection: retry server errors (5xx), fail immediately on client errors (4xx)
+  * Applies to both AcoustID and MusicBrainz API clients
+* **fingerprint:** enhanced error handling for fpcalc failures ([Phase B.7](docs/ENRICHMENT_ROBUSTNESS.md))
+  * Validates file exists, is readable, and not empty before fingerprinting
+  * Specific error messages for common failure modes (unsupported format, corrupted file, too short)
+  * Path included in all error messages for easier troubleshooting
+* **scanning:** transaction batching with in-memory caching ([Phase B.2](docs/SCANNING_PERFORMANCE_ANALYSIS.md))
+  * 10x throughput improvement: 60→650 files/sec
+  * 25x faster DB writes: 16ms→0.64ms per file
+  * Batches of 100 files per commit with artist/album ID caching
+
+### 🐛 Bug Fixes
+
+* **metadata:** CRITICAL fix for data loss bug in write() function ([Phase B.7](docs/ENRICHMENT_ROBUSTNESS.md))
+  * Previous implementation opened file with truncate=true BEFORE save verification
+  * Any save failure would leave file empty/corrupted with no recovery
+  * New implementation creates `.bak.tmp` backup before truncating original
+  * Automatically restores from backup if write fails
+  * Explicit flush() ensures data written to disk before cleanup
+
+### ⚡ Performance
+
+* **startup:** database-level sorting eliminates in-memory sort ([Phase B.1](docs/STARTUP_OPTIMIZATION_PHASE_1.md))
+  * 17ms to interactive (14.5ms initial + 2-3ms overhead)
+  * Incremental loading: 200 tracks initially, rest in background
+  * Lazy player initialization deferred to first play
+
+### 📚 Documentation
+
+* add ENRICHMENT_ROBUSTNESS.md detailing defensive programming improvements
+* update ROADMAP.md with Phase B.7 completion status
+* update STATUS.md with latest performance metrics and test counts
+
+## [0.1.7](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.6...music-minder-v0.1.7) (2025-12-27)
 
 ### ✨ Features
 
@@ -22,18 +86,15 @@
 * **ui:** implement queue drag-and-drop reordering (7.7.2-7.7.3) ([7ea453b](https://github.com/Hardcoreprawn/music-minder/commit/7ea453b8f953735dcd6ed6c31e49f7cc7509a153))
 * **ui:** keyboard navigation with Enter/Delete shortcuts ([a1cf158](https://github.com/Hardcoreprawn/music-minder/commit/a1cf1586522fa53931b6515569c062a5cdfdd3dd))
 
-
 ### 🐛 Bug Fixes
 
 * **ci:** Split release workflow for reliable installer builds ([f051548](https://github.com/Hardcoreprawn/music-minder/commit/f0515488320d4d31e2d85b57a0c13e470378032a))
 * **queue:** improve drag-drop origin tracking ([995faeb](https://github.com/Hardcoreprawn/music-minder/commit/995faeb21aa49c3aad373cdec50c25f78a41a046))
 * **windows:** prevent console popup when running fpcalc ([35a990a](https://github.com/Hardcoreprawn/music-minder/commit/35a990ad6db173059761b1f8495bdefefe6154c6))
 
-
 ### ♻️ Refactoring
 
 * **ui:** consolidate icons to char-based system with easter eggs ([e209b2d](https://github.com/Hardcoreprawn/music-minder/commit/e209b2de450be529bd0860c204a34db80ffcddb8))
-
 
 ### 📚 Documentation
 
@@ -44,12 +105,10 @@
 
 ## [0.1.6](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.5...music-minder-v0.1.6) (2025-12-22)
 
-
 ### ✨ Features
 
 * Add application icon ([a77f722](https://github.com/Hardcoreprawn/music-minder/commit/a77f722f9491f7d3c1a056ef93fd9fc5a9784c1a))
 * **ui:** Add scan progress indicator with file count ([6d2c7fa](https://github.com/Hardcoreprawn/music-minder/commit/6d2c7faf6d2c74d2a79a3d216184fb76185fd92a))
-
 
 ### 🐛 Bug Fixes
 
@@ -61,7 +120,6 @@
 * **wix:** Move shortcuts to same feature as main executable ([0f66bd7](https://github.com/Hardcoreprawn/music-minder/commit/0f66bd751a62532024701a6ce5c4dafb5d219eaf))
 
 ## [0.1.5](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.4...music-minder-v0.1.5) (2025-12-20)
-
 
 ### ✨ Features
 
@@ -85,7 +143,6 @@
 * **ui:** Integrate gardener and quality updates in UI loop ([860ad30](https://github.com/Hardcoreprawn/music-minder/commit/860ad301cb0ae23a7baad389303a3a049e541159))
 * update dependencies with defensive tests ([1ddb170](https://github.com/Hardcoreprawn/music-minder/commit/1ddb170d196b05e86f0d135e5ad7e60f301ddc30))
 
-
 ### 🐛 Bug Fixes
 
 * **scripts:** correct pre-commit hook path and encoding ([507a984](https://github.com/Hardcoreprawn/music-minder/commit/507a984f6dbaae82784d97ffa49567b20aa0218d))
@@ -94,11 +151,9 @@
 * use -C flag to pass WiX preprocessor variable ([a3a2476](https://github.com/Hardcoreprawn/music-minder/commit/a3a247643ad479bd87b614c2692c4fedb8334288))
 * **watcher:** migrate GUI subscription to async tokio::sync::mpsc ([15a2828](https://github.com/Hardcoreprawn/music-minder/commit/15a28287e03f79052c78b95fe9d47539b3ae3e3d))
 
-
 ### ⚡ Performance
 
 * **ci:** optimize pipeline for faster runs ([ba7fda1](https://github.com/Hardcoreprawn/music-minder/commit/ba7fda18f6ed2fa772ac924a2d53d18166b05230))
-
 
 ### ♻️ Refactoring
 
@@ -107,7 +162,6 @@
 * **ui:** consolidate subscriptions and improve player state sync ([747eb69](https://github.com/Hardcoreprawn/music-minder/commit/747eb691abc415d67185db3cad8c942f1c2c5548))
 * **ui:** Split library pane into focused modules ([2c79ac8](https://github.com/Hardcoreprawn/music-minder/commit/2c79ac87ce2f85ad0df52bb4e610865a61b3c622))
 * **ui:** Update views to use new theme system and modules ([c491fb3](https://github.com/Hardcoreprawn/music-minder/commit/c491fb3cdd9eeb5faa45536480c7685898c85dc5))
-
 
 ### 📚 Documentation
 
@@ -118,16 +172,13 @@
 
 ## [0.1.4](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.3...music-minder-v0.1.4) (2025-12-09)
 
-
 ### ✨ Features
 
 * add cargo-audit security scanning to CI ([0ebc610](https://github.com/Hardcoreprawn/music-minder/commit/0ebc610962c7cb0805c105f991d72b1f430d8348))
 
-
 ### 🐛 Bug Fixes
 
 * quote WiX version argument for PowerShell ([bb75b94](https://github.com/Hardcoreprawn/music-minder/commit/bb75b94cd74f39b70ce8ec381b12b961765e0cd3))
-
 
 ### 📚 Documentation
 
@@ -135,13 +186,11 @@
 
 ## [0.1.3](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.2...music-minder-v0.1.3) (2025-12-09)
 
-
 ### 🐛 Bug Fixes
 
 * pass version to WiX installer from release-please ([68304f9](https://github.com/Hardcoreprawn/music-minder/commit/68304f9f7fde8e811806be8a2e67ad90e7f21f97))
 
 ## [0.1.2](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.1...music-minder-v0.1.2) (2025-12-09)
-
 
 ### 🐛 Bug Fixes
 
@@ -150,16 +199,13 @@
 
 ## [0.1.1](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.0...music-minder-v0.1.1) (2025-12-09)
 
-
 ### 🐛 Bug Fixes
 
 * resolve formatting and clippy warnings for CI ([cfce9f0](https://github.com/Hardcoreprawn/music-minder/commit/cfce9f0b40f81d07ba44debaa59d8ae9dfd3a292))
 
-
 ### ♻️ Refactoring
 
 * unify playback initiation with load_and_play_current() ([9830d06](https://github.com/Hardcoreprawn/music-minder/commit/9830d064fef848bb97cf519b69baa96bea731d68))
-
 
 ### 📚 Documentation
 
