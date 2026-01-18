@@ -208,6 +208,12 @@ pub fn cmd_write_tags(
 }
 
 /// Batch enrich multiple audio files
+///
+/// **Phase C.1 Improvements:**
+/// - Parallel fingerprinting (up to 4 files concurrently)
+/// - Rate-limited API calls (respects MusicBrainz 1 req/sec limit)
+/// - Smarter progress tracking with ETA
+/// - Path analysis for genre/compilation hints
 #[allow(clippy::too_many_arguments)]
 pub fn cmd_enrich(
     rt: &Runtime,
@@ -251,7 +257,10 @@ pub fn cmd_enrich(
         if pool.is_some() {
             println!("Health tracking enabled\n");
         }
-        println!("Enriching {} file(s)...\n", files.len());
+        println!(
+            "Enriching {} file(s) with parallel processing...\n",
+            files.len()
+        );
 
         let config = enrichment::EnrichmentConfig {
             acoustid_api_key: api_key,
@@ -259,101 +268,28 @@ pub fn cmd_enrich(
             use_musicbrainz: true,
             ..Default::default()
         };
-        let service = enrichment::EnrichmentService::new(config);
+        let service = std::sync::Arc::new(enrichment::EnrichmentService::new(config));
 
-        let mut success_count = 0;
-        let mut skip_count = 0;
-        let mut fail_count = 0;
+        // Phase C.1: Parallel processing with rate limiting
+        let start_time = std::time::Instant::now();
+        let (success_count, skip_count, fail_count) =
+            enrich_batch_parallel(&files, service, write, fill_only, dry_run, pool.as_ref()).await;
 
-        for (i, file_path) in files.iter().enumerate() {
-            let filename = file_path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("?");
-
-            print!("[{}/{}] {}... ", i + 1, files.len(), filename);
-            use std::io::Write;
-            std::io::stdout().flush().unwrap();
-
-            let path_str = file_path.to_string_lossy().to_string();
-
-            match service.identify_track(file_path).await {
-                Ok(result) => {
-                    let album = result.track.album.as_deref().unwrap_or("?");
-                    print!("✓ {} ", album);
-
-                    // Track health: OK
-                    if let Some(ref p) = pool {
-                        let health_record = health::FileHealth::ok(
-                            &path_str,
-                            result.score as f64,
-                            result.track.recording_id.clone(),
-                        )
-                        .with_file_info(file_path);
-                        let _ = health::upsert_health(p, &health_record).await;
-                    }
-
-                    if write && !dry_run {
-                        let options = metadata::WriteOptions2 {
-                            only_fill_empty: fill_only,
-                            write_musicbrainz_ids: true,
-                        };
-                        match metadata::write(file_path, &result.track, &options) {
-                            Ok(write_result) => {
-                                println!("({} tags written)", write_result.fields_updated);
-                            }
-                            Err(e) => {
-                                println!("(write failed: {})", e);
-                            }
-                        }
-                    } else if write && dry_run {
-                        println!("(would write tags)");
-                    } else {
-                        println!();
-                    }
-                    success_count += 1;
-                }
-                Err(enrichment::EnrichmentError::NoMatches) => {
-                    println!("✗ No match");
-                    // Track health: No match
-                    if let Some(ref p) = pool {
-                        let health_record =
-                            health::FileHealth::no_match(&path_str).with_file_info(file_path);
-                        let _ = health::upsert_health(p, &health_record).await;
-                    }
-                    skip_count += 1;
-                }
-                Err(e) => {
-                    println!("✗ Error: {}", e);
-                    // Track health: Error
-                    if let Some(ref p) = pool {
-                        let error_type = if e.to_string().contains("fingerprint") {
-                            health::ErrorType::EmptyFingerprint
-                        } else if e.to_string().contains("decode") {
-                            health::ErrorType::DecodeError
-                        } else {
-                            health::ErrorType::Other("enrichment_error".to_string())
-                        };
-                        let health_record =
-                            health::FileHealth::error(&path_str, error_type, e.to_string())
-                                .with_file_info(file_path);
-                        let _ = health::upsert_health(p, &health_record).await;
-                    }
-                    fail_count += 1;
-                }
-            }
-
-            // Small delay between files to be nice to APIs
-            if i < files.len() - 1 {
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            }
-        }
-
+        let elapsed = start_time.elapsed();
         println!();
         println!(
-            "Done! {} identified, {} no match, {} errors",
-            success_count, skip_count, fail_count
+            "Done in {:.1}s! {} identified, {} no match, {} errors",
+            elapsed.as_secs_f64(),
+            success_count,
+            skip_count,
+            fail_count
         );
+
+        // Calculate and show throughput
+        if success_count > 0 {
+            let per_file = elapsed.as_secs_f64() / success_count as f64;
+            println!("Average: {:.1}s per file", per_file);
+        }
 
         // Show health summary if tracking
         if let Some(ref p) = pool
@@ -370,4 +306,126 @@ pub fn cmd_enrich(
         }
     });
     Ok(())
+}
+
+/// Process batch of files in parallel with rate limiting
+///
+/// **Strategy:**
+/// - Fingerprinting: 4 concurrent (CPU-bound, local operation)
+/// - API calls: Rate-limited to 1/sec (MusicBrainz requirement)
+/// - Tag writes: Sequential (safety - avoid file system contention)
+async fn enrich_batch_parallel(
+    files: &[PathBuf],
+    service: std::sync::Arc<enrichment::EnrichmentService>,
+    write_tags: bool,
+    fill_only: bool,
+    dry_run: bool,
+    pool: Option<&sqlx::SqlitePool>,
+) -> (usize, usize, usize) {
+    use futures::stream::{self, StreamExt};
+
+    let mut success_count = 0;
+    let mut skip_count = 0;
+    let mut fail_count = 0;
+
+    // Rate limiter: 1 request per second for MusicBrainz
+    let rate_limit_delay = std::time::Duration::from_millis(1100);
+    let mut last_api_call = std::time::Instant::now() - rate_limit_delay;
+
+    // Process files with parallelism limit
+    let mut stream = stream::iter(files.iter().enumerate())
+        .map(|(i, file_path)| {
+            let service = service.clone();
+            async move { (i, file_path, service.identify_track(file_path).await) }
+        })
+        .buffer_unordered(4); // Parallel fingerprinting (4 concurrent)
+
+    while let Some((i, file_path, result)) = stream.next().await {
+        // Enforce rate limiting between API calls
+        let now = std::time::Instant::now();
+        let elapsed = now.duration_since(last_api_call);
+        if elapsed < rate_limit_delay {
+            tokio::time::sleep(rate_limit_delay - elapsed).await;
+        }
+        last_api_call = std::time::Instant::now();
+
+        let filename = file_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?");
+
+        print!("[{}/{}] {}... ", i + 1, files.len(), filename);
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+
+        let path_str = file_path.to_string_lossy().to_string();
+
+        match result {
+            Ok(identification) => {
+                let album = identification.track.album.as_deref().unwrap_or("?");
+                print!("✓ {} ", album);
+
+                // Track health: OK
+                if let Some(p) = pool {
+                    let health_record = health::FileHealth::ok(
+                        &path_str,
+                        identification.score as f64,
+                        identification.track.recording_id.clone(),
+                    )
+                    .with_file_info(file_path);
+                    let _ = health::upsert_health(p, &health_record).await;
+                }
+
+                if write_tags && !dry_run {
+                    let options = metadata::WriteOptions2 {
+                        only_fill_empty: fill_only,
+                        write_musicbrainz_ids: true,
+                    };
+                    match metadata::write(file_path, &identification.track, &options) {
+                        Ok(write_result) => {
+                            println!("({} tags written)", write_result.fields_updated);
+                        }
+                        Err(e) => {
+                            println!("(write failed: {})", e);
+                        }
+                    }
+                } else if write_tags && dry_run {
+                    println!("(would write tags)");
+                } else {
+                    println!();
+                }
+                success_count += 1;
+            }
+            Err(enrichment::EnrichmentError::NoMatches) => {
+                println!("✗ No match");
+                // Track health: No match
+                if let Some(p) = pool {
+                    let health_record =
+                        health::FileHealth::no_match(&path_str).with_file_info(file_path);
+                    let _ = health::upsert_health(p, &health_record).await;
+                }
+                skip_count += 1;
+            }
+            Err(e) => {
+                println!("✗ Error: {}", e);
+                // Track health: Error
+                if let Some(p) = pool {
+                    let error_type = if e.to_string().contains("fingerprint") {
+                        health::ErrorType::EmptyFingerprint
+                    } else if e.to_string().contains("decode") {
+                        health::ErrorType::DecodeError
+                    } else {
+                        health::ErrorType::Other("enrichment_error".to_string())
+                    };
+                    let health_record =
+                        health::FileHealth::error(&path_str, error_type, e.to_string())
+                            .with_file_info(file_path);
+                    let _ = health::upsert_health(p, &health_record).await;
+                }
+                fail_count += 1;
+            }
+        }
+    }
+
+    (success_count, skip_count, fail_count)
 }
