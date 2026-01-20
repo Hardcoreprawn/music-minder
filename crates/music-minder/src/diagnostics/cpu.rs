@@ -5,13 +5,15 @@
 //! - Current CPU usage
 //! - Frequency (actual vs max, detects throttling)
 
+use serde::{Deserialize, Serialize};
+
 use super::{CheckStatus, DiagnosticCheck};
 
 #[cfg(windows)]
 use std::mem::MaybeUninit;
 
 /// CPU information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CpuInfo {
     /// Processor name/model
     pub name: String,

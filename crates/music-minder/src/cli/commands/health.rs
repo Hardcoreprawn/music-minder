@@ -81,30 +81,41 @@ pub fn cmd_check(
 }
 
 /// Run system diagnostics
-pub fn cmd_diagnose() -> anyhow::Result<()> {
+pub fn cmd_diagnose(format: &str) -> anyhow::Result<()> {
     let report = diagnostics::DiagnosticReport::generate();
 
-    println!("System Diagnostics Report");
-    println!("=========================\n");
-    println!(
-        "Overall Rating: {} {}\n",
-        report.overall_rating.emoji(),
-        report.overall_rating.as_str()
-    );
+    match format {
+        "json" => {
+            // JSON output for machine consumption
+            let json = serde_json::to_string_pretty(&report)?;
+            println!("{}", json);
+        }
+        _ => {
+            // Default text output for human readability
+            println!("System Diagnostics Report");
+            println!("=========================\n");
+            println!(
+                "Overall Rating: {} {}\n",
+                report.overall_rating.emoji(),
+                report.overall_rating.as_str()
+            );
 
-    for check in &report.checks {
-        println!(
-            "  {} {} : {}",
-            check.status.emoji(),
-            check.name,
-            check.value
-        );
-        if let Some(ref rec) = check.recommendation {
-            println!("    → {}", rec);
+            for check in &report.checks {
+                println!(
+                    "  {} {} : {}",
+                    check.status.emoji(),
+                    check.name,
+                    check.value
+                );
+                if let Some(ref rec) = check.recommendation {
+                    println!("    → {}", rec);
+                }
+            }
+
+            println!();
         }
     }
 
-    println!();
     Ok(())
 }
 

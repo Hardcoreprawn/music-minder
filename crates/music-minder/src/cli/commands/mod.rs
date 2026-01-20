@@ -279,11 +279,8 @@ pub fn run_command(cli: &Cli) -> anyhow::Result<bool> {
             cmd_check(&rt, pool, path.as_ref())?;
             Ok(true)
         }
-        Some(Commands::Diagnose {
-            format: _,
-            quick: _,
-        }) => {
-            cmd_diagnose()?;
+        Some(Commands::Diagnose { format, quick: _ }) => {
+            cmd_diagnose(format)?;
             Ok(true)
         }
         Some(Commands::Quality { db, verbose }) => {

@@ -6,13 +6,15 @@
 //! Applications can request higher resolution via timeBeginPeriod(), and
 //! the system uses the highest requested resolution.
 
+use serde::{Deserialize, Serialize};
+
 use super::{CheckStatus, DiagnosticCheck};
 
 #[cfg(windows)]
 use std::mem::MaybeUninit;
 
 /// Timer resolution information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerInfo {
     /// Best (smallest) supported timer resolution in microseconds (~500us)
     pub best_resolution_us: u32,

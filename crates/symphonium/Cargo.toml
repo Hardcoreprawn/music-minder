@@ -16,6 +16,7 @@ realfft = { workspace = true }
 rtrb = { workspace = true }
 rubato = { workspace = true }
 rustfft = { workspace = true }
+serde = { workspace = true }
 symphonia = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

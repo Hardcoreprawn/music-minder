@@ -33,10 +33,12 @@
 //! All SIMD operations are safe wrappers around unsafe intrinsics.
 //! Runtime feature detection ensures we only use supported instructions.
 
+use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 /// CPU feature level detected at runtime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SimdLevel {
     /// No SIMD available, use scalar fallback
     Scalar,
@@ -375,7 +377,7 @@ pub fn log_simd_capabilities() {
 // ============================================================================
 
 /// Results from running the SIMD benchmark.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimdBenchmarkResults {
     /// Detected SIMD level
     pub simd_level: SimdLevel,

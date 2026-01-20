@@ -3,8 +3,10 @@
 //! Enumerates audio devices and their capabilities.
 //! Uses Windows Multimedia APIs for device enumeration.
 
+use serde::{Deserialize, Serialize};
+
 /// Audio device information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioDeviceInfo {
     /// Device name
     pub name: String,
@@ -18,7 +20,8 @@ pub struct AudioDeviceInfo {
     pub channels: Option<u32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AudioDeviceType {
     Output,
     Input,

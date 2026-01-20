@@ -289,6 +289,7 @@ file target\profiling\music-minder.exe  # Should mention "with debug_info"
 | **File I/O** | 0.14ms/file | Directory walking + file access |
 
 **Time distribution:**
+
 - Database writes: 64.9% (largest bottleneck)
 - Metadata parsing: 20.6%
 - File I/O: 14.5%
@@ -300,11 +301,13 @@ file target\profiling\music-minder.exe  # Should mention "with debug_info"
 **Current:** 0.65ms/file, 64.9% of scan time
 
 **Causes:**
+
 - Individual INSERTs per track (not batched)
 - Foreign key lookups for artists/albums
 - Index updates on every row
 
 **Optimization Opportunities:**
+
 - ✅ **Batch inserts** - Use `UNION ALL` or prepared statements with multiple rows
 - ✅ **Transaction wrapping** - Group all writes in single transaction
 - ✅ **Deferred index updates** - Disable, bulk load, rebuild
@@ -317,11 +320,13 @@ file target\profiling\music-minder.exe  # Should mention "with debug_info"
 **Current:** 0.21ms/file, 20.6% of scan time
 
 **Causes:**
+
 - Reading all tags (title, artist, album, year, genre, etc.)
 - Decoding album art (even if not needed)
 - String allocations for every tag
 
 **Optimization Opportunities:**
+
 - ✅ **Selective tag reading** - Only read tags we need
 - ✅ **Skip album art** - Don't decode images during scan
 - ⚠️ **Parallel parsing** - Use Rayon for CPU-bound work (see #11)
@@ -344,6 +349,7 @@ file target\profiling\music-minder.exe  # Should mention "with debug_info"
 | **Large libraries** (50k+ files) | ~200 files/sec | 1000+ files/sec | ❌ NEEDS SIGNIFICANT WORK |
 
 **Scaling issue:** Performance degrades with library size due to:
+
 - Database index size growth (slower lookups)
 - Connection pool contention (concurrent scans)
 - Memory pressure (holding large result sets)
@@ -370,6 +376,7 @@ batch_scanning/scan_album_50_tracks   6.43 μs (50 files)
 ```
 
 **Key findings:**
+
 - Metadata struct creation is ~90ns (negligible)
 - String operations are ~40ns (negligible)
 - Path operations are <3ns (negligible)
@@ -400,6 +407,7 @@ samply record target\profiling\music-minder.exe scan organized_music
 ```
 
 **What to look for:**
+
 - Wide bars = time spent in that function
 - Database functions (`sqlx`, `rusqlite`) should be <50% of total
 - Metadata parsing (`lofty`, `symphonia`) should be <30%

@@ -3,10 +3,12 @@
 //! Windows power plans affect CPU frequency scaling and latency.
 //! For audio work, "High Performance" or "Ultimate Performance" is recommended.
 
+use serde::{Deserialize, Serialize};
+
 use super::{CheckStatus, DiagnosticCheck};
 
 /// Power plan information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PowerInfo {
     /// Active power scheme GUID
     pub scheme_guid: String,

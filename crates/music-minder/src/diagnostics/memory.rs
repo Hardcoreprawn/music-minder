@@ -3,13 +3,15 @@
 //! Checks memory availability and pressure, which can affect audio performance
 //! if the system is paging heavily.
 
+use serde::{Deserialize, Serialize};
+
 use super::{CheckStatus, DiagnosticCheck};
 
 #[cfg(windows)]
 use std::mem::MaybeUninit;
 
 /// Memory information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryInfo {
     /// Total physical memory in bytes
     pub total_physical: u64,

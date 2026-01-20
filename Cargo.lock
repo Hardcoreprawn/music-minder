@@ -807,6 +807,7 @@ checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
  "iana-time-zone",
  "num-traits",
+ "serde",
  "windows-link",
 ]
 
@@ -1461,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "discographer"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "criterion",
@@ -3381,7 +3382,7 @@ dependencies = [
 
 [[package]]
 name = "music-minder"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3428,7 +3429,7 @@ dependencies = [
 
 [[package]]
 name = "musicographer"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "crossbeam-channel",
  "futures",
@@ -5456,7 +5457,7 @@ dependencies = [
 
 [[package]]
 name = "soundstore"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "bitflags 2.10.0",
@@ -5934,7 +5935,7 @@ dependencies = [
 
 [[package]]
 name = "symphonium"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "cpal",
  "criterion",
@@ -5945,6 +5946,7 @@ dependencies = [
  "rtrb",
  "rubato",
  "rustfft",
+ "serde",
  "souvlaki",
  "symphonia",
  "thiserror 2.0.17",

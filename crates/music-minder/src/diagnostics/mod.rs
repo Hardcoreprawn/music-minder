@@ -16,6 +16,8 @@
 //! or a custom driver). This module provides user-mode approximations and
 //! system configuration checks that correlate with audio performance.
 
+use serde::{Deserialize, Serialize};
+
 mod audio;
 mod cpu;
 mod memory;
@@ -30,7 +32,8 @@ pub use power::*;
 pub use timer::*;
 
 /// Overall system readiness rating for audio work
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AudioReadiness {
     /// System is well-configured for low-latency audio
     Excellent,
@@ -74,7 +77,7 @@ impl AudioReadiness {
 }
 
 /// A single diagnostic check result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticCheck {
     pub name: String,
     pub category: String,
@@ -84,7 +87,8 @@ pub struct DiagnosticCheck {
 }
 
 /// Status of a diagnostic check
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum CheckStatus {
     Pass,
     Warning,
@@ -104,7 +108,7 @@ impl CheckStatus {
 }
 
 /// Complete system diagnostic report
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticReport {
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub overall_rating: AudioReadiness,
