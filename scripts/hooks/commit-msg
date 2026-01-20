@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Commit message hook for music-minder
+# Validates commit messages follow Conventional Commits format
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+
+# Skip merge commits and revert commits
+if echo "$commit_msg" | grep -qE "^Merge (branch|pull request)|^Revert "; then
+    exit 0
+fi
+
+# Conventional Commits pattern
+# Format: type(optional scope): description
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9\-]+\))?!?: .{1,72}"; then
+    echo ""
+    echo -e "\033[0;31m[X] Invalid commit message format!\033[0m"
+    echo ""
+    echo -e "\033[0;33mCommit messages must follow Conventional Commits format:\033[0m"
+    echo ""
+    echo "  type(scope): description"
+    echo ""
+    echo -e "\033[0;33mValid types:\033[0m"
+    echo "  feat:     A new feature"
+    echo "  fix:      A bug fix"
+    echo "  docs:     Documentation changes"
+    echo "  style:    Code style changes (formatting, etc.)"
+    echo "  refactor: Code refactoring"
+    echo "  perf:     Performance improvements"
+    echo "  test:     Test changes"
+    echo "  build:    Build system changes"
+    echo "  ci:       CI/CD changes"
+    echo "  chore:    Other changes (dependencies, etc.)"
+    echo ""
+    echo -e "\033[0;33mExamples:\033[0m"
+    echo -e "\033[0;32m  feat(ui): add dark mode support\033[0m"
+    echo -e "\033[0;32m  fix(db): eliminate race condition in get_or_create\033[0m"
+    echo -e "\033[0;32m  docs: update README with installation steps\033[0m"
+    echo -e "\033[0;32m  ci: restore release-please workflow\033[0m"
+    echo ""
+    echo -e "\033[0;33mScope is optional, description is required (1-72 chars).\033[0m"
+    echo -e "\033[0;33mUse '!' after type/scope for breaking changes: feat!: breaking change\033[0m"
+    echo ""
+    exit 1
+fi
+
+# Check description length (first line)
+first_line=$(echo "$commit_msg" | head -n1)
+if [ ${#first_line} -gt 100 ]; then
+    echo ""
+    echo -e "\033[0;33m[!] Warning: Commit message first line is very long (>100 chars).\033[0m"
+    echo -e "\033[0;33m    Consider making it more concise.\033[0m"
+    echo ""
+fi
+
+exit 0
