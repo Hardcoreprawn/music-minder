@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.1.8](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.7...music-minder-v0.1.8) (2026-01-20)
+
+
+### ✨ Features
+
+* **B.4:** Add criterion benchmarking infrastructure ([07f0e22](https://github.com/Hardcoreprawn/music-minder/commit/07f0e229d9a9e3a8c7089b378db00f134fbca613))
+* **ci:** automated benchmark baseline collection ([7bfc302](https://github.com/Hardcoreprawn/music-minder/commit/7bfc3025ac476677eb31bbc70f74371d0acf73d9))
+* comprehensive optimizations and robustness improvements ([a3409f4](https://github.com/Hardcoreprawn/music-minder/commit/a3409f481c4ab557ee1937bf4b7e13a333cc8678))
+* **docs:** Add ADR for architecture extraction strategy ([237eda9](https://github.com/Hardcoreprawn/music-minder/commit/237eda9de9a86881cf47a4668aa7cc2a201684a8))
+* **enrichment:** add parallel batch processing with retry logic ([9fbaffb](https://github.com/Hardcoreprawn/music-minder/commit/9fbaffb8a175b040ad163926aaefa6493ff97221))
+* **git:** add commit message validation hook ([4955ea5](https://github.com/Hardcoreprawn/music-minder/commit/4955ea57122fd4b49d602f75e62fd9f1f57fe361))
+* **perf:** lazy-load player at startup (Task 5 / B.1) ([43aad74](https://github.com/Hardcoreprawn/music-minder/commit/43aad743dbc0b5fa6a59746acbda6cdea9f165ef))
+* Phase B.4 benchmarking + B.5.1 CI integration + B.6 security hardening ([973d066](https://github.com/Hardcoreprawn/music-minder/commit/973d066761ea0c6ac84ac6006870662f27ade717))
+* **scanning:** implement batched database writes with timing instrumentation ([44ab6fe](https://github.com/Hardcoreprawn/music-minder/commit/44ab6fe91fce2640d605e6de7752d4c342f2b982))
+* **ui:** add progressive loading with database-level sorting ([da384ff](https://github.com/Hardcoreprawn/music-minder/commit/da384ff5abb37dd217437385f9568a8edede704f))
+
+
+### 🐛 Bug Fixes
+
+* **ci:** configure release-please package name to match tag format ([7ca86ce](https://github.com/Hardcoreprawn/music-minder/commit/7ca86cef06e310404993f970d70262ab5efe75b2))
+* **ci:** restore release-please with correct tag format ([07ae200](https://github.com/Hardcoreprawn/music-minder/commit/07ae2005f7a13b8c812a0ecd5aa0a127ceb3fd28))
+* **ci:** simplify release-please config ([49f8a5b](https://github.com/Hardcoreprawn/music-minder/commit/49f8a5b9fd6a6d9457fd01ec61f05955623f0079))
+* **ci:** switch release-please to simple strategy ([ed66f85](https://github.com/Hardcoreprawn/music-minder/commit/ed66f853598374a4923bfde2200ade01d4bb8949))
+* **ci:** update release-please to handle workspace version inheritance ([80dea26](https://github.com/Hardcoreprawn/music-minder/commit/80dea26bc4b8b18b389302bccd5a766308c484df))
+* **db:** eliminate race condition in get_or_create functions ([421210e](https://github.com/Hardcoreprawn/music-minder/commit/421210e19fb061d2e55d28e04ddd88342a3d384d))
+* **diagnostics:** Update SIMD descriptions and complete profiling baseline ([b1684aa](https://github.com/Hardcoreprawn/music-minder/commit/b1684aae2e92b46e69344bba52e7128a419c60dc))
+* Implement metadata write functionality in soundstore ([861820e](https://github.com/Hardcoreprawn/music-minder/commit/861820e7de6bb1b7d167bf5f6cac59c7d92a2893))
+
+
+### ♻️ Refactoring
+
+* Migrate metadata and organizer code to crates ([99b5cb1](https://github.com/Hardcoreprawn/music-minder/commit/99b5cb110b07d892867853f7b8100d1ed9eac301))
+* **music_journo:** Migrate scanner and watcher from music-minder ([41c3113](https://github.com/Hardcoreprawn/music-minder/commit/41c3113441bc54e30a57b37f5266d190a72cad43))
+* **music-minder:** Remove old source files moved to crates ([0814acc](https://github.com/Hardcoreprawn/music-minder/commit/0814acc142e6e1a8e26d18cc668057bd38b9ca20))
+* **workspace:** Create cargo workspace with crate skeletons ([9b1438d](https://github.com/Hardcoreprawn/music-minder/commit/9b1438d9c174909a8a6acdf7b90103c4b5e006f6))
+
+
+### 📚 Documentation
+
+* Add Phase A.5 Code Migration status and strategy ([8acdb1d](https://github.com/Hardcoreprawn/music-minder/commit/8acdb1d7a077423e049c6b7a93e8c330cfb76fe1))
+* update for B.5.2 and B.6.2 completion ([9b8489c](https://github.com/Hardcoreprawn/music-minder/commit/9b8489c86ef39e553ea6ef13143142b55bb9c2db))
+* Update STATUS.md and ROADMAP.md for Phase A.5 completion ([70cd0ad](https://github.com/Hardcoreprawn/music-minder/commit/70cd0ade105df6b648f79c96e975813395c203c7))
+* Update STATUS.md and ROADMAP.md for Phase B.4 completion ([03cc926](https://github.com/Hardcoreprawn/music-minder/commit/03cc926ce290bcd93b527e5beffbfcf77eeb9cd5))
+
 ## [Unreleased]
 
 ### ✨ Features
