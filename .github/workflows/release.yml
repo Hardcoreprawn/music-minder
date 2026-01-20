@@ -1,8 +1,11 @@
 name: Release Please
 
 on:
-  push:
-    branches: [main]
+  # Temporarily disabled - needs bootstrap with initial release PR
+  # See https://github.com/googleapis/release-please?tab=readme-ov-file#bootstrapping
+  workflow_dispatch: {}
+  # push:
+  #   branches: [main]
 
 permissions:
   contents: write
