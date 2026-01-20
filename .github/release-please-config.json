@@ -8,6 +8,7 @@
       "bump-patch-for-minor-pre-major": true,
       "draft": false,
       "prerelease": false,
+      "include-component-in-tag": false,
       "changelog-sections": [
         { "type": "feat", "section": "✨ Features" },
         { "type": "fix", "section": "🐛 Bug Fixes" },
@@ -19,7 +20,12 @@
         { "type": "ci", "section": "👷 CI", "hidden": true }
       ],
       "extra-files": [
-        "Cargo.toml"
+        "Cargo.toml",
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        }
       ]
     }
   }
