@@ -112,20 +112,20 @@ pub async fn init_db(db_url: &str) -> Result<SqlitePool, sqlx::Error> {
 ///
 /// The database ID of the (existing or new) artist.
 pub async fn get_or_create_artist(pool: &SqlitePool, name: &str) -> sqlx::Result<i64> {
-    let row: Option<(i64,)> = sqlx::query_as("SELECT id FROM artists WHERE name = ?")
+    // Use INSERT OR IGNORE to handle concurrent duplicates, then query for the ID
+    // This avoids race conditions from check-then-act pattern
+    sqlx::query("INSERT OR IGNORE INTO artists (name) VALUES (?)")
         .bind(name)
-        .fetch_optional(pool)
+        .execute(pool)
         .await?;
 
-    if let Some((id,)) = row {
-        Ok(id)
-    } else {
-        let result = sqlx::query("INSERT INTO artists (name) VALUES (?)")
-            .bind(name)
-            .execute(pool)
-            .await?;
-        Ok(result.last_insert_rowid())
-    }
+    // Always query for the ID (works whether we inserted or it existed)
+    let (id,): (i64,) = sqlx::query_as("SELECT id FROM artists WHERE name = ?")
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(id)
 }
 
 /// Get or create an album by title and artist.
@@ -147,23 +147,21 @@ pub async fn get_or_create_album(
     title: &str,
     artist_id: Option<i64>,
 ) -> sqlx::Result<i64> {
-    let row: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM albums WHERE title = ? AND artist_id IS ?")
-            .bind(title)
-            .bind(artist_id)
-            .fetch_optional(pool)
-            .await?;
+    // Use INSERT OR IGNORE to handle concurrent duplicates, then query for the ID
+    sqlx::query("INSERT OR IGNORE INTO albums (title, artist_id) VALUES (?, ?)")
+        .bind(title)
+        .bind(artist_id)
+        .execute(pool)
+        .await?;
 
-    if let Some((id,)) = row {
-        Ok(id)
-    } else {
-        let result = sqlx::query("INSERT INTO albums (title, artist_id) VALUES (?, ?)")
-            .bind(title)
-            .bind(artist_id)
-            .execute(pool)
-            .await?;
-        Ok(result.last_insert_rowid())
-    }
+    // Always query for the ID (works whether we inserted or it existed)
+    let (id,): (i64,) = sqlx::query_as("SELECT id FROM albums WHERE title = ? AND artist_id IS ?")
+        .bind(title)
+        .bind(artist_id)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(id)
 }
 
 /// Insert or update a track record.
