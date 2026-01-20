@@ -224,9 +224,23 @@ where
 {
     let buffer_capacity = consumer.buffer().capacity();
 
+    // Track first callback to log actual buffer size from CPAL/WASAPI
+    // Buffer size varies: wired audio ~480-960 samples, Bluetooth ~2000-4000 samples
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static FIRST_CALLBACK: AtomicBool = AtomicBool::new(true);
+
     device.build_output_stream(
         config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            // Log actual buffer size (varies by device: Bluetooth has larger buffers)
+            if FIRST_CALLBACK.swap(false, Ordering::Relaxed) {
+                tracing::info!(
+                    "Audio callback buffer size: {} samples ({:.1}ms @ 48kHz)",
+                    data.len(),
+                    data.len() as f64 / 48000.0 * 1000.0
+                );
+            }
+
             let start = std::time::Instant::now();
 
             // ✅ SAFE: Atomic reads - no locks in the audio callback
