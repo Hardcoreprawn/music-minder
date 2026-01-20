@@ -5,6 +5,7 @@
 //! - Track CRUD operations
 //! - Artist and album management  
 //! - Batch updates for file organization
+//! - Retry logic for transient lock errors
 //!
 //! # Example
 //!
@@ -14,6 +15,8 @@
 //! let pool = init_db("sqlite:music.db").await?;
 //! let tracks = get_all_tracks_with_metadata(&pool).await?;
 //! ```
+
+pub mod retry;
 
 use std::path::PathBuf;
 
@@ -191,29 +194,33 @@ pub async fn insert_track(
     let duration = meta.duration as i64;
     let track_number = meta.track_number.map(|n| n as i64);
 
-    let row: (i64,) = sqlx::query_as(
-        r#"
-        INSERT INTO tracks (title, artist_id, album_id, path, duration, track_number)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(path) DO UPDATE SET
-            title = excluded.title,
-            artist_id = excluded.artist_id,
-            album_id = excluded.album_id,
-            duration = excluded.duration,
-            track_number = excluded.track_number
-        RETURNING id
-        "#,
-    )
-    .bind(&meta.title)
-    .bind(artist_id)
-    .bind(album_id)
-    .bind(path)
-    .bind(duration)
-    .bind(track_number)
-    .fetch_one(pool)
-    .await?;
+    // Wrap in retry logic to handle SQLITE_BUSY/SQLITE_LOCKED
+    retry::with_retry(|| async {
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            INSERT INTO tracks (title, artist_id, album_id, path, duration, track_number)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(path) DO UPDATE SET
+                title = excluded.title,
+                artist_id = excluded.artist_id,
+                album_id = excluded.album_id,
+                duration = excluded.duration,
+                track_number = excluded.track_number
+            RETURNING id
+            "#,
+        )
+        .bind(&meta.title)
+        .bind(artist_id)
+        .bind(album_id)
+        .bind(path)
+        .bind(duration)
+        .bind(track_number)
+        .fetch_one(pool)
+        .await?;
 
-    Ok(row.0)
+        Ok(row.0)
+    })
+    .await
 }
 
 /// Batch insert or update tracks with artist/album resolution in a single transaction.
@@ -245,97 +252,100 @@ pub async fn batch_insert_tracks(
         return Ok(Vec::new());
     }
 
-    let mut tx = pool.begin().await?;
-    let mut results = Vec::with_capacity(tracks.len());
+    retry::with_retry(|| async {
+        let mut tx = pool.begin().await?;
+        let mut results = Vec::with_capacity(tracks.len());
 
-    // Phase 1: Collect unique artists and albums
-    let mut artist_names: Vec<&str> = tracks
-        .iter()
-        .map(|(meta, _)| meta.artist.as_str())
-        .collect();
-    artist_names.sort_unstable();
-    artist_names.dedup();
-
-    let mut album_info: Vec<(&str, &str)> = tracks
-        .iter()
-        .map(|(meta, _)| (meta.album.as_str(), meta.artist.as_str()))
-        .collect();
-    album_info.sort_unstable();
-    album_info.dedup();
-
-    // Phase 2: Batch insert/get artists
-    for artist_name in artist_names {
-        sqlx::query("INSERT OR IGNORE INTO artists (name) VALUES (?)")
-            .bind(artist_name)
-            .execute(&mut *tx)
-            .await?;
-    }
-
-    // Phase 3: Build artist name -> ID cache
-    let artist_cache: std::collections::HashMap<String, i64> =
-        sqlx::query_as::<_, (String, i64)>("SELECT name, id FROM artists")
-            .fetch_all(&mut *tx)
-            .await?
-            .into_iter()
+        // Phase 1: Collect unique artists and albums
+        let mut artist_names: Vec<&str> = tracks
+            .iter()
+            .map(|(meta, _)| meta.artist.as_str())
             .collect();
+        artist_names.sort_unstable();
+        artist_names.dedup();
 
-    // Phase 4: Batch insert/get albums
-    for (album_title, artist_name) in album_info {
-        let artist_id = artist_cache.get(artist_name).copied();
-        sqlx::query("INSERT OR IGNORE INTO albums (title, artist_id) VALUES (?, ?)")
-            .bind(album_title)
+        let mut album_info: Vec<(&str, &str)> = tracks
+            .iter()
+            .map(|(meta, _)| (meta.album.as_str(), meta.artist.as_str()))
+            .collect();
+        album_info.sort_unstable();
+        album_info.dedup();
+
+        // Phase 2: Batch insert/get artists
+        for artist_name in artist_names {
+            sqlx::query("INSERT OR IGNORE INTO artists (name) VALUES (?)")
+                .bind(artist_name)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Phase 3: Build artist name -> ID cache
+        let artist_cache: std::collections::HashMap<String, i64> =
+            sqlx::query_as::<_, (String, i64)>("SELECT name, id FROM artists")
+                .fetch_all(&mut *tx)
+                .await?
+                .into_iter()
+                .collect();
+
+        // Phase 4: Batch insert/get albums
+        for (album_title, artist_name) in album_info {
+            let artist_id = artist_cache.get(artist_name).copied();
+            sqlx::query("INSERT OR IGNORE INTO albums (title, artist_id) VALUES (?, ?)")
+                .bind(album_title)
+                .bind(artist_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        // Phase 5: Build album (title, artist_id) -> ID cache
+        let album_rows: Vec<(i64, String, Option<i64>)> =
+            sqlx::query_as("SELECT id, title, artist_id FROM albums")
+                .fetch_all(&mut *tx)
+                .await?;
+
+        let mut album_cache: std::collections::HashMap<(String, Option<i64>), i64> =
+            std::collections::HashMap::new();
+        for (id, title, artist_id) in album_rows {
+            album_cache.insert((title, artist_id), id);
+        }
+
+        // Phase 6: Insert/update tracks
+        for (meta, path) in tracks {
+            let artist_id = artist_cache.get(&meta.artist).copied();
+            let album_id = album_cache.get(&(meta.album.clone(), artist_id)).copied();
+
+            let duration = meta.duration as i64;
+            let track_number = meta.track_number.map(|n| n as i64);
+
+            let row: (i64,) = sqlx::query_as(
+                r#"
+                INSERT INTO tracks (title, artist_id, album_id, path, duration, track_number)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(path) DO UPDATE SET
+                    title = excluded.title,
+                    artist_id = excluded.artist_id,
+                    album_id = excluded.album_id,
+                    duration = excluded.duration,
+                    track_number = excluded.track_number
+                RETURNING id
+                "#,
+            )
+            .bind(&meta.title)
             .bind(artist_id)
-            .execute(&mut *tx)
-            .await?;
-    }
-
-    // Phase 5: Build album (title, artist_id) -> ID cache
-    let album_rows: Vec<(i64, String, Option<i64>)> =
-        sqlx::query_as("SELECT id, title, artist_id FROM albums")
-            .fetch_all(&mut *tx)
+            .bind(album_id)
+            .bind(path)
+            .bind(duration)
+            .bind(track_number)
+            .fetch_one(&mut *tx)
             .await?;
 
-    let mut album_cache: std::collections::HashMap<(String, Option<i64>), i64> =
-        std::collections::HashMap::new();
-    for (id, title, artist_id) in album_rows {
-        album_cache.insert((title, artist_id), id);
-    }
+            results.push((path.clone(), row.0));
+        }
 
-    // Phase 6: Insert/update tracks
-    for (meta, path) in tracks {
-        let artist_id = artist_cache.get(&meta.artist).copied();
-        let album_id = album_cache.get(&(meta.album.clone(), artist_id)).copied();
-
-        let duration = meta.duration as i64;
-        let track_number = meta.track_number.map(|n| n as i64);
-
-        let row: (i64,) = sqlx::query_as(
-            r#"
-            INSERT INTO tracks (title, artist_id, album_id, path, duration, track_number)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(path) DO UPDATE SET
-                title = excluded.title,
-                artist_id = excluded.artist_id,
-                album_id = excluded.album_id,
-                duration = excluded.duration,
-                track_number = excluded.track_number
-            RETURNING id
-            "#,
-        )
-        .bind(&meta.title)
-        .bind(artist_id)
-        .bind(album_id)
-        .bind(path)
-        .bind(duration)
-        .bind(track_number)
-        .fetch_one(&mut *tx)
-        .await?;
-
-        results.push((path.clone(), row.0));
-    }
-
-    tx.commit().await?;
-    Ok(results)
+        tx.commit().await?;
+        Ok(results)
+    })
+    .await
 }
 
 /// Get all tracks from the database.
