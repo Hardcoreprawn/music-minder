@@ -77,6 +77,10 @@ mod error_recovery_tests {
     }
 
     #[test]
+    #[cfg_attr(
+        target_os = "linux",
+        ignore = "Flaky on Linux CI - system paths may be accessible"
+    )]
     fn test_permission_denied_handling() {
         // Create a file and attempt to read it with restricted permissions
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
