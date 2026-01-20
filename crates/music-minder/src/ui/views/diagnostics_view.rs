@@ -318,8 +318,11 @@ fn get_check_explanation(name: &str, status: CheckStatus) -> (&'static str, &'st
                 CheckStatus::Pass => {
                     "SIMD is providing good speedup. Volume processing is well-optimized."
                 }
-                CheckStatus::Warning | CheckStatus::Info => {
-                    "SIMD shows minimal speedup. If running a debug build, this is expected — try a release build for accurate results."
+                CheckStatus::Info => {
+                    "SIMD shows modest speedup (1.2x-2.0x). This is typical for release builds on some CPUs."
+                }
+                CheckStatus::Warning => {
+                    "SIMD shows minimal speedup (<1.2x). If running a debug build, this is expected — try a release build for accurate results."
                 }
                 _ => "Volume scaling benchmark failed.",
             },
@@ -328,8 +331,11 @@ fn get_check_explanation(name: &str, status: CheckStatus) -> (&'static str, &'st
             "Audio is processed as 32-bit floats but output as 16-bit integers. This conversion happens thousands of times per second. Note: This benchmark is only accurate in release builds (`cargo run --release`).",
             match status {
                 CheckStatus::Pass => "Format conversion is hardware-accelerated with good speedup.",
-                CheckStatus::Warning | CheckStatus::Info => {
-                    "Conversion shows minimal speedup. If running a debug build, this is expected — SIMD optimizations require release mode."
+                CheckStatus::Info => {
+                    "Conversion shows modest speedup (1.2x-2.0x). Performance is acceptable for typical playback."
+                }
+                CheckStatus::Warning => {
+                    "Conversion shows minimal speedup (<1.2x). If running a debug build, this is expected — SIMD optimizations require release mode."
                 }
                 _ => "Conversion benchmark failed.",
             },
@@ -558,4 +564,75 @@ fn check_row(
     })
     .on_press(Message::DiagnosticsToggleCheck(check_name))
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that SIMD benchmark descriptions appropriately reflect status levels.
+    ///
+    /// Issue #18: The UI was showing warning-level text ("minimal speedup") even
+    /// for Info status (modest speedup in release builds). This test ensures
+    /// descriptions match the actual performance thresholds:
+    /// - Pass (>2.0x speedup): "good speedup" or "well-optimized"
+    /// - Info (1.2-2.0x speedup): Should mention "modest" or reasonable performance
+    /// - Warning (<1.2x speedup): "minimal speedup", debug build expected
+    #[test]
+    fn test_simd_benchmark_descriptions_match_status() {
+        // Volume scaling benchmark descriptions
+        let (_, vol_pass_fix) = get_check_explanation("SIMD Volume Scaling", CheckStatus::Pass);
+        let (_, vol_info_fix) = get_check_explanation("SIMD Volume Scaling", CheckStatus::Info);
+        let (_, vol_warn_fix) = get_check_explanation("SIMD Volume Scaling", CheckStatus::Warning);
+
+        // Pass should mention good/optimized performance
+        assert!(
+            vol_pass_fix.contains("good") || vol_pass_fix.contains("optimized"),
+            "Pass description should indicate good performance: {}",
+            vol_pass_fix
+        );
+
+        // Info should NOT say "minimal" - that's for Warning
+        assert!(
+            !vol_info_fix.contains("minimal"),
+            "Info description should not say 'minimal': {}",
+            vol_info_fix
+        );
+
+        // Warning should mention minimal/debug
+        assert!(
+            vol_warn_fix.contains("minimal") || vol_warn_fix.contains("debug"),
+            "Warning description should mention minimal/debug: {}",
+            vol_warn_fix
+        );
+
+        // Conversion benchmark descriptions
+        let (_, conv_pass_fix) =
+            get_check_explanation("SIMD f32→i16 Conversion", CheckStatus::Pass);
+        let (_, conv_info_fix) =
+            get_check_explanation("SIMD f32→i16 Conversion", CheckStatus::Info);
+        let (_, conv_warn_fix) =
+            get_check_explanation("SIMD f32→i16 Conversion", CheckStatus::Warning);
+
+        // Pass should mention accelerated/good
+        assert!(
+            conv_pass_fix.contains("accelerated") || conv_pass_fix.contains("good"),
+            "Pass description should indicate good performance: {}",
+            conv_pass_fix
+        );
+
+        // Info should NOT say "minimal" - that's for Warning
+        assert!(
+            !conv_info_fix.contains("minimal"),
+            "Info description should not say 'minimal': {}",
+            conv_info_fix
+        );
+
+        // Warning should mention minimal/SIMD optimizations require release
+        assert!(
+            conv_warn_fix.contains("minimal") || conv_warn_fix.contains("require release"),
+            "Warning description should mention minimal or release mode: {}",
+            conv_warn_fix
+        );
+    }
 }
