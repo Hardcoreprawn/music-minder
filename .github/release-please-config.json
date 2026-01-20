@@ -17,14 +17,6 @@
         { "type": "chore", "section": "🔧 Maintenance", "hidden": true },
         { "type": "test", "section": "🧪 Tests", "hidden": true },
         { "type": "ci", "section": "👷 CI", "hidden": true }
-      ],
-      "extra-files": [
-        "Cargo.toml",
-        {
-          "type": "toml",
-          "path": "Cargo.toml",
-          "jsonpath": "$.workspace.package.version"
-        }
       ]
     }
   }
