@@ -16,14 +16,40 @@ pub fn handle_search_filter(s: &mut LoadedState, message: Message) -> Task<Messa
             apply_filters_and_sort(s);
         }
         Message::SortByColumn(col) => {
-            if s.sort_column == col {
-                // Toggle sort direction if clicking same column
-                s.sort_ascending = !s.sort_ascending;
+            let needs_reload = {
+                let old_col = s.sort_column;
+                let old_asc = s.sort_ascending;
+
+                if s.sort_column == col {
+                    // Toggle sort direction if clicking same column
+                    s.sort_ascending = !s.sort_ascending;
+                } else {
+                    s.sort_column = col;
+                    s.sort_ascending = true;
+                }
+
+                // Check if we need to reload from database
+                // Reload if: no search/filters active AND sorting changes
+                let has_filters = !s.search_query.is_empty()
+                    || s.filter_format.is_some()
+                    || s.filter_lossless.is_some();
+
+                !has_filters && (old_col != s.sort_column || old_asc != s.sort_ascending)
+            };
+
+            if needs_reload {
+                // Reload tracks from database with new sort order
+                s.tracks_loading = true;
+                s.status_message = "Resorting library...".to_string();
+                return super::load_tracks_initial_sorted_task(
+                    s.pool.clone(),
+                    s.sort_column,
+                    s.sort_ascending,
+                );
             } else {
-                s.sort_column = col;
-                s.sort_ascending = true;
+                // Apply in-memory sorting for filtered results
+                apply_filters_and_sort(s);
             }
-            apply_filters_and_sort(s);
         }
         Message::FilterByFormat(format) => {
             s.filter_format = format;
@@ -38,8 +64,14 @@ pub fn handle_search_filter(s: &mut LoadedState, message: Message) -> Task<Messa
             s.filter_format = None;
             s.filter_lossless = None;
             s.filtered_indices.clear();
-            // Keep sort settings but rebuild indices
-            apply_filters_and_sort(s);
+            // Reload tracks from database with current sort
+            s.tracks_loading = true;
+            s.status_message = "Loading library...".to_string();
+            return super::load_tracks_initial_sorted_task(
+                s.pool.clone(),
+                s.sort_column,
+                s.sort_ascending,
+            );
         }
         _ => {}
     }

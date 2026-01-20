@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use tokio::runtime::Runtime;
 use tracing::{debug, info};
 
@@ -16,8 +16,12 @@ pub fn cmd_scan(rt: &Runtime, path: &PathBuf, pool: sqlx::SqlitePool) -> anyhow:
     rt.block_on(async {
         println!("Scanning directory: {:?}", path);
 
+        // Reset timing stats before scan
+        library::reset_scan_timings();
+        let scan_start = Instant::now();
+
         use futures::StreamExt;
-        let stream = library::scan_library(pool, path.clone());
+        let stream = library::scan_library_batched(pool, path.clone());
         let mut stream = std::pin::pin!(stream);
         let mut count = 0;
 
@@ -36,7 +40,53 @@ pub fn cmd_scan(rt: &Runtime, path: &PathBuf, pool: sqlx::SqlitePool) -> anyhow:
                 }
             }
         }
+
+        let elapsed = scan_start.elapsed();
+        let files_per_sec = if elapsed.as_secs_f64() > 0.0 {
+            count as f64 / elapsed.as_secs_f64()
+        } else {
+            0.0
+        };
+
         println!("\nScan complete. Total scanned: {} tracks.", count);
+        println!(
+            "Total time: {:.2}s ({:.1} files/sec)",
+            elapsed.as_secs_f64(),
+            files_per_sec
+        );
+
+        // Print timing breakdown
+        let timings = library::get_scan_timings();
+        let meta_ms = timings
+            .metadata_ns
+            .load(std::sync::atomic::Ordering::Relaxed) as f64
+            / 1_000_000.0;
+        let db_ms = timings.db_ns.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1_000_000.0;
+        let total_ms = elapsed.as_secs_f64() * 1000.0;
+        let other_ms = total_ms - meta_ms - db_ms;
+
+        println!("\nTiming breakdown:");
+        println!(
+            "  Metadata parsing: {:.1}ms ({:.1}%)",
+            meta_ms,
+            meta_ms / total_ms * 100.0
+        );
+        println!(
+            "  Database writes:  {:.1}ms ({:.1}%)",
+            db_ms,
+            db_ms / total_ms * 100.0
+        );
+        println!(
+            "  Other (I/O, etc): {:.1}ms ({:.1}%)",
+            other_ms.max(0.0),
+            (other_ms / total_ms * 100.0).max(0.0)
+        );
+
+        if count > 0 {
+            println!("\nPer-file averages:");
+            println!("  Metadata: {:.2}ms/file", meta_ms / count as f64);
+            println!("  Database: {:.2}ms/file", db_ms / count as f64);
+        }
     });
     Ok(())
 }

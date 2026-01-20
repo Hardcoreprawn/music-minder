@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 /// Create a stream that scans a library directory and emits scan events
 pub fn scan_stream(pool: SqlitePool, path: PathBuf) -> impl futures::Stream<Item = Message> {
-    library::scan_library(pool, path)
+    library::scan_library_batched(pool, path)
         .map(Message::ScanEventReceived)
         .chain(futures::stream::once(async { Message::ScanFinished }))
 }

@@ -9,7 +9,6 @@ description = "Database schema and repository layer for Music Minder"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 bitflags = { workspace = true }
 chrono = { workspace = true }
 lofty = { workspace = true }

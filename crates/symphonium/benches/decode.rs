@@ -12,7 +12,9 @@
 /// - Understand where our audio processing time goes
 /// - Validate SIMD optimizations are working
 /// - Measure impact of different SIMD levels (AVX2 vs SSE4.1 vs Scalar)
+/// - **CRITICAL**: Compare our manual SIMD against compiler auto-vectorization
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use symphonium::simd;
 
 // ============================================================================
 // SIMD Volume Scaling Benchmarks (AUDIO CALLBACK HOT PATH)
@@ -23,6 +25,28 @@ use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_mai
 //
 // The resampler output → ring buffer → CPAL callback uses volume scaling
 // to apply user volume setting without modifying the decoded audio.
+//
+// **Phase B.3 Goal**: Verify our manual SIMD actually beats the compiler!
+
+/// Test: Naive iterator implementation (what the compiler sees)
+#[inline(never)]
+fn volume_naive(samples: &mut [f32], volume: f32) {
+    for sample in samples.iter_mut() {
+        *sample *= volume;
+    }
+}
+
+/// Test: Compiler with auto-vectorization hints
+#[inline(always)]
+fn volume_compiler_optimized(samples: &mut [f32], volume: f32) {
+    // Give the compiler every advantage:
+    // - inline(always) for aggressive optimization
+    // - Iterator pattern it can auto-vectorize
+    // - No artificial barriers
+    for sample in samples.iter_mut() {
+        *sample *= volume;
+    }
+}
 
 fn simd_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("simd_volume_scaling");
@@ -38,16 +62,30 @@ fn simd_benchmarks(c: &mut Criterion) {
     for &frame_size in &[256, 1024, 4096] {
         group.throughput(Throughput::Elements(frame_size as u64));
 
-        let name = format!("volume_scale_{}frames", frame_size);
-        group.bench_function(&name, |b| {
-            let audio_buffer = vec![0.5f32; frame_size];
+        // Benchmark 1: Our manual SIMD implementation (runtime detection)
+        group.bench_function(format!("manual_simd_{}frames", frame_size), |b| {
+            let mut audio_buffer = vec![0.5f32; frame_size];
             b.iter(|| {
-                let samples = black_box(audio_buffer.clone());
                 let volume = black_box(0.8f32);
+                simd::apply_volume(black_box(&mut audio_buffer), volume);
+            });
+        });
 
-                // Simulate what the audio callback does: multiply each sample by volume
-                let _result: Vec<f32> = samples.iter().map(|&s| s * volume).collect();
-                _result
+        // Benchmark 2: Naive implementation (baseline)
+        group.bench_function(format!("naive_scalar_{}frames", frame_size), |b| {
+            let mut audio_buffer = vec![0.5f32; frame_size];
+            b.iter(|| {
+                let volume = black_box(0.8f32);
+                volume_naive(black_box(&mut audio_buffer), volume);
+            });
+        });
+
+        // Benchmark 3: Compiler-optimized (auto-vectorization)
+        group.bench_function(format!("compiler_optimized_{}frames", frame_size), |b| {
+            let mut audio_buffer = vec![0.5f32; frame_size];
+            b.iter(|| {
+                let volume = black_box(0.8f32);
+                volume_compiler_optimized(black_box(&mut audio_buffer), volume);
             });
         });
     }

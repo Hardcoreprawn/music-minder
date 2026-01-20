@@ -35,6 +35,8 @@ pub enum Message {
     TracksLoaded(Result<Vec<db::TrackWithMetadata>, String>),
     /// Progressive loading: first batch of tracks with total count
     TracksLoadedInitial(Result<(Vec<db::TrackWithMetadata>, i64), String>),
+    /// Progressive loading: first batch with sorting metadata (tracks, total, sort_column, ascending)
+    TracksLoadedInitialSorted(Result<(Vec<db::TrackWithMetadata>, i64, SortColumn, bool), String>),
     /// Progressive loading: subsequent batch of tracks
     TracksLoadedMore(Result<Vec<db::TrackWithMetadata>, String>),
 

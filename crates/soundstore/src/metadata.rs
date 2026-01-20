@@ -236,13 +236,30 @@ pub struct FieldChange {
 ///
 /// The `track_data` parameter should implement Into<FullMetadata> to allow flexibility
 /// in what metadata structure is passed (e.g., IdentifiedTrack from enrichment module).
+///
+/// # Safety
+///
+/// This function uses a safe two-phase write:
+/// 1. Build modified tag structure in memory
+/// 2. Only then open file with write mode
+///
+/// This prevents data loss if metadata parsing/building fails.
 pub fn write<T: Into<FullMetadata>>(
     path: &Path,
     track_data: T,
     options: &WriteOptions2,
 ) -> Result<WriteResult> {
     let metadata = track_data.into();
-    let current = read_full(path)?;
+
+    // Phase 1: Validate file is accessible and not corrupted
+    let current = read_full(path)
+        .context("Failed to read current metadata - file may be corrupted or inaccessible")?;
+
+    // Phase 2: Check file is not read-only
+    let file_metadata = std::fs::metadata(path).context("Failed to get file metadata")?;
+    if file_metadata.permissions().readonly() {
+        anyhow::bail!("File is read-only: {}", path.display());
+    }
 
     let mut fields_updated = 0;
     let mut fields_skipped = Vec::new();
@@ -252,7 +269,8 @@ pub fn write<T: Into<FullMetadata>>(
         !options.only_fill_empty || current_val.as_deref().is_none_or(str::is_empty)
     };
 
-    // Open the file for writing
+    // Phase 3: Open the file for reading and build tag structure
+    // CRITICAL: Do NOT open with truncate=true until we're ready to write
     let mut tagged_file = Probe::open(path)
         .context("Failed to open file for writing")?
         .read()
@@ -260,7 +278,7 @@ pub fn write<T: Into<FullMetadata>>(
 
     let tag = tagged_file
         .primary_tag_mut()
-        .ok_or_else(|| anyhow::anyhow!("No tag found in file"))?;
+        .ok_or_else(|| anyhow::anyhow!("No tag found in file - format may not support tags"))?;
 
     // Write basic metadata
     if let Some(ref title) = metadata.title {
@@ -326,21 +344,62 @@ pub fn write<T: Into<FullMetadata>>(
         fields_skipped.push("musicbrainz_recording_id (unsupported by Accessor)".to_string());
     }
 
-    // Truncate the file and write changes back
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(path)
-        .context("Failed to open file for writing")?;
+    // Phase 4: Safe write - only truncate AFTER all validation passes
+    // CRITICAL: Only open with truncate=true at the last possible moment
+    // This prevents data loss if any previous step failed
 
-    tagged_file
-        .save_to(&mut file, Default::default())
-        .context("Failed to save metadata to file")?;
+    // Create backup path in case write fails
+    let backup_path = path.with_extension("bak.tmp");
 
-    Ok(WriteResult {
-        fields_updated,
-        fields_skipped,
-    })
+    // Copy original file to backup (defensive - in case write fails mid-operation)
+    std::fs::copy(path, &backup_path).context("Failed to create backup before writing")?;
+
+    // Now safe to truncate and write
+    let write_result = (|| -> Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(path)
+            .context("Failed to open file for writing")?;
+
+        tagged_file
+            .save_to(&mut file, Default::default())
+            .context("Failed to save metadata to file")?;
+
+        // Flush to ensure data is written
+        use std::io::Write;
+        file.flush().context("Failed to flush file writes")?;
+
+        Ok(())
+    })();
+
+    // Handle write result and cleanup backup
+    match write_result {
+        Ok(()) => {
+            // Success - remove backup
+            let _ = std::fs::remove_file(&backup_path);
+            Ok(WriteResult {
+                fields_updated,
+                fields_skipped,
+            })
+        }
+        Err(e) => {
+            // Failure - restore from backup
+            if backup_path.exists() {
+                if let Err(restore_err) = std::fs::copy(&backup_path, path) {
+                    eprintln!(
+                        "CRITICAL: Failed to restore backup after write failure: {}",
+                        restore_err
+                    );
+                    eprintln!("Backup saved at: {}", backup_path.display());
+                } else {
+                    // Successfully restored, can remove backup
+                    let _ = std::fs::remove_file(&backup_path);
+                }
+            }
+            Err(e).context("Failed to write metadata (original file restored from backup)")
+        }
+    }
 }
 
 /// Preview what changes would be made without actually writing

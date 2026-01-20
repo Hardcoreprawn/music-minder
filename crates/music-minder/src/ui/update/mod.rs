@@ -47,6 +47,10 @@ pub use watcher::handle_watcher;
 const INITIAL_BATCH_SIZE: i64 = 200;
 
 /// Helper to load tracks from database (all at once - legacy)
+///
+/// This is kept for backward compatibility but not currently used.
+/// Prefer `load_tracks_initial_sorted_task` for better UX.
+#[allow(dead_code)]
 pub(crate) fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {
     Task::perform(
         async move {
@@ -65,7 +69,11 @@ pub(crate) fn load_tracks_task(pool: sqlx::SqlitePool) -> Task<Message> {
     )
 }
 
-/// Load initial batch of tracks for fast UI display
+/// Load initial batch of tracks for fast UI display (legacy, unsorted)
+///
+/// This is kept for backward compatibility but not currently used.
+/// Prefer `load_tracks_initial_sorted_task` for better UX.
+#[allow(dead_code)]
 pub(crate) fn load_tracks_initial_task(pool: sqlx::SqlitePool) -> Task<Message> {
     Task::perform(
         async move {
@@ -129,6 +137,141 @@ pub(crate) fn load_tracks_remaining_task(
         },
         Message::TracksLoadedMore,
     )
+}
+
+/// Load initial batch of tracks with sorting at database level.
+///
+/// This optimized version performs sorting in the database query itself,
+/// avoiding the need to load all tracks into memory before sorting.
+///
+/// # Arguments
+///
+/// * `pool` - Database connection pool
+/// * `sort_column` - Which column to sort by
+/// * `ascending` - Sort direction (true = ascending, false = descending)
+pub(crate) fn load_tracks_initial_sorted_task(
+    pool: sqlx::SqlitePool,
+    sort_column: crate::ui::state::SortColumn,
+    ascending: bool,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            let load_start = std::time::Instant::now();
+            tracing::debug!(
+                "Loading initial {} tracks (sorted by {:?} {})...",
+                INITIAL_BATCH_SIZE,
+                sort_column,
+                if ascending { "ASC" } else { "DESC" }
+            );
+
+            // Get total count first (very fast query)
+            let total = crate::db::count_tracks(&pool)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            // Convert UI sort column to DB sort column
+            let db_sort = convert_sort_column(sort_column);
+            let db_direction = if ascending {
+                crate::db::SortDirection::Ascending
+            } else {
+                crate::db::SortDirection::Descending
+            };
+
+            // Load first batch with sorting
+            let tracks = crate::db::get_tracks_sorted_paginated(
+                &pool,
+                db_sort,
+                db_direction,
+                INITIAL_BATCH_SIZE,
+                0,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+            tracing::info!(
+                "Initial {} tracks loaded in {:.1}ms (total: {})",
+                tracks.len(),
+                load_start.elapsed().as_secs_f64() * 1000.0,
+                total
+            );
+
+            Ok((tracks, total, sort_column, ascending))
+        },
+        Message::TracksLoadedInitialSorted,
+    )
+}
+
+/// Load remaining tracks with sorting at database level.
+///
+/// Continues loading tracks in batches with consistent sorting.
+pub(crate) fn load_tracks_remaining_sorted_task(
+    pool: sqlx::SqlitePool,
+    offset: i64,
+    total: i64,
+    sort_column: crate::ui::state::SortColumn,
+    ascending: bool,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            let remaining = total - offset;
+            if remaining <= 0 {
+                return Ok(vec![]);
+            }
+
+            let load_start = std::time::Instant::now();
+            tracing::debug!(
+                "Loading remaining {} tracks (offset {}, sorted by {:?} {})...",
+                remaining,
+                offset,
+                sort_column,
+                if ascending { "ASC" } else { "DESC" }
+            );
+
+            // Convert UI sort column to DB sort column
+            let db_sort = convert_sort_column(sort_column);
+            let db_direction = if ascending {
+                crate::db::SortDirection::Ascending
+            } else {
+                crate::db::SortDirection::Descending
+            };
+
+            let tracks = crate::db::get_tracks_sorted_paginated(
+                &pool,
+                db_sort,
+                db_direction,
+                remaining,
+                offset,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+
+            tracing::info!(
+                "Remaining {} tracks loaded in {:.1}ms",
+                tracks.len(),
+                load_start.elapsed().as_secs_f64() * 1000.0
+            );
+
+            Ok(tracks)
+        },
+        Message::TracksLoadedMore,
+    )
+}
+
+/// Convert UI sort column enum to database sort column enum.
+///
+/// Format is special - we don't store format in the database,
+/// so we fall back to sorting by path (filename).
+fn convert_sort_column(ui_col: crate::ui::state::SortColumn) -> crate::db::SortColumn {
+    match ui_col {
+        crate::ui::state::SortColumn::Title => crate::db::SortColumn::Title,
+        crate::ui::state::SortColumn::Artist => crate::db::SortColumn::Artist,
+        crate::ui::state::SortColumn::Album => crate::db::SortColumn::Album,
+        crate::ui::state::SortColumn::Year => crate::db::SortColumn::Year,
+        crate::ui::state::SortColumn::Duration => crate::db::SortColumn::Duration,
+        // Format is not stored in DB, so we can't sort by it efficiently
+        // Fall back to ID order (will be sorted in-memory later if needed)
+        crate::ui::state::SortColumn::Format => crate::db::SortColumn::Id,
+    }
 }
 
 /// Helper to pick a folder

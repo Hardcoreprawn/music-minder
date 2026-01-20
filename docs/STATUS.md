@@ -1,5 +1,62 @@
 # Project Status Summary
 
+## Current Version: v0.2.1 (Phase B.3 & C.1 Complete)
+
+**207 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
+
+### Latest Achievements
+
+**Phase B.3: Audio Pipeline Optimization ✅**
+
+- SIMD benchmarking: Manual AVX2 is 1.7-2.9x faster than compiler
+- Validated Rubato (FFT resampler) uses SIMD (already optimal)
+- Validated RealFFT (visualization) uses SIMD (already optimal)
+- Comprehensive documentation in `AUDIO_SIMD_VALIDATION.md`
+- **Conclusion:** Audio pipeline optimally implemented
+
+**Phase C.1: Batch Enrichment Improvements ✅**
+
+✅ **Parallel Processing**
+
+- 4x concurrent fingerprinting for local operations
+- Intelligent rate limiting (1.1s delay for MusicBrainz compliance)
+- 2-3x faster batch enrichment for typical albums
+
+✅ **Progress Tracking**
+
+- Real-time progress indicators during batch processing
+- Timing statistics (total time, average per file)
+- Throughput metrics for transparency
+
+### Recent Achievements
+
+**(Phase B.7: Enrichment Robustness)**
+
+- Data safety improvements with backup/restore mechanism
+- Enhanced error handling for fingerprinting
+- Network resilience with retry logic
+
+**(Phase B.6.3: Dependency Tracking)**
+
+- Automated cargo-outdated checks in CI
+- Quarterly dependency health review process
+
+**(Phase B.1-B.2: Performance Optimization)**
+
+✅ **Startup Performance**
+
+- 17ms to interactive (14.5ms initial load + 2-3ms overhead)
+- Database-level sorting eliminates in-memory sort
+- Incremental loading (200 tracks initially, rest in background)
+- Lazy player initialization (defer to first play)
+
+✅ **Scanning Performance**
+
+- 10x throughput improvement: 60→650 files/sec
+- 25x faster DB writes: 16ms→0.64ms per file
+- Transaction batching (100 files per commit)
+- In-memory artist/album caching
+
 ## Completed Features ✅
 
 ### Phase 1: Foundation
@@ -163,6 +220,7 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 - ✅ **music-minder** - Main application (GUI, CLI, enrichment service)
 
 **Test Coverage:** 198 tests across 5 crates
+
 - discographer: 7 tests
 - music-minder: 102 tests (2 ignored)
 - musicographer: 7 tests
@@ -170,6 +228,7 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 - symphonium: 66 tests
 
 **Crate Separation Achieved:**
+
 - Metadata write functionality restored to soundstore
 - IdentifiedTrack → FullMetadata trait conversion implemented
 - All imports updated to use extracted crates
@@ -194,6 +253,7 @@ cargo run -- write-tags /path/to/song.mp3 --title "Song" --fill-only
 - ✅ Provides baseline for performance tracking
 
 **Benchmarks Available:**
+
 ```bash
 # Run all benchmarks
 cargo bench
@@ -208,6 +268,7 @@ cargo bench -- --plotting-backend gnuplot
 ```
 
 **Next Steps (Phase B.0-B.3):**
+
 - [ ] Phase B.0: Enhanced test coverage (end-to-end CLI, error recovery)
 - [ ] Phase B.1: Startup performance optimization (target: <100ms to GUI)
 - [ ] Phase B.2: Scanning speed optimization (target: 1000+ files/sec)

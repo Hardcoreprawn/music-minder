@@ -2,7 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "release-type": "rust",
+      "release-type": "simple",
+      "package-name": "music-minder",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "draft": false,
@@ -18,7 +19,11 @@
         { "type": "ci", "section": "👷 CI", "hidden": true }
       ],
       "extra-files": [
-        "Cargo.toml"
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        }
       ]
     }
   }

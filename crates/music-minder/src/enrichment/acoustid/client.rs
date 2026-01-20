@@ -88,6 +88,12 @@ impl AcoustIdClient {
     /// The `compress` meta flag is included to request compressed response data from
     /// MusicBrainz (distinct from HTTP gzip compression). This reduces the amount of
     /// data transferred and processed.
+    ///
+    /// ## Robustness
+    ///
+    /// - Retries up to 3 times on transient network errors with exponential backoff
+    /// - 30-second timeout per request to prevent hanging
+    /// - Does NOT retry on HTTP 429 (rate limit) - those should bubble up immediately
     async fn send_lookup_request(
         &self,
         fingerprint: &AudioFingerprint,
@@ -102,29 +108,94 @@ impl AcoustIdClient {
             urlencoding::encode(&fingerprint.fingerprint)
         );
 
-        let response = self
-            .http_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| EnrichmentError::Network(e.to_string()))?;
+        // Retry up to 3 times on transient network errors
+        let mut attempts = 0;
+        let max_attempts = 3;
+        let mut last_error = None;
 
-        if !response.status().is_success() {
-            // Try to get the response body for more details
+        while attempts < max_attempts {
+            attempts += 1;
+
+            // Exponential backoff: 0ms, 500ms, 1000ms
+            if attempts > 1 {
+                let delay_ms = (attempts - 1) * 500;
+                tokio::time::sleep(std::time::Duration::from_millis(delay_ms as u64)).await;
+                tracing::debug!(
+                    "Retrying AcoustID request (attempt {}/{})",
+                    attempts,
+                    max_attempts
+                );
+            }
+
+            // Send request with 30-second timeout
+            let request_future = self.http_client.get(&url).send();
+            let timeout_duration = std::time::Duration::from_secs(30);
+
+            let response = match tokio::time::timeout(timeout_duration, request_future).await {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => {
+                    // Check if this is a transient error worth retrying
+                    if Self::is_transient_error(&e) {
+                        last_error = Some(EnrichmentError::Network(format!(
+                            "Transient network error: {}",
+                            e
+                        )));
+                        continue;
+                    }
+                    // Non-transient error - fail immediately
+                    return Err(EnrichmentError::Network(e.to_string()));
+                }
+                Err(_) => {
+                    last_error = Some(EnrichmentError::Network(format!(
+                        "Request timeout after {}s (attempt {}/{})",
+                        timeout_duration.as_secs(),
+                        attempts,
+                        max_attempts
+                    )));
+                    continue;
+                }
+            };
+
+            // Check HTTP status
             let status = response.status();
+            if status.is_success() {
+                // Success - parse and return
+                return response
+                    .json::<dto::LookupResponse>()
+                    .await
+                    .map_err(|e| EnrichmentError::Parse(e.to_string()));
+            }
+
+            // Check for rate limiting - fail immediately without retry
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                return Err(EnrichmentError::RateLimited);
+            }
+
+            // Other HTTP errors - try to get body for diagnostics
             let body = response.text().await.unwrap_or_default();
-            return Err(EnrichmentError::Network(format!(
+            last_error = Some(EnrichmentError::Network(format!(
                 "HTTP {}: {} - {}",
                 status,
                 status.canonical_reason().unwrap_or("Unknown"),
                 body.chars().take(200).collect::<String>()
             )));
+
+            // Retry server errors (5xx), fail immediately on client errors (4xx)
+            if status.is_client_error() {
+                return Err(last_error.unwrap());
+            }
+            // Continue to retry on server errors (5xx)
         }
 
-        response
-            .json::<dto::LookupResponse>()
-            .await
-            .map_err(|e| EnrichmentError::Parse(e.to_string()))
+        // All retries exhausted
+        Err(last_error
+            .unwrap_or_else(|| EnrichmentError::Network("Max retries exceeded".to_string())))
+    }
+
+    /// Check if an error is transient and worth retrying
+    fn is_transient_error(e: &reqwest::Error) -> bool {
+        // Retry on connection errors, timeouts, etc.
+        e.is_connect() || e.is_timeout() || e.is_request()
     }
 }
 
