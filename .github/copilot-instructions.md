@@ -235,10 +235,33 @@ The CI pipeline runs:
 
 1. **Formatting check** - `cargo fmt --check`
 2. **Clippy linting** - `cargo clippy -- -D warnings`
-3. **Tests** - `cargo nextest run` on Linux and Windows
+3. **Tests** - `cargo nextest run` on Linux (every PR/push) and Windows (main only)
 4. **Security audit** - `cargo audit` (on main branch only)
+5. **CodeQL analysis** - Weekly schedule + security-sensitive changes only
 
 All checks must pass before merge. Use the pre-commit hook (installed via `scripts/setup.ps1`) to catch issues early.
+
+### CI Optimization Guidelines
+
+**Use Pull Requests for Sprint Work** - Instead of pushing directly to main:
+- Batch related commits into a feature branch
+- Create a PR to run CI once on the complete changeset
+- This reduces CI runs by ~10x and saves significant compute time
+- Direct pushes to main trigger full CI (Linux + Windows + CodeQL) on every commit
+
+**When to skip CI:**
+- Use `[ci skip]` in commit messages for docs-only changes
+- Markdown files and `docs/` folder are already excluded via `paths-ignore`
+
+**Windows tests are expensive:**
+- Windows runners cost 2x Linux runners
+- Windows tests only run on main pushes, not on every PR
+- Ensure platform-specific code is well-tested locally before pushing
+
+**CodeQL is for security, not everyday bugs:**
+- Runs weekly + on dependency/workflow changes only
+- Rust's compiler catches most issues CodeQL would find in other languages
+- Don't rely on CodeQL for general code quality - use clippy instead
 
 ## Release Process
 

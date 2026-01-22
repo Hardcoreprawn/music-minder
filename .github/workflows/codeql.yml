@@ -1,14 +1,19 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # Only run on schedule and manual trigger - Rust's compiler catches most issues
+  # CodeQL is better suited for languages with runtime vulnerabilities
   schedule:
     # Weekly scan on Sundays at 2am UTC
     - cron: '0 2 * * 0'
   workflow_dispatch:  # Allow manual triggers
+  pull_request:
+    # Only run on security-sensitive changes
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
 
 permissions:
   contents: read
