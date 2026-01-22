@@ -26,9 +26,9 @@ What made Winamp special:
 
 ## Current Status: v0.2.1+ (Phases A, B.0-B.7, C.1 Complete)
 
-**237 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
+**242 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
 
-**Last Updated:** January 19, 2026
+**Last Updated:** January 22, 2026
 
 ---
 
@@ -46,16 +46,12 @@ What made Winamp special:
 
 ### 🐛 Bug Fixes (Quick Wins)
 
-| Issue | Title | Est. | Priority | Notes |
-| ----- | ----- | ---- | -------- | ----- |
-| [#18](https://github.com/Hardcoreprawn/music-minder/issues/18) | Fix SIMD diagnostics UI warnings | 15m | **HIGH** | Release builds show misleading warnings |
-| [#12](https://github.com/Hardcoreprawn/music-minder/issues/12) | cargo-outdated CI check | 30m | MEDIUM | Already designed, just needs CI config |
+All quick bug fixes completed! ✅
 
 ### 🚀 Feature Work (Next Sprint)
 
 | Issue | Title | Est. | Priority | Notes |
 | ----- | ----- | ---- | -------- | ----- |
-| [#13](https://github.com/Hardcoreprawn/music-minder/issues/13) | Batch enrichment: parallel + rate limiting | 4h | **HIGH** | Phase C.1 partially done, needs completion |
 | [#9](https://github.com/Hardcoreprawn/music-minder/issues/9) | Startup lazy-loading optimizations | 4h | MEDIUM | Audio device enumeration |
 | [#10](https://github.com/Hardcoreprawn/music-minder/issues/10) | Profile scanning bottlenecks | 2h | MEDIUM | Document metrics for optimization |
 | [#11](https://github.com/Hardcoreprawn/music-minder/issues/11) | Scanning Rayon parallelization | 6h | MEDIUM | Depends on #10 profiling |
@@ -66,8 +62,6 @@ Lower priority – defer to v0.3.0 unless blocking users
 
 | Issue | Title | Est. | Category |
 | ----- | ----- | ---- | -------- |
-| [#32](https://github.com/Hardcoreprawn/music-minder/issues/32) | Database retry logic | 3h | Database |
-| [#31](https://github.com/Hardcoreprawn/music-minder/issues/31) | Circuit breaker for APIs | 4h | Networking |
 | [#30](https://github.com/Hardcoreprawn/music-minder/issues/30) | Enrichment telemetry/metrics | 3h | Observability |
 | [#29](https://github.com/Hardcoreprawn/music-minder/issues/29) | Graceful degradation (partial enrichment) | 6h | UX |
 | [#28](https://github.com/Hardcoreprawn/music-minder/issues/28) | Health checks (fpcalc, API availability) | 3h | Diagnostics |
@@ -124,8 +118,10 @@ Good to have, but not blocking current features
 **Robustness:**
 
 - ✅ Enrichment: Defensive metadata writes with backup/restore
-- ✅ API retry logic with exponential backoff
-- ✅ 237 tests (unit, integration, concurrent, error recovery)
+- ✅ API retry logic with exponential backoff (enrichment)
+- ✅ Database retry logic with exponential backoff (SQLite BUSY/LOCKED)
+- ✅ Circuit breaker pattern for API resilience (fail fast when services down)
+- ✅ 242 tests (unit, integration, concurrent, error recovery)
 
 ### Phase C.1: Batch Enrichment (Partial Complete)
 
