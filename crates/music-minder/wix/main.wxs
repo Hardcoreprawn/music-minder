@@ -35,7 +35,7 @@
         <Property Id="DiskPrompt" Value="Music Minder Installation"/>
 
         <!-- Application icon for Add/Remove Programs -->
-        <Icon Id="MusicMinderIcon" SourceFile="assets\icon.ico"/>
+        <Icon Id="MusicMinderIcon" SourceFile="..\..\assets\icon.ico"/>
         <Property Id="ARPPRODUCTICON" Value="MusicMinderIcon"/>
 
         <Directory Id="TARGETDIR" Name="SourceDir">
@@ -139,7 +139,7 @@
         
         <!-- Nice installer UI -->
         <UIRef Id="WixUI_FeatureTree"/>
-        <WixVariable Id="WixUILicenseRtf" Value="wix\License.rtf"/>
+        <WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
         
     </Product>
 </Wix>
