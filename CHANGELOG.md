@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.1.9](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.8...music-minder-v0.1.9) (2026-01-22)
+
+
+### ✨ Features
+
+* add error categorization and guidance for enrichment ([#27](https://github.com/Hardcoreprawn/music-minder/issues/27)) ([3a22b61](https://github.com/Hardcoreprawn/music-minder/commit/3a22b61763ecd83bc8e655fb2da47f8d22b75d69))
+* add health checks for enrichment dependencies ([#28](https://github.com/Hardcoreprawn/music-minder/issues/28)) ([fc32491](https://github.com/Hardcoreprawn/music-minder/commit/fc3249174ff9cf72b0be723a3b288bdd62adaaf2))
+* **cli:** add JSON output format to diagnose command ([ecb1940](https://github.com/Hardcoreprawn/music-minder/commit/ecb1940690ffed8a92ccdfe700b61815daa18f2c)), closes [#34](https://github.com/Hardcoreprawn/music-minder/issues/34)
+* **db:** add retry logic for SQLite lock errors ([8707815](https://github.com/Hardcoreprawn/music-minder/commit/8707815bf41c36c3c2b9a3dff3f80b2cb92cec89)), closes [#32](https://github.com/Hardcoreprawn/music-minder/issues/32)
+* **enrichment:** add circuit breaker pattern for API resilience ([b97b90e](https://github.com/Hardcoreprawn/music-minder/commit/b97b90e02420c18c035a261a51b9538299fe8fe6)), closes [#31](https://github.com/Hardcoreprawn/music-minder/issues/31)
+* **enrichment:** add telemetry and metrics tracking ([480806d](https://github.com/Hardcoreprawn/music-minder/commit/480806dfe3949ad45686b758ddf9f81cd44e8d24)), closes [#30](https://github.com/Hardcoreprawn/music-minder/issues/30)
+* **enrichment:** implement smart retry for failed enrichment results ([dcf4b78](https://github.com/Hardcoreprawn/music-minder/commit/dcf4b78360b685f0d9d4a3cb878af5a219c13fdb))
+* **scanning:** add Rayon parallel scanning for 10x+ performance ([a2482c7](https://github.com/Hardcoreprawn/music-minder/commit/a2482c7f32603e8c02b18182d6882593dffa614b)), closes [#11](https://github.com/Hardcoreprawn/music-minder/issues/11)
+* **ui:** add error categorization display and retry failed button ([4b62982](https://github.com/Hardcoreprawn/music-minder/commit/4b62982486d6b3b06729e2b8cb75e0e13b4864c4))
+
+
+### 🐛 Bug Fixes
+
+* **ci:** specify package for cargo-wix in workspace ([a8573d9](https://github.com/Hardcoreprawn/music-minder/commit/a8573d9b14b1958ada57b211810359c5ab24db8c))
+
+
+### ⚡ Performance
+
+* **simd:** improve SIMD benchmark measurement accuracy ([84e457d](https://github.com/Hardcoreprawn/music-minder/commit/84e457ddf5d4796459b7168fb5296755e44afcb5)), closes [#35](https://github.com/Hardcoreprawn/music-minder/issues/35)
+
+
+### 📚 Documentation
+
+* update roadmap with completed v0.1.9 work ([8704b37](https://github.com/Hardcoreprawn/music-minder/commit/8704b37265145e8b0fb44284a546f24eb06012d8))
+
 ## [0.1.8](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.7...music-minder-v0.1.8) (2026-01-20)
 
 
