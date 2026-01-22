@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "discographer"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "criterion",
@@ -3382,7 +3382,7 @@ dependencies = [
 
 [[package]]
 name = "music-minder"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3429,7 +3429,7 @@ dependencies = [
 
 [[package]]
 name = "musicographer"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "crossbeam-channel",
  "futures",
@@ -5458,7 +5458,7 @@ dependencies = [
 
 [[package]]
 name = "soundstore"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "bitflags 2.10.0",
@@ -5936,7 +5936,7 @@ dependencies = [
 
 [[package]]
 name = "symphonium"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "cpal",
  "criterion",
