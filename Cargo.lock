@@ -3435,6 +3435,7 @@ dependencies = [
  "futures",
  "notify",
  "notify-debouncer-full",
+ "rayon",
  "serde",
  "tempfile",
  "thiserror 2.0.17",

@@ -86,26 +86,28 @@ pub fn get_scan_timings() -> &'static ScanTimings {
 ///
 /// ## Performance Strategy (Phase B.2)
 ///
-/// This implementation batches database writes to eliminate per-file transaction overhead:
-/// 1. **Metadata Parsing** — Read 100 files (parallel, CPU+I/O bound)
-/// 2. **Batch DB Write** — Single transaction for all 100 files (I/O bound)
-/// 3. **Repeat** — Continue until all files processed
+/// This implementation uses parallel file discovery and batched database writes:
+/// 1. **File Discovery** — Rayon parallel directory traversal (CPU+I/O bound)
+/// 2. **Metadata Parsing** — Read 200 files in parallel batches of 20 (CPU+I/O bound)
+/// 3. **Batch DB Write** — Single transaction for all 200 files (I/O bound)
+/// 4. **Repeat** — Continue until all files processed
 ///
-/// Expected 10-15x improvement over individual inserts due to:
-/// - Single transaction per batch (vs 100 commits)
-/// - Reduced async overhead (300 awaits → ~3 awaits per batch)
+/// Expected 10-20x improvement over individual inserts due to:
+/// - Parallel directory traversal (multi-core utilization)
+/// - Single transaction per batch (vs 200 commits)
+/// - Reduced async overhead (600 awaits → ~6 awaits per batch)
 /// - Bulk INSERT OR IGNORE for artists/albums
 ///
 /// ## Configuration
 ///
-/// - Batch size: 100 files (tunable trade-off between memory and latency)
-/// - Metadata parallelism: 10 concurrent reads
+/// - Batch size: 200 files (tunable trade-off between memory and latency)
+/// - Metadata parallelism: 20 concurrent reads per batch
 pub fn scan_library_batched(pool: SqlitePool, root: PathBuf) -> impl Stream<Item = ScanEvent> {
-    tracing::debug!(target: "music_minder::library", path = %root.display(), "Starting batched library scan");
+    tracing::debug!(target: "music_minder::library", path = %root.display(), "Starting parallel batched library scan");
 
-    const BATCH_SIZE: usize = 100;
+    const BATCH_SIZE: usize = 200; // Increased from 100 for better throughput
 
-    let paths = scanner::scan(root);
+    let paths = scanner::scan_parallel(root); // Use parallel scanner
 
     // Collect paths into batches, then process each batch
     async_stream::stream! {
@@ -134,28 +136,32 @@ pub fn scan_library_batched(pool: SqlitePool, root: PathBuf) -> impl Stream<Item
 }
 
 /// Process a batch of files: read metadata in parallel, then write to DB in one transaction
+///
+/// Uses parallel metadata reading with a concurrency limit of 20 to balance:
+/// - CPU utilization (tag parsing)
+/// - I/O throughput (file reads)
+/// - Memory usage (buffered futures)
 async fn process_batch(pool: &SqlitePool, paths: &[PathBuf]) -> Vec<ScanEvent> {
-    use futures::stream::FuturesUnordered;
+    use futures::stream::{self, StreamExt};
 
-    // Phase 1: Read metadata for all files in parallel
-    let meta_tasks: FuturesUnordered<_> = paths
-        .iter()
-        .map(|path| {
-            let path = path.clone();
-            async move {
-                let meta_start = Instant::now();
-                let result = metadata::read(&path);
-                let meta_elapsed = meta_start.elapsed().as_nanos() as u64;
-                SCAN_TIMINGS
-                    .metadata_ns
-                    .fetch_add(meta_elapsed, Ordering::Relaxed);
+    const METADATA_PARALLELISM: usize = 20; // Increased from 10 for faster batch processing
 
-                (path, result)
-            }
+    // Phase 1: Read metadata for all files in parallel with concurrency limit
+    let path_vec: Vec<PathBuf> = paths.to_vec();
+    let metadata_results: Vec<_> = stream::iter(path_vec)
+        .map(|path| async move {
+            let meta_start = Instant::now();
+            let result = metadata::read(&path);
+            let meta_elapsed = meta_start.elapsed().as_nanos() as u64;
+            SCAN_TIMINGS
+                .metadata_ns
+                .fetch_add(meta_elapsed, Ordering::Relaxed);
+
+            (path, result)
         })
-        .collect();
-
-    let metadata_results: Vec<_> = meta_tasks.collect().await;
+        .buffer_unordered(METADATA_PARALLELISM)
+        .collect()
+        .await;
 
     // Phase 2: Prepare successful metadata for batch insert
     let mut tracks_to_insert = Vec::new();

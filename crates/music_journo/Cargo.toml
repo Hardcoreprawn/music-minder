@@ -11,6 +11,7 @@ crossbeam-channel.workspace = true
 futures.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
+rayon.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
