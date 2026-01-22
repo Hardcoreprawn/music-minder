@@ -29,6 +29,7 @@
 //! println!("Total files: {}, OK: {}, Errors: {}", summary.total, summary.ok, summary.errors);
 //! ```
 
+mod checks;
 mod db;
 mod gardener;
 mod hash;
@@ -60,4 +61,10 @@ pub use gardener::{
 pub use verification::{
     ExistingMetadata, FingerprintMatch, ReleaseInfo, ReleaseType, VerificationIssue,
     VerificationResult, VerificationStatus, verify_metadata,
+};
+
+// Re-export health checks
+pub use checks::{
+    ApiStatus, DependencyStatus, HealthCheckReport, HealthChecker, NetworkStatus,
+    remediation_for_issue,
 };

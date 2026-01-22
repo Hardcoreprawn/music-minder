@@ -78,6 +78,10 @@ pub enum Message {
     EnrichmentClearResult,
     EnrichmentWriteTagsPressed,
     EnrichmentWriteTagsResult(Result<usize, String>),
+    /// Run health checks for enrichment dependencies
+    EnrichmentRunHealthChecks,
+    /// Health check results received
+    EnrichmentHealthCheckComplete(crate::health::HealthCheckReport),
 
     // Enrich pane messages (batch operations)
     EnrichAddFromLibrary,             // Open library selection

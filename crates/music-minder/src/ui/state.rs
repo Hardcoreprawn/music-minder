@@ -340,6 +340,12 @@ pub struct EnrichmentState {
     pub last_error: Option<String>,
     /// Whether fpcalc is available
     pub fpcalc_available: bool,
+    /// Health check report (cached for 5 minutes)
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub health_report: Option<crate::health::HealthCheckReport>,
+    /// Whether health checks are currently running
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub health_checking: bool,
 }
 
 /// State for track detail modal view
@@ -387,6 +393,12 @@ pub struct EnrichmentPaneState {
     pub fpcalc_available: bool,
     /// Rate limit status for display
     pub rate_limit_status: RateLimitStatus,
+    /// Health check report (cached for 5 minutes)
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub health_report: Option<crate::health::HealthCheckReport>,
+    /// Whether health checks are currently running
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub health_checking: bool,
 
     /// Track indices selected for enrichment (indices into LoadedState.tracks)
     pub selected_tracks: Vec<usize>,
