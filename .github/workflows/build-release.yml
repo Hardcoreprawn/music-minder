@@ -71,7 +71,7 @@ jobs:
         run: cargo install cargo-wix
         
       - name: Build MSI installer
-        run: cargo wix --no-build --nocapture
+        run: cargo wix --no-build --nocapture --package music-minder
           
       - name: Prepare artifacts
         run: |
