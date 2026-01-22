@@ -15,6 +15,7 @@ use crate::enrichment::{
     domain::{EnrichmentError, TrackIdentification},
     fingerprint,
     musicbrainz::MusicBrainzClient,
+    telemetry::{EnrichmentMetrics, Timer},
 };
 
 /// Configuration for the enrichment service
@@ -46,6 +47,7 @@ pub struct EnrichmentService {
     acoustid: AcoustIdClient,
     musicbrainz: MusicBrainzClient,
     coverart: CoverArtClient,
+    metrics: EnrichmentMetrics,
 }
 
 impl EnrichmentService {
@@ -55,6 +57,7 @@ impl EnrichmentService {
             acoustid: AcoustIdClient::new(&config.acoustid_api_key),
             musicbrainz: MusicBrainzClient::new(),
             coverart: CoverArtClient::new(),
+            metrics: EnrichmentMetrics::new(),
             config,
         }
     }
@@ -69,6 +72,11 @@ impl EnrichmentService {
         fingerprint::get_fpcalc_version()
     }
 
+    /// Get current metrics snapshot
+    pub fn metrics(&self) -> &EnrichmentMetrics {
+        &self.metrics
+    }
+
     /// Identify a track by its audio fingerprint
     ///
     /// Returns the best match with confidence >= min_confidence, or NoMatches error.
@@ -78,10 +86,30 @@ impl EnrichmentService {
         path: &Path,
     ) -> Result<TrackIdentification, EnrichmentError> {
         // Step 1: Generate fingerprint
-        let fp = fingerprint::generate_fingerprint(path)?;
+        let timer = Timer::new();
+        let fp = match fingerprint::generate_fingerprint(path) {
+            Ok(fp) => {
+                self.metrics.record_fingerprint_success(timer.elapsed());
+                fp
+            }
+            Err(e) => {
+                self.metrics.record_fingerprint_error(&e);
+                return Err(e);
+            }
+        };
 
         // Step 2: Look up on AcoustID
-        let identifications = self.acoustid.lookup(&fp).await?;
+        let timer = Timer::new();
+        let identifications = match self.acoustid.lookup(&fp).await {
+            Ok(ids) => {
+                self.metrics.record_acoustid_success(timer.elapsed());
+                ids
+            }
+            Err(e) => {
+                self.metrics.record_acoustid_error(&e);
+                return Err(e);
+            }
+        };
 
         // Step 3: Read existing metadata from file for matching hints
         let existing_meta = crate::metadata::read(path).ok();
@@ -109,12 +137,15 @@ impl EnrichmentService {
             // Add a small delay to respect MusicBrainz rate limits (1 req/sec)
             tokio::time::sleep(Duration::from_millis(1100)).await;
 
+            let timer = Timer::new();
             match self.musicbrainz.lookup_recording(recording_id).await {
                 Ok(mb_result) => {
+                    self.metrics.record_musicbrainz_success(timer.elapsed());
                     // Merge MusicBrainz data into our identification
                     identification.track.merge(&mb_result.track);
                 }
                 Err(e) => {
+                    self.metrics.record_musicbrainz_error(&e);
                     // Log but don't fail - AcoustID data is still useful
                     tracing::warn!("MusicBrainz lookup failed: {}", e);
                 }

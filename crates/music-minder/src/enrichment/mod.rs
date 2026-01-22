@@ -42,6 +42,7 @@ pub mod domain;
 pub mod fingerprint;
 pub mod musicbrainz;
 pub mod service;
+pub mod telemetry;
 pub mod traits;
 
 #[cfg(test)]
@@ -52,4 +53,5 @@ pub use domain::{
     AudioFingerprint, EnrichmentError, EnrichmentSource, IdentifiedTrack, TrackIdentification,
 };
 pub use service::{EnrichmentConfig, EnrichmentService, identify_track};
+pub use telemetry::{EnrichmentMetrics, MetricsSnapshot};
 pub use traits::{AcoustIdApi, CoverArtApi, MusicBrainzApi};
