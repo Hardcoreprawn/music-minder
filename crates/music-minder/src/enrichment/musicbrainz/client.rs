@@ -6,12 +6,14 @@
 //! IMPORTANT: MusicBrainz requires a User-Agent header and rate limits to 1 req/sec.
 
 use super::{adapter, dto};
+use crate::enrichment::circuit_breaker::{CircuitBreaker, CircuitBreakerError};
 use crate::enrichment::domain::{EnrichmentError, TrackIdentification};
 
 /// MusicBrainz API client
 pub struct MusicBrainzClient {
     http_client: reqwest::Client,
     base_url: String,
+    circuit_breaker: CircuitBreaker,
 }
 
 /// User agent string - MusicBrainz requires this
@@ -32,6 +34,7 @@ impl MusicBrainzClient {
         Self {
             http_client,
             base_url: "https://musicbrainz.org/ws/2".to_string(),
+            circuit_breaker: CircuitBreaker::new("MusicBrainz"),
         }
     }
 
@@ -46,15 +49,31 @@ impl MusicBrainzClient {
         Self {
             http_client,
             base_url: base_url.into(),
+            circuit_breaker: CircuitBreaker::new("MusicBrainz-Test"),
         }
     }
 
     /// Look up a recording by MusicBrainz ID and return enriched track info
+    ///
+    /// Protected by circuit breaker - fails fast if service is down after
+    /// 5 consecutive failures.
     pub async fn lookup_recording(
         &self,
         recording_id: &str,
     ) -> Result<TrackIdentification, EnrichmentError> {
-        let response = self.send_recording_request(recording_id).await?;
+        // Wrap the request in circuit breaker
+        let response = self
+            .circuit_breaker
+            .call(|| self.send_recording_request(recording_id))
+            .await
+            .map_err(|e| match e {
+                CircuitBreakerError::CircuitOpen(name) => EnrichmentError::Network(format!(
+                    "Circuit breaker '{}' is open - service appears to be down",
+                    name
+                )),
+                CircuitBreakerError::Request(err) => err,
+            })?;
+
         Ok(adapter::to_identification(response))
     }
 

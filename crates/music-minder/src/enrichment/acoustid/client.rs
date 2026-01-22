@@ -25,6 +25,7 @@
 //! We use GET since it works reliably and fingerprint sizes are manageable.
 
 use super::{adapter, dto};
+use crate::enrichment::circuit_breaker::{CircuitBreaker, CircuitBreakerError};
 use crate::enrichment::domain::{AudioFingerprint, EnrichmentError, TrackIdentification};
 
 /// AcoustID API client
@@ -32,6 +33,7 @@ pub struct AcoustIdClient {
     api_key: String,
     http_client: reqwest::Client,
     base_url: String,
+    circuit_breaker: CircuitBreaker,
 }
 
 impl AcoustIdClient {
@@ -40,6 +42,7 @@ impl AcoustIdClient {
     /// The client is configured to:
     /// - Accept gzip-compressed responses (reduces bandwidth)
     /// - Send User-Agent header identifying the application
+    /// - Circuit breaker to fail fast when service is down
     pub fn new(api_key: impl Into<String>) -> Self {
         let http_client = reqwest::Client::builder()
             .gzip(true) // Accept gzip-compressed responses
@@ -55,6 +58,7 @@ impl AcoustIdClient {
             api_key: api_key.into(),
             http_client,
             base_url: "https://api.acoustid.org/v2/lookup".to_string(),
+            circuit_breaker: CircuitBreaker::new("AcoustID"),
         }
     }
 
@@ -65,15 +69,31 @@ impl AcoustIdClient {
             api_key: api_key.into(),
             http_client: reqwest::Client::new(),
             base_url: base_url.into(),
+            circuit_breaker: CircuitBreaker::new("AcoustID-Test"),
         }
     }
 
     /// Look up a fingerprint and return track identifications
+    ///
+    /// Protected by circuit breaker - fails fast if service is down after
+    /// 5 consecutive failures.
     pub async fn lookup(
         &self,
         fingerprint: &AudioFingerprint,
     ) -> Result<Vec<TrackIdentification>, EnrichmentError> {
-        let response = self.send_lookup_request(fingerprint).await?;
+        // Wrap the request in circuit breaker
+        let response = self
+            .circuit_breaker
+            .call(|| self.send_lookup_request(fingerprint))
+            .await
+            .map_err(|e| match e {
+                CircuitBreakerError::CircuitOpen(name) => EnrichmentError::Network(format!(
+                    "Circuit breaker '{}' is open - service appears to be down",
+                    name
+                )),
+                CircuitBreakerError::Request(err) => err,
+            })?;
+
         adapter::to_identifications(response)
     }
 

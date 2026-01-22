@@ -36,6 +36,7 @@
 pub const DEFAULT_ACOUSTID_API_KEY: &str = "SIwKdLgXuH";
 
 pub mod acoustid;
+pub mod circuit_breaker;
 pub mod coverart;
 pub mod domain;
 pub mod fingerprint;
