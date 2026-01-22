@@ -139,7 +139,7 @@
         
         <!-- Nice installer UI -->
         <UIRef Id="WixUI_FeatureTree"/>
-        <WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
+        <!-- Note: License.rtf is copied to target/wix by cargo-wix, so we reference it there -->
         
     </Product>
 </Wix>
