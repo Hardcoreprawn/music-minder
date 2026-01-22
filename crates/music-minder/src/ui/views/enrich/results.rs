@@ -78,6 +78,62 @@ fn result_row(index: usize, result: &EnrichmentResult) -> Element<'_, Message> {
     // Main content
     let title_text = result.title.as_deref().unwrap_or("Unknown");
 
+    // Error details (for failed results)
+    let error_details: Option<Element<Message>> = if result.status == ResultStatus::Error {
+        result.error.as_ref().map(|err_msg| {
+            let mut error_items: Vec<Element<Message>> = vec![
+                text(err_msg)
+                    .size(typography::SIZE_TINY)
+                    .color(color::ERROR)
+                    .into(),
+            ];
+
+            // Show error category if available
+            if let Some(ref category) = result.error_category {
+                let category_text = format!("Category: {}", category.label());
+                let category_color = match category {
+                    crate::enrichment::ErrorCategory::Recoverable => color::SUCCESS,
+                    crate::enrichment::ErrorCategory::Fixable => color::WARNING,
+                    crate::enrichment::ErrorCategory::Permanent => color::TEXT_MUTED,
+                };
+                error_items.push(Space::with_height(spacing::XS).into());
+                error_items.push(
+                    text(category_text)
+                        .size(typography::SIZE_TINY)
+                        .color(category_color)
+                        .into(),
+                );
+            }
+
+            // Show guidance if available
+            if let Some(ref guidance) = result.error_guidance {
+                error_items.push(Space::with_height(spacing::XS).into());
+                error_items.push(
+                    text(guidance)
+                        .size(typography::SIZE_TINY)
+                        .color(color::TEXT_SECONDARY)
+                        .into(),
+                );
+            }
+
+            container(column(error_items).spacing(0))
+                .padding(spacing::SM)
+                .style(|_| container::Style {
+                    background: Some(iced::Background::Color(color::SURFACE)),
+                    border: iced::Border {
+                        color: color::ERROR,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .width(Length::Fill)
+                .into()
+        })
+    } else {
+        None
+    };
+
     let changes_text: Element<Message> = if !result.changes.is_empty() {
         let changes_str = result.changes.join(", ");
         text(changes_str)
@@ -143,6 +199,11 @@ fn result_row(index: usize, result: &EnrichmentResult) -> Element<'_, Message> {
         .into(),
         changes_text,
     ];
+
+    // Add error details if available
+    if let Some(error_widget) = error_details {
+        content_items.push(error_widget);
+    }
 
     // Add alternatives list if expanded and available
     if result.show_alternatives && !result.alternatives.is_empty() {

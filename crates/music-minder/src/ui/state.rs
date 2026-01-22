@@ -341,10 +341,10 @@ pub struct EnrichmentState {
     /// Whether fpcalc is available
     pub fpcalc_available: bool,
     /// Health check report (cached for 5 minutes)
-    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    #[allow(dead_code)] // Reserved for health check UI display
     pub health_report: Option<crate::health::HealthCheckReport>,
     /// Whether health checks are currently running
-    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    #[allow(dead_code)] // Reserved for health check UI display
     pub health_checking: bool,
 }
 
@@ -397,7 +397,7 @@ pub struct EnrichmentPaneState {
     #[allow(dead_code)] // Will be used in UI display (Issue #27)
     pub health_report: Option<crate::health::HealthCheckReport>,
     /// Whether health checks are currently running
-    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    #[allow(dead_code)] // Reserved for health check UI display
     pub health_checking: bool,
 
     /// Track indices selected for enrichment (indices into LoadedState.tracks)
@@ -424,19 +424,17 @@ impl EnrichmentPaneState {
     }
 
     /// Check if there are failed results that can be retried
-    #[allow(dead_code)] // Will be used for UI button enabling (Issue #26)
     pub fn has_retriable_failures(&self) -> bool {
         self.results.iter().any(|r| r.is_retriable())
     }
 
     /// Get count of retriable failures
-    #[allow(dead_code)] // Will be used for UI button text (Issue #26)
     pub fn retriable_failure_count(&self) -> usize {
         self.results.iter().filter(|r| r.is_retriable()).count()
     }
 
     /// Get indices of results that can be retried
-    #[allow(dead_code)] // Will be used for batch retry operations (Issue #26)
+    #[allow(dead_code)] // Reserved for selective retry operations
     pub fn get_retriable_indices(&self) -> Vec<usize> {
         self.results
             .iter()
@@ -507,10 +505,8 @@ pub struct EnrichmentResult {
     /// Error message (if status is Error)
     pub error: Option<String>,
     /// Error category for grouping and retry logic
-    #[allow(dead_code)] // Will be used in UI display (Issue #27)
     pub error_category: Option<enrichment::ErrorCategory>,
     /// User-friendly guidance for fixing the error
-    #[allow(dead_code)] // Will be used in UI display (Issue #27)
     pub error_guidance: Option<String>,
     /// Whether this result is confirmed for writing
     pub confirmed: bool,

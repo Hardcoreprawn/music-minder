@@ -111,6 +111,17 @@ pub enum ErrorCategory {
     Permanent,
 }
 
+impl ErrorCategory {
+    /// Get a human-readable label for this category
+    pub fn label(&self) -> &'static str {
+        match self {
+            ErrorCategory::Recoverable => "Network/API Errors",
+            ErrorCategory::Fixable => "Fixable Issues",
+            ErrorCategory::Permanent => "Unsupported",
+        }
+    }
+}
+
 impl EnrichmentError {
     /// Get the error category for UI display and retry logic
     pub fn category(&self) -> ErrorCategory {

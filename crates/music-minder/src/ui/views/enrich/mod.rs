@@ -92,9 +92,9 @@ pub fn enrich_pane(s: &LoadedState) -> Element<'_, Message> {
         Space::new(0, 0).into()
     };
 
-    // Batch actions (visible when we have confirmed results)
-    let batch_actions = if enrich.has_confirmed_results() {
-        batch_actions_section()
+    // Batch actions (visible when we have confirmed results or retriable failures)
+    let batch_actions = if enrich.has_confirmed_results() || enrich.has_retriable_failures() {
+        batch_actions_section(enrich)
     } else {
         Space::new(0, 0).into()
     };
@@ -217,36 +217,68 @@ fn progress_section(
     .into()
 }
 
-/// Batch actions - Write All Confirmed, Export Report
-fn batch_actions_section() -> Element<'static, Message> {
-    let write_all_btn = button(
-        row![
-            icon_sized(icons::FLOPPY, typography::SIZE_BODY).color(color::TEXT_INVERSE),
-            text("Write All Confirmed").color(color::TEXT_INVERSE),
-        ]
-        .spacing(spacing::SM)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([spacing::SM, spacing::LG])
-    .style(theme::button_primary)
-    .on_press(Message::EnrichWriteAllConfirmed);
+/// Batch actions - Write All Confirmed, Retry Failed, Export Report
+fn batch_actions_section(enrich: &crate::ui::state::EnrichmentPaneState) -> Element<'_, Message> {
+    let mut action_buttons: Vec<Element<Message>> = vec![];
 
-    let export_btn = button(
-        row![
-            icon_sized(icons::FILE_EXPORT, typography::SIZE_BODY).color(color::TEXT_SECONDARY),
-            text("Export Report").color(color::TEXT_SECONDARY),
-        ]
-        .spacing(spacing::SM)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([spacing::SM, spacing::LG])
-    .style(theme::button_secondary)
-    .on_press(Message::EnrichExportReport);
-
-    container(
-        row![write_all_btn, Space::with_width(spacing::MD), export_btn,]
+    // Write All Confirmed button (only if we have confirmed results)
+    if enrich.has_confirmed_results() {
+        let write_all_btn = button(
+            row![
+                icon_sized(icons::FLOPPY, typography::SIZE_BODY).color(color::TEXT_INVERSE),
+                text("Write All Confirmed").color(color::TEXT_INVERSE),
+            ]
+            .spacing(spacing::SM)
             .align_y(iced::Alignment::Center),
-    )
-    .padding([spacing::LG, 0])
-    .into()
+        )
+        .padding([spacing::SM, spacing::LG])
+        .style(theme::button_primary)
+        .on_press(Message::EnrichWriteAllConfirmed);
+        action_buttons.push(write_all_btn.into());
+    }
+
+    // Retry Failed button (only if we have retriable failures)
+    if enrich.has_retriable_failures() {
+        let retry_count = enrich.retriable_failure_count();
+        let retry_btn = button(
+            row![
+                icon_sized(icons::ARROW_ROTATE, typography::SIZE_BODY).color(color::TEXT_INVERSE),
+                text(format!("Retry Failed ({})", retry_count)).color(color::TEXT_INVERSE),
+            ]
+            .spacing(spacing::SM)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([spacing::SM, spacing::LG])
+        .style(theme::button_primary)
+        .on_press(Message::EnrichRetryFailed);
+
+        if !action_buttons.is_empty() {
+            action_buttons.push(Space::with_width(spacing::MD).into());
+        }
+        action_buttons.push(retry_btn.into());
+    }
+
+    // Export Report button (always available if we have results)
+    if !enrich.results.is_empty() {
+        let export_btn = button(
+            row![
+                icon_sized(icons::FILE_EXPORT, typography::SIZE_BODY).color(color::TEXT_SECONDARY),
+                text("Export Report").color(color::TEXT_SECONDARY),
+            ]
+            .spacing(spacing::SM)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([spacing::SM, spacing::LG])
+        .style(theme::button_secondary)
+        .on_press(Message::EnrichExportReport);
+
+        if !action_buttons.is_empty() {
+            action_buttons.push(Space::with_width(spacing::MD).into());
+        }
+        action_buttons.push(export_btn.into());
+    }
+
+    container(row(action_buttons).align_y(iced::Alignment::Center))
+        .padding([spacing::LG, 0])
+        .into()
 }

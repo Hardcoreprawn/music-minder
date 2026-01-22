@@ -106,6 +106,9 @@ pub fn cmd_identify(
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
+                eprintln!();
+                eprintln!("Category: {}", e.category_label());
+                eprintln!("Guidance: {}", e.guidance());
                 std::process::exit(1);
             }
         }
