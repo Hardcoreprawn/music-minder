@@ -110,6 +110,7 @@ pub enum Message {
     EnrichExportReport,                    // Export results to file
     EnrichToggleAlternatives(usize),       // Toggle alternatives list for result at index
     EnrichSelectAlternative(usize, usize), // Select alternative for result (result_idx, alt_idx)
+    EnrichRetryFailed,                     // Retry all failed items with recoverable/fixable errors
 
     // Player messages
     PlayerPlay,

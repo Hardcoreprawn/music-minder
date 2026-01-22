@@ -334,7 +334,8 @@ impl MusicMinder {
             | Message::EnrichSelectAlternative(_, _)
             | Message::EnrichWriteResult(_)
             | Message::EnrichWriteAllConfirmed
-            | Message::EnrichExportReport => {
+            | Message::EnrichExportReport
+            | Message::EnrichRetryFailed => {
                 return update::handle_enrich_pane(s, message);
             }
 

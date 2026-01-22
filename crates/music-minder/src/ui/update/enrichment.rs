@@ -653,6 +653,70 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
             );
         }
 
+        Message::EnrichRetryFailed => {
+            // Find all retriable failures and their original track indices
+            let retriable_results: Vec<(usize, usize)> = s
+                .enrichment_pane
+                .results
+                .iter()
+                .enumerate()
+                .filter_map(|(result_idx, result)| {
+                    if result.is_retriable() {
+                        Some((result_idx, result.track_index))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if retriable_results.is_empty() {
+                tracing::info!("No retriable failures found");
+                return Task::none();
+            }
+
+            tracing::info!("Retrying {} failed items", retriable_results.len());
+
+            // Remove the failed results - iterate in reverse to avoid index shifting
+            let mut indices_to_remove: Vec<usize> =
+                retriable_results.iter().map(|(idx, _)| *idx).collect();
+            indices_to_remove.sort_unstable();
+            indices_to_remove.reverse();
+
+            for idx in indices_to_remove {
+                s.enrichment_pane.results.remove(idx);
+            }
+
+            // Start retrying the first failed track
+            if let Some(&(_, track_pos)) = retriable_results.first()
+                && let Some(&track_idx) = s.enrichment_pane.selected_tracks.get(track_pos)
+                && let Some(track) = s.tracks.get(track_idx)
+            {
+                s.enrichment_pane.is_identifying = true;
+                let path = PathBuf::from(&track.path);
+                let api_key = s.enrichment_pane.api_key.clone();
+
+                return Task::perform(
+                    async move {
+                        let config = enrichment::EnrichmentConfig {
+                            acoustid_api_key: api_key,
+                            min_confidence: 0.5,
+                            use_musicbrainz: true,
+                            ..Default::default()
+                        };
+                        let service = enrichment::EnrichmentService::new(config);
+                        let result = service
+                            .identify_track_with_alternatives(&path)
+                            .await
+                            .map_err(|e| e.to_string());
+                        (track_pos, result)
+                    },
+                    |(pos, result)| Message::EnrichBatchIdentifyWithAlts(pos, result),
+                );
+            }
+
+            return Task::none();
+        }
+
         Message::EnrichExportReport => {
             // Generate a simple text report
             let mut report = String::new();

@@ -422,6 +422,28 @@ impl EnrichmentPaneState {
             .iter()
             .any(|r| r.confirmed && r.status == ResultStatus::Success)
     }
+
+    /// Check if there are failed results that can be retried
+    #[allow(dead_code)] // Will be used for UI button enabling (Issue #26)
+    pub fn has_retriable_failures(&self) -> bool {
+        self.results.iter().any(|r| r.is_retriable())
+    }
+
+    /// Get count of retriable failures
+    #[allow(dead_code)] // Will be used for UI button text (Issue #26)
+    pub fn retriable_failure_count(&self) -> usize {
+        self.results.iter().filter(|r| r.is_retriable()).count()
+    }
+
+    /// Get indices of results that can be retried
+    #[allow(dead_code)] // Will be used for batch retry operations (Issue #26)
+    pub fn get_retriable_indices(&self) -> Vec<usize> {
+        self.results
+            .iter()
+            .enumerate()
+            .filter_map(|(i, r)| if r.is_retriable() { Some(i) } else { None })
+            .collect()
+    }
 }
 
 /// Rate limit status for display
@@ -501,6 +523,36 @@ pub struct EnrichmentResult {
     pub show_alternatives: bool,
     /// Index of currently selected alternative (into alternatives vec)
     pub selected_alternative: Option<usize>,
+}
+
+impl EnrichmentResult {
+    /// Check if this result can be retried
+    ///
+    /// Only failed results with recoverable or fixable errors can be retried.
+    /// Permanent errors (unsupported format, no matches, too short) cannot be fixed by retrying.
+    pub fn is_retriable(&self) -> bool {
+        if self.status != ResultStatus::Error {
+            return false;
+        }
+
+        // If we have error category, use it
+        if let Some(category) = self.error_category {
+            return category == enrichment::ErrorCategory::Recoverable
+                || category == enrichment::ErrorCategory::Fixable;
+        }
+
+        // Fallback: parse error message if category not set
+        // This shouldn't happen in normal flow, but provides safety
+        if let Some(ref error) = self.error {
+            let error_lower = error.to_lowercase();
+            // Not retriable if permanent issue
+            !(error_lower.contains("unsupported")
+                || error_lower.contains("too short")
+                || error_lower.contains("no matches"))
+        } else {
+            false
+        }
+    }
 }
 
 /// State for cover art display.
