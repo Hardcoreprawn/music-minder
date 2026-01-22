@@ -9,6 +9,66 @@ use super::super::messages::Message;
 use super::super::state::{EnrichmentResult, LoadedState, ResultStatus};
 use super::load_tracks_task;
 
+/// Parse error message to extract category and guidance
+///
+/// Analyzes error strings to determine if errors are recoverable, fixable, or permanent,
+/// and provides user-friendly guidance for each case.
+fn parse_error_info(error_msg: &str) -> (enrichment::ErrorCategory, &'static str) {
+    // Check for specific error patterns
+    if error_msg.contains("not found") && error_msg.contains("fpcalc") {
+        (
+            enrichment::ErrorCategory::Fixable,
+            "Install Chromaprint (fpcalc) - see Settings for instructions",
+        )
+    } else if error_msg.contains("locked") || error_msg.contains("in use") {
+        (
+            enrichment::ErrorCategory::Fixable,
+            "File is in use. Close the program using it and retry.",
+        )
+    } else if error_msg.contains("Unsupported") {
+        (
+            enrichment::ErrorCategory::Permanent,
+            "This file format is not supported by fpcalc. Try MP3, FLAC, OGG, or WAV.",
+        )
+    } else if error_msg.contains("too short") {
+        (
+            enrichment::ErrorCategory::Permanent,
+            "Audio file is too short for fingerprinting (minimum ~10 seconds).",
+        )
+    } else if error_msg.contains("empty") || error_msg.contains("0 bytes") {
+        (
+            enrichment::ErrorCategory::Permanent,
+            "File is empty or corrupted.",
+        )
+    } else if error_msg.contains("No matches") {
+        (
+            enrichment::ErrorCategory::Permanent,
+            "No fingerprint match found. Try manual tagging or a different source file.",
+        )
+    } else if error_msg.contains("Network") || error_msg.contains("network") {
+        (
+            enrichment::ErrorCategory::Recoverable,
+            "Check your internet connection and retry.",
+        )
+    } else if error_msg.contains("Rate limited") || error_msg.contains("rate limit") {
+        (
+            enrichment::ErrorCategory::Recoverable,
+            "API rate limit reached. Wait a minute and retry.",
+        )
+    } else if error_msg.contains("timeout") || error_msg.contains("timed out") {
+        (
+            enrichment::ErrorCategory::Recoverable,
+            "Request timed out. Check your network or try again later.",
+        )
+    } else {
+        // Default to recoverable for unknown errors
+        (
+            enrichment::ErrorCategory::Recoverable,
+            "An unexpected error occurred. Check logs for details.",
+        )
+    }
+}
+
 /// Handle enrichment-related messages (single track - Settings pane)
 pub fn handle_enrichment(s: &mut LoadedState, msg: Message) -> Task<Message> {
     match msg {
@@ -333,6 +393,8 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         confidence: Some(identification.score),
                         changes,
                         error: None,
+                        error_category: None,
+                        error_guidance: None,
                         confirmed: identification.score >= 0.7, // Auto-confirm high confidence
                         identification: Some(identification.clone()),
                         alternatives,
@@ -340,21 +402,28 @@ pub fn handle_enrich_pane(s: &mut LoadedState, msg: Message) -> Task<Message> {
                         selected_alternative: None,
                     }
                 }
-                Err(ref e) => EnrichmentResult {
-                    track_index: pos,
-                    status: ResultStatus::Error,
-                    title: None,
-                    artist: None,
-                    album: None,
-                    confidence: None,
-                    changes: vec![],
-                    error: Some(e.clone()),
-                    confirmed: false,
-                    identification: None,
-                    alternatives: vec![],
-                    show_alternatives: false,
-                    selected_alternative: None,
-                },
+                Err(ref e) => {
+                    // Parse error to extract category and guidance
+                    let (error_category, error_guidance) = parse_error_info(e);
+
+                    EnrichmentResult {
+                        track_index: pos,
+                        status: ResultStatus::Error,
+                        title: None,
+                        artist: None,
+                        album: None,
+                        confidence: None,
+                        changes: vec![],
+                        error: Some(e.clone()),
+                        error_category: Some(error_category),
+                        error_guidance: Some(error_guidance.to_string()),
+                        confirmed: false,
+                        identification: None,
+                        alternatives: vec![],
+                        show_alternatives: false,
+                        selected_alternative: None,
+                    }
+                }
             };
 
             s.enrichment_pane.results.push(enrich_result);

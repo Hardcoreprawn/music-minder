@@ -50,7 +50,8 @@ pub mod test_mocks;
 
 pub use coverart::{CoverArt, CoverArtClient, CoverSize};
 pub use domain::{
-    AudioFingerprint, EnrichmentError, EnrichmentSource, IdentifiedTrack, TrackIdentification,
+    AudioFingerprint, EnrichmentError, EnrichmentSource, ErrorCategory, IdentifiedTrack,
+    TrackIdentification,
 };
 pub use service::{EnrichmentConfig, EnrichmentService, identify_track};
 pub use telemetry::{EnrichmentMetrics, MetricsSnapshot};

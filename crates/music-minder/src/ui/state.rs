@@ -484,6 +484,12 @@ pub struct EnrichmentResult {
     pub changes: Vec<String>,
     /// Error message (if status is Error)
     pub error: Option<String>,
+    /// Error category for grouping and retry logic
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub error_category: Option<enrichment::ErrorCategory>,
+    /// User-friendly guidance for fixing the error
+    #[allow(dead_code)] // Will be used in UI display (Issue #27)
+    pub error_guidance: Option<String>,
     /// Whether this result is confirmed for writing
     pub confirmed: bool,
     /// Full identification result for writing

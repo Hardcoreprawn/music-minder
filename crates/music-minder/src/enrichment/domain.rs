@@ -100,6 +100,100 @@ pub enum EnrichmentError {
     ContractViolation { expected: String, actual: String },
 }
 
+/// Category of error for UI display and retry logic
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCategory {
+    /// Can retry automatically (network, timeout, rate limit)
+    Recoverable,
+    /// User can fix (missing API key, fpcalc not installed, file locked)
+    Fixable,
+    /// Cannot be fixed (unsupported format, file too short, no matches)
+    Permanent,
+}
+
+impl EnrichmentError {
+    /// Get the error category for UI display and retry logic
+    pub fn category(&self) -> ErrorCategory {
+        match self {
+            // Recoverable - can retry
+            EnrichmentError::Network(_) => ErrorCategory::Recoverable,
+            EnrichmentError::RateLimited => ErrorCategory::Recoverable,
+            EnrichmentError::ApiError(msg) if msg.contains("timeout") => ErrorCategory::Recoverable,
+            EnrichmentError::ApiError(msg) if msg.contains("timed out") => {
+                ErrorCategory::Recoverable
+            }
+
+            // Fixable - user action needed
+            EnrichmentError::FingerprintError(msg) if msg.contains("not found") => {
+                ErrorCategory::Fixable
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("locked") => {
+                ErrorCategory::Fixable
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("in use") => {
+                ErrorCategory::Fixable
+            }
+
+            // Permanent - cannot fix
+            EnrichmentError::NoMatches => ErrorCategory::Permanent,
+            EnrichmentError::FingerprintError(msg) if msg.contains("Unsupported") => {
+                ErrorCategory::Permanent
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("too short") => {
+                ErrorCategory::Permanent
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("empty") => {
+                ErrorCategory::Permanent
+            }
+
+            // Default to recoverable for unknown API errors
+            _ => ErrorCategory::Recoverable,
+        }
+    }
+
+    /// Get user-friendly guidance for fixing this error
+    pub fn guidance(&self) -> &'static str {
+        match self {
+            EnrichmentError::FingerprintError(msg) if msg.contains("not found") => {
+                "Install Chromaprint (fpcalc) - see Settings for instructions"
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("locked") => {
+                "File is in use. Close the program using it and retry."
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("in use") => {
+                "File is in use. Close the program using it and retry."
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("Unsupported") => {
+                "This file format is not supported by fpcalc. Try MP3, FLAC, OGG, or WAV."
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("too short") => {
+                "Audio file is too short for fingerprinting (minimum ~10 seconds)."
+            }
+            EnrichmentError::FingerprintError(msg) if msg.contains("empty") => {
+                "File is empty or corrupted."
+            }
+            EnrichmentError::Network(_) => "Check your internet connection and retry.",
+            EnrichmentError::RateLimited => "API rate limit reached. Wait a minute and retry.",
+            EnrichmentError::NoMatches => {
+                "No fingerprint match found. Try manual tagging or a different source file."
+            }
+            EnrichmentError::ApiError(msg) if msg.contains("timeout") => {
+                "Request timed out. Check your network or try again later."
+            }
+            _ => "An unexpected error occurred. Check logs for details.",
+        }
+    }
+
+    /// Get a short category label for grouping
+    pub fn category_label(&self) -> &'static str {
+        match self.category() {
+            ErrorCategory::Recoverable => "Network/API Errors",
+            ErrorCategory::Fixable => "Fixable Issues",
+            ErrorCategory::Permanent => "Unsupported",
+        }
+    }
+}
+
 impl IdentifiedTrack {
     /// Merge another identification into this one, preferring non-None values
     pub fn merge(&mut self, other: &IdentifiedTrack) {
@@ -216,5 +310,57 @@ mod tests {
         assert_eq!(track.title, Some("Song".to_string())); // Kept original
         assert_eq!(track.artist, Some("Artist".to_string())); // Filled in
         assert_eq!(track.album, Some("Album".to_string())); // Filled in
+    }
+
+    #[test]
+    fn test_error_category_recoverable() {
+        let err = EnrichmentError::Network("Connection refused".to_string());
+        assert_eq!(err.category(), ErrorCategory::Recoverable);
+        assert!(err.guidance().contains("internet connection"));
+
+        let err = EnrichmentError::RateLimited;
+        assert_eq!(err.category(), ErrorCategory::Recoverable);
+        assert!(err.guidance().contains("rate limit"));
+
+        let err = EnrichmentError::ApiError("Request timeout".to_string());
+        assert_eq!(err.category(), ErrorCategory::Recoverable);
+    }
+
+    #[test]
+    fn test_error_category_fixable() {
+        let err = EnrichmentError::FingerprintError("fpcalc not found".to_string());
+        assert_eq!(err.category(), ErrorCategory::Fixable);
+        assert!(err.guidance().contains("Install Chromaprint"));
+
+        let err = EnrichmentError::FingerprintError("File is locked or in use".to_string());
+        assert_eq!(err.category(), ErrorCategory::Fixable);
+        assert!(err.guidance().contains("in use"));
+    }
+
+    #[test]
+    fn test_error_category_permanent() {
+        let err = EnrichmentError::NoMatches;
+        assert_eq!(err.category(), ErrorCategory::Permanent);
+        assert!(err.guidance().contains("No fingerprint match"));
+
+        let err = EnrichmentError::FingerprintError("Unsupported audio format".to_string());
+        assert_eq!(err.category(), ErrorCategory::Permanent);
+        assert!(err.guidance().contains("not supported"));
+
+        let err = EnrichmentError::FingerprintError("Audio file too short".to_string());
+        assert_eq!(err.category(), ErrorCategory::Permanent);
+        assert!(err.guidance().contains("too short"));
+    }
+
+    #[test]
+    fn test_error_category_labels() {
+        let err = EnrichmentError::Network("test".to_string());
+        assert_eq!(err.category_label(), "Network/API Errors");
+
+        let err = EnrichmentError::FingerprintError("locked".to_string());
+        assert_eq!(err.category_label(), "Fixable Issues");
+
+        let err = EnrichmentError::NoMatches;
+        assert_eq!(err.category_label(), "Unsupported");
     }
 }
