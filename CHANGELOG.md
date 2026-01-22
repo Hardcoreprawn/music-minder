@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.10](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.9...music-minder-v0.1.10) (2026-01-22)
+
+
+### 🐛 Bug Fixes
+
+* **build:** correct asset paths in WiX configuration ([6d5b5a9](https://github.com/Hardcoreprawn/music-minder/commit/6d5b5a95c675d257694a9cadf23b23388d275fb9))
+* **build:** move wix folder to music-minder package directory ([229ac9a](https://github.com/Hardcoreprawn/music-minder/commit/229ac9a6bd5f0c9f6d0e263865583e8bbf4a7689))
+
 ## [0.1.9](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.8...music-minder-v0.1.9) (2026-01-22)
 
 
