@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.10...music-minder-v0.1.11) (2026-01-22)
+
+
+### 🐛 Bug Fixes
+
+* **build:** disable EULA dialog in installer temporarily ([51b8838](https://github.com/Hardcoreprawn/music-minder/commit/51b88383945c591d0f7ad9915f39250b0161e3c5))
+
 ## [0.1.10](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.9...music-minder-v0.1.10) (2026-01-22)
 
 
