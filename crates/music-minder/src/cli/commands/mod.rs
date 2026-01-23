@@ -20,7 +20,7 @@ use tokio::runtime::Runtime;
 use musicographer::scanner::is_audio_file;
 
 pub use enrich::{cmd_check_tools, cmd_enrich, cmd_identify, cmd_write_tags};
-pub use health::{cmd_check, cmd_diagnose, cmd_quality};
+pub use health::{cmd_check, cmd_diagnose, cmd_quality, cmd_validate};
 pub use organize::cmd_organize;
 pub use scan::{cmd_list, cmd_scan, cmd_watch};
 
@@ -172,6 +172,32 @@ pub enum Commands {
         #[arg(long)]
         scan_first: bool,
     },
+    /// Validate library files for corruption and incomplete metadata
+    Validate {
+        /// Path to file or directory to validate
+        path: Option<PathBuf>,
+        /// Database path
+        #[arg(long, default_value = "music_minder.db")]
+        db: PathBuf,
+        /// Verify tags are readable
+        #[arg(long)]
+        check_tags: bool,
+        /// Verify audio is decodable
+        #[arg(long)]
+        check_audio: bool,
+        /// Verify fpcalc can process file
+        #[arg(long)]
+        check_fingerprint: bool,
+        /// Show only files with errors or warnings
+        #[arg(long)]
+        problems_only: bool,
+        /// Parallel validation using multiple threads
+        #[arg(long)]
+        parallel: bool,
+        /// Output format: text, json
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 /// Run the specified CLI command.
@@ -302,6 +328,31 @@ pub fn run_command(cli: &Cli) -> anyhow::Result<bool> {
                 None
             };
             cmd_watch(&rt, path, *verbose, pool, *scan_first)?;
+            Ok(true)
+        }
+        Some(Commands::Validate {
+            path,
+            db,
+            check_tags,
+            check_audio,
+            check_fingerprint,
+            problems_only,
+            parallel,
+            format,
+        }) => {
+            let db_url = format!("sqlite:{}", db.display());
+            let pool = rt.block_on(crate::db::init_db(&db_url))?;
+            cmd_validate(
+                &rt,
+                pool,
+                path.as_ref(),
+                *check_tags,
+                *check_audio,
+                *check_fingerprint,
+                *problems_only,
+                *parallel,
+                format,
+            )?;
             Ok(true)
         }
         None => Ok(false),

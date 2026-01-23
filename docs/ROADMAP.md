@@ -50,11 +50,7 @@ All quick bug fixes completed! ✅
 
 ### 🚀 Feature Work (Next Sprint)
 
-| Issue | Title | Est. | Priority | Notes |
-| ----- | ----- | ---- | -------- | ----- |
-| [#9](https://github.com/Hardcoreprawn/music-minder/issues/9) | Startup lazy-loading optimizations | 4h | MEDIUM | Audio device enumeration |
-| [#10](https://github.com/Hardcoreprawn/music-minder/issues/10) | Profile scanning bottlenecks | 2h | MEDIUM | Document metrics for optimization |
-| [#11](https://github.com/Hardcoreprawn/music-minder/issues/11) | Scanning Rayon parallelization | 6h | MEDIUM | Depends on #10 profiling |
+_No open feature issues - Phase D features completed!_
 
 ### 🛡️ Robustness Enhancements (Phase B.7 Follow-ups)
 
@@ -62,11 +58,8 @@ Lower priority – defer to v0.3.0 unless blocking users
 
 | Issue | Title | Est. | Category |
 | ----- | ----- | ---- | -------- |
-| [#30](https://github.com/Hardcoreprawn/music-minder/issues/30) | Enrichment telemetry/metrics | 3h | Observability |
 | [#29](https://github.com/Hardcoreprawn/music-minder/issues/29) | Graceful degradation (partial enrichment) | 6h | UX |
-| [#28](https://github.com/Hardcoreprawn/music-minder/issues/28) | Health checks (fpcalc, API availability) | 3h | Diagnostics |
 | [#27](https://github.com/Hardcoreprawn/music-minder/issues/27) | Better enrichment error UX | 4h | UX |
-| [#26](https://github.com/Hardcoreprawn/music-minder/issues/26) | "Retry failed" button | 2h | UX |
 | [#25](https://github.com/Hardcoreprawn/music-minder/issues/25) | Show backup paths in errors | 1h | UX |
 | [#24](https://github.com/Hardcoreprawn/music-minder/issues/24) | Library validation command | 4h | CLI |
 | [#23](https://github.com/Hardcoreprawn/music-minder/issues/23) | Persistent enrichment queue | 6h | Background |
@@ -107,7 +100,7 @@ Good to have, but not blocking current features
 **Performance Achievements:**
 
 - ✅ **Startup:** 17ms to interactive (lazy player init, incremental DB loading)
-- ✅ **Scanning:** 10x faster (650 files/sec, batch DB writes)
+- ✅ **Scanning:** 10x faster (650 files/sec, batch DB writes + Rayon parallel file discovery)
 - ✅ **SIMD:** Validated manual AVX2 is 1.7-2.9x faster than compiler
 
 **Security & Tooling:**
@@ -282,7 +275,7 @@ See [SCANNING_PERFORMANCE_ANALYSIS.md](SCANNING_PERFORMANCE_ANALYSIS.md) for det
 
 - [x] Transaction batching (100 files per commit) — Expected 10-15x gain
 - [x] In-memory artist/album cache — Expected 2-3x gain
-- [ ] Rayon parallel metadata reads — Expected 2-4x gain on SSD
+- [x] Rayon parallel metadata reads — Implemented in music_journo scanner
 - [ ] Relaxed parsing options (skip cover art) — Expected 1.2x gain
 
 ---

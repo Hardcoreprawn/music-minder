@@ -377,6 +377,10 @@ pub fn write<T: Into<FullMetadata>>(
     match write_result {
         Ok(()) => {
             // Success - remove backup
+            tracing::debug!(
+                "Metadata write successful, cleaning up backup at {}",
+                backup_path.display()
+            );
             let _ = std::fs::remove_file(&backup_path);
             Ok(WriteResult {
                 fields_updated,
@@ -386,14 +390,21 @@ pub fn write<T: Into<FullMetadata>>(
         Err(e) => {
             // Failure - restore from backup
             if backup_path.exists() {
-                if let Err(restore_err) = std::fs::copy(&backup_path, path) {
-                    eprintln!(
-                        "CRITICAL: Failed to restore backup after write failure: {}",
-                        restore_err
+                if let Err(_restore_err) = std::fs::copy(&backup_path, path) {
+                    let backup_msg = format!(
+                        "CRITICAL: Failed to restore backup after write failure. \
+                         Backup preserved at: {} \
+                         You can manually restore by renaming this file.",
+                        backup_path.display()
                     );
-                    eprintln!("Backup saved at: {}", backup_path.display());
+                    eprintln!("{}", backup_msg);
+                    return Err(e).context(backup_msg);
                 } else {
                     // Successfully restored, can remove backup
+                    tracing::warn!(
+                        "Metadata write failed but successfully restored from backup at {}",
+                        backup_path.display()
+                    );
                     let _ = std::fs::remove_file(&backup_path);
                 }
             }
