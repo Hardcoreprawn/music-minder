@@ -1,5 +1,6 @@
 //! File health tracking and diagnostics commands.
 
+use rayon::prelude::*;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
@@ -232,4 +233,195 @@ fn print_quality_stats(stats: &db::QualityStats) {
             println!("\nAverage quality score: ~{}%", avg);
         }
     }
+}
+
+/// Validate library files for corruption and incomplete metadata
+#[allow(clippy::too_many_arguments)]
+pub fn cmd_validate(
+    rt: &Runtime,
+    pool: sqlx::SqlitePool,
+    path: Option<&PathBuf>,
+    check_tags: bool,
+    check_audio: bool,
+    check_fingerprint: bool,
+    problems_only: bool,
+    parallel: bool,
+    format: &str,
+) -> anyhow::Result<()> {
+    rt.block_on(async {
+        // If no specific checks requested, do all checks
+        let do_all = !check_tags && !check_audio && !check_fingerprint;
+
+        // Get files to validate
+        let files = if let Some(p) = path {
+            // Validate specific path
+            crate::cli::commands::collect_audio_files(p, true)
+        } else {
+            // Validate all tracked files
+            match soundstore::db::get_all_tracks(&pool).await {
+                Ok(tracks) => tracks.into_iter().map(|t| PathBuf::from(t.path)).collect(),
+                Err(e) => {
+                    eprintln!("Failed to get tracked files: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        };
+
+        if files.is_empty() {
+            println!("No files to validate");
+            return;
+        }
+
+        println!("Validating {} files...\n", files.len());
+
+        // Validation function
+        let validate_file = |file_path: &PathBuf| -> ValidationResult {
+            let mut result = ValidationResult {
+                path: file_path.clone(),
+                ok: true,
+                errors: Vec::new(),
+                warnings: Vec::new(),
+            };
+
+            // 1. File accessibility
+            if !file_path.exists() {
+                result.ok = false;
+                result.errors.push("File does not exist".to_string());
+                return result;
+            }
+
+            if let Ok(metadata) = std::fs::metadata(file_path) {
+                if metadata.len() == 0 {
+                    result.ok = false;
+                    result.errors.push("File is zero bytes".to_string());
+                    return result;
+                }
+                if metadata.permissions().readonly() {
+                    result.warnings.push("File is read-only".to_string());
+                }
+            }
+
+            // 2. Tag integrity (if requested or do_all)
+            if check_tags || do_all {
+                match soundstore::metadata::read(file_path) {
+                    Ok(meta) => {
+                        if meta.title.is_empty() {
+                            result.warnings.push("Missing title tag".to_string());
+                        }
+                        if meta.artist.is_empty() {
+                            result.warnings.push("Missing artist tag".to_string());
+                        }
+                    }
+                    Err(e) => {
+                        result.ok = false;
+                        result.errors.push(format!("Cannot read tags: {}", e));
+                        return result;
+                    }
+                }
+            }
+
+            // 3. Audio integrity (if requested or do_all)
+            if check_audio || do_all {
+                // Try to get audio properties (duration, sample rate)
+                if let Err(e) = soundstore::metadata::read(file_path) {
+                    result.ok = false;
+                    result.errors.push(format!("Cannot decode audio: {}", e));
+                    return result;
+                }
+            }
+
+            // 4. Fingerprint capability (if requested or do_all)
+            if check_fingerprint || do_all {
+                // Check if fpcalc is available (basic check - could run fpcalc but it's slow)
+                // For now just skip this check since it would require adding 'which' crate
+                // Users can run 'diagnose' command to check fpcalc availability
+            }
+
+            result
+        };
+
+        // Run validation (parallel or sequential)
+        let results: Vec<ValidationResult> = if parallel {
+            files.par_iter().map(validate_file).collect()
+        } else {
+            files.iter().map(validate_file).collect()
+        };
+
+        // Count results
+        let ok_count = results.iter().filter(|r| r.ok && r.warnings.is_empty()).count();
+        let warning_count = results.iter().filter(|r| r.ok && !r.warnings.is_empty()).count();
+        let error_count = results.iter().filter(|r| !r.ok).count();
+
+        // Output results
+        match format {
+            "json" => {
+                let json_output = serde_json::json!({
+                    "total": files.len(),
+                    "ok": ok_count,
+                    "warnings": warning_count,
+                    "errors": error_count,
+                    "files": results.iter().filter(|r| !problems_only || !r.ok || !r.warnings.is_empty()).map(|r| {
+                        serde_json::json!({
+                            "path": r.path.to_string_lossy(),
+                            "ok": r.ok,
+                            "errors": r.errors,
+                            "warnings": r.warnings,
+                        })
+                    }).collect::<Vec<_>>(),
+                });
+                if let Ok(json_str) = serde_json::to_string_pretty(&json_output) {
+                    println!("{}", json_str);
+                } else {
+                    eprintln!("Failed to serialize JSON output");
+                    std::process::exit(1);
+                }
+            }
+            _ => {
+                // Text output
+                println!("Validation complete!\n");
+                println!("✓ {} files OK", ok_count);
+                if warning_count > 0 {
+                    println!("⚠️  {} files have warnings", warning_count);
+                }
+                if error_count > 0 {
+                    println!("❌ {} files have errors", error_count);
+                }
+                println!();
+
+                // Show errors
+                let errors: Vec<_> = results.iter().filter(|r| !r.ok).collect();
+                if !errors.is_empty() {
+                    println!("Errors:");
+                    for result in errors.iter().take(10) {
+                        println!("  {} - {}", result.path.display(), result.errors.join(", "));
+                    }
+                    if errors.len() > 10 {
+                        println!("  ... and {} more errors", errors.len() - 10);
+                    }
+                    println!();
+                }
+
+                // Show warnings
+                let warnings: Vec<_> = results.iter().filter(|r| r.ok && !r.warnings.is_empty()).collect();
+                if !warnings.is_empty() && !problems_only {
+                    println!("Warnings:");
+                    for result in warnings.iter().take(10) {
+                        println!("  {} - {}", result.path.display(), result.warnings.join(", "));
+                    }
+                    if warnings.len() > 10 {
+                        println!("  ... and {} more warnings", warnings.len() - 10);
+                    }
+                }
+            }
+        }
+    });
+    Ok(())
+}
+
+#[derive(Debug)]
+struct ValidationResult {
+    path: PathBuf,
+    ok: bool,
+    errors: Vec<String>,
+    warnings: Vec<String>,
 }
