@@ -125,6 +125,9 @@ jobs:
   test-windows:
     name: Test (Windows)
     runs-on: windows-latest
+    # Only run Windows tests on push to main, not on every PR
+    # This saves 2x compute costs while still catching platform-specific bugs before release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
     steps:
@@ -156,10 +159,15 @@ jobs:
     steps:
       - name: Check all jobs passed
         run: |
+          # Windows tests only run on main pushes, so skip in success check if not run
           if [[ "${{ needs.lint.result }}" != "success" ]] || \
-             [[ "${{ needs.test-linux.result }}" != "success" ]] || \
-             [[ "${{ needs.test-windows.result }}" != "success" ]]; then
+             [[ "${{ needs.test-linux.result }}" != "success" ]]; then
             echo "One or more jobs failed"
+            exit 1
+          fi
+          # Only check Windows if it actually ran
+          if [[ "${{ needs.test-windows.result }}" != "skipped" && "${{ needs.test-windows.result }}" != "success" ]]; then
+            echo "Windows tests failed"
             exit 1
           fi
           echo "All CI checks passed!"
