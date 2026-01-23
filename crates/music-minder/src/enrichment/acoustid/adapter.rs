@@ -95,6 +95,7 @@ fn convert_recording_to_identifications(
                     score: acoustid_score,
                     track,
                     source: EnrichmentSource::AcoustId,
+                    enrichment_level: crate::enrichment::domain::EnrichmentLevel::Basic,
                 }
             })
             .collect()
@@ -122,6 +123,7 @@ fn convert_recording_to_identifications(
                 genres: vec![],
             },
             source: EnrichmentSource::AcoustId,
+            enrichment_level: crate::enrichment::domain::EnrichmentLevel::Basic,
         }]
     }
 }
@@ -228,6 +230,7 @@ mod tests {
                     ..Default::default()
                 },
                 source: EnrichmentSource::AcoustId,
+                enrichment_level: crate::enrichment::domain::EnrichmentLevel::Basic,
             },
             TrackIdentification {
                 score: 0.9,
@@ -236,6 +239,7 @@ mod tests {
                     ..Default::default()
                 },
                 source: EnrichmentSource::AcoustId,
+                enrichment_level: crate::enrichment::domain::EnrichmentLevel::Basic,
             },
         ];
 

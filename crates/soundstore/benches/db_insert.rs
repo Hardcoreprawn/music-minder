@@ -104,6 +104,8 @@ fn data_structure_creation(c: &mut Criterion) {
                 quality_checked_at: black_box(None),
                 acoustid_confidence: black_box(None),
                 musicbrainz_recording_id: black_box(None),
+                enrichment_level: black_box(None),
+                cover_art_available: black_box(None),
             };
         });
     });
@@ -127,6 +129,8 @@ fn data_structure_creation(c: &mut Criterion) {
                 musicbrainz_recording_id: black_box(Some(
                     "a1b2c3d4-e5f6-7890-abcd-ef1234567890".to_string(),
                 )),
+                enrichment_level: black_box(Some("enhanced".to_string())),
+                cover_art_available: black_box(Some(1)),
             };
         });
     });
@@ -168,6 +172,8 @@ fn batch_operations(c: &mut Criterion) {
                     quality_checked_at: black_box(None),
                     acoustid_confidence: black_box(None),
                     musicbrainz_recording_id: black_box(None),
+                    enrichment_level: black_box(None),
+                    cover_art_available: black_box(None),
                 });
             }
             black_box(tracks)
@@ -193,6 +199,8 @@ fn batch_operations(c: &mut Criterion) {
         quality_checked_at: None,
         acoustid_confidence: None,
         musicbrainz_recording_id: None,
+        enrichment_level: None,
+        cover_art_available: None,
     };
 
     group.bench_function("clone_track", |b| {

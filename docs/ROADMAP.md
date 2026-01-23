@@ -24,11 +24,24 @@ What made Winamp special:
 
 ---
 
-## Current Status: v0.2.1+ (Phases A, B.0-B.7, C.1 Complete)
+## Current Status: v0.1.12 (Phases A, B.0-B.7, C.1 Complete)
 
-**242 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
+**243 tests passing** | **0 clippy warnings** | **5-crate modular architecture**
 
-**Last Updated:** January 22, 2026
+**Last Updated:** January 23, 2026
+
+### 🎯 Next Sprint: Phase B.8 - Robustness Completion
+
+Complete Phase B robustness work before moving to new features:
+
+1. **#29 - Graceful degradation** (~6h) - Handle non-critical enrichment failures without blocking
+2. **#23 - Persistent enrichment queue** (~6h) - Add retry logic and persistence for failed enrichments  
+3. **#43 - User documentation** (~8h) - Create user-facing guide for CLI and common workflows
+
+**Defer to v0.2.0:**
+- #44 (Playlist import/export)
+- #45 (Cross-platform installers)
+- #22-19 (Testing infrastructure)
 
 ---
 
@@ -36,35 +49,32 @@ What made Winamp special:
 
 > **Strategy:** Merge PRs → Fix bugs → Complete features → Plan robustness enhancements
 
-### 🔄 Active Pull Requests
+### � Phase B.8: Robustness Completion (Current Sprint)
 
-| PR | Title | Status | Priority | Action |
-| -- | ----- | ------ | -------- | ------ |
-| [#33](https://github.com/Hardcoreprawn/music-minder/pull/33) | Security: bump rsa 0.9.9 → 0.9.10 | CI pending | **HIGH** | ✅ Merge when CI passes (panic fix) |
-| [#17](https://github.com/Hardcoreprawn/music-minder/pull/17) | Copilot instructions | Draft | MEDIUM | Review alignment with current arch |
-| [#15](https://github.com/Hardcoreprawn/music-minder/pull/15) | Clone optimization (Arc<> in hot paths) | Draft | MEDIUM | Performance test & validate |
+**Goal:** Complete Phase B before moving to new features
 
-### 🐛 Bug Fixes (Quick Wins)
+| Issue | Title | Est. | Status | Priority |
+| ----- | ----- | ---- | ------ | -------- |
+| [#29](https://github.com/Hardcoreprawn/music-minder/issues/29) | Graceful degradation (partial enrichment) | 6h | **IN PROGRESS** | **P0** |
+| [#23](https://github.com/Hardcoreprawn/music-minder/issues/23) | Persistent enrichment queue | 6h | Not started | P0 |
+| [#43](https://github.com/Hardcoreprawn/music-minder/issues/43) | User documentation | 8h | Not started | P1 |
 
-All quick bug fixes completed! ✅
+**Completed in v0.1.12:**
+- ✅ #24 - Library validation command
+- ✅ #25 - Backup paths in error messages
+- ✅ #27 - Error guidance (v0.1.9)
+- ✅ #28 - Health checks (v0.1.9)
 
-### 🚀 Feature Work (Next Sprint)
+### 🎨 Feature Backlog (v0.2.0+)
 
-_No open feature issues - Phase D features completed!_
-
-### 🛡️ Robustness Enhancements (Phase B.7 Follow-ups)
-
-Lower priority – defer to v0.3.0 unless blocking users
+Defer to next release cycle after Phase B.8 complete
 
 | Issue | Title | Est. | Category |
 | ----- | ----- | ---- | -------- |
-| [#29](https://github.com/Hardcoreprawn/music-minder/issues/29) | Graceful degradation (partial enrichment) | 6h | UX |
-| [#27](https://github.com/Hardcoreprawn/music-minder/issues/27) | Better enrichment error UX | 4h | UX |
-| [#25](https://github.com/Hardcoreprawn/music-minder/issues/25) | Show backup paths in errors | 1h | UX |
-| [#24](https://github.com/Hardcoreprawn/music-minder/issues/24) | Library validation command | 4h | CLI |
-| [#23](https://github.com/Hardcoreprawn/music-minder/issues/23) | Persistent enrichment queue | 6h | Background |
+| [#44](https://github.com/Hardcoreprawn/music-minder/issues/44) | Playlist import/export (M3U, PLS) | 8h | Feature |
+| [#45](https://github.com/Hardcoreprawn/music-minder/issues/45) | Cross-platform installers | 12h | Infrastructure |
 
-### 🧪 Testing Infrastructure (Optional)
+### 🧪 Testing Infrastructure (Optional - v0.3.0+)
 
 Good to have, but not blocking current features
 
@@ -75,7 +85,7 @@ Good to have, but not blocking current features
 | [#20](https://github.com/Hardcoreprawn/music-minder/issues/20) | Chaos engineering tests | 4h | Medium |
 | [#19](https://github.com/Hardcoreprawn/music-minder/issues/19) | Performance regression tests (retry logic) | 2h | Medium |
 
-### 🎨 Future Features (Post-v0.3.0)
+### 🎨 Future UI/UX (Post-v0.2.0)
 
 - **C.2:** UI/UX refinements (smooth transitions, focus indicators)
 - **C.3:** Advanced features (duplicate detection, smart playlists)

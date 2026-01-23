@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::enrichment::{
     acoustid::AcoustIdClient,
     coverart::{CoverArt, CoverArtClient, CoverSize},
-    domain::{EnrichmentError, TrackIdentification},
+    domain::{EnrichmentError, EnrichmentLevel, TrackIdentification},
     fingerprint,
     musicbrainz::MusicBrainzClient,
     telemetry::{EnrichmentMetrics, Timer},
@@ -130,6 +130,9 @@ impl EnrichmentService {
             return Err(EnrichmentError::NoMatches);
         };
 
+        // At this point we have Basic enrichment (AcoustID match)
+        let mut enrichment_level = EnrichmentLevel::Basic;
+
         // Step 4: Optionally enrich with MusicBrainz
         if self.config.use_musicbrainz
             && let Some(ref recording_id) = identification.track.recording_id
@@ -143,14 +146,23 @@ impl EnrichmentService {
                     self.metrics.record_musicbrainz_success(timer.elapsed());
                     // Merge MusicBrainz data into our identification
                     identification.track.merge(&mb_result.track);
+                    // We now have Enhanced enrichment
+                    enrichment_level = EnrichmentLevel::Enhanced;
                 }
                 Err(e) => {
                     self.metrics.record_musicbrainz_error(&e);
                     // Log but don't fail - AcoustID data is still useful
-                    tracing::warn!("MusicBrainz lookup failed: {}", e);
+                    tracing::warn!(
+                        "MusicBrainz lookup failed, continuing with Basic enrichment: {}",
+                        e
+                    );
+                    // enrichment_level stays at Basic
                 }
             }
         }
+
+        // Set the enrichment level on the identification
+        identification.enrichment_level = enrichment_level;
 
         Ok(identification)
     }

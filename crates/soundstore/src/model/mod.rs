@@ -11,6 +11,7 @@
 //! - `tracks` - Individual audio files with metadata
 
 use sqlx::FromRow;
+use std::str::FromStr;
 
 /// An artist in the music library.
 #[derive(Debug, Clone, FromRow)]
@@ -61,6 +62,60 @@ pub struct Track {
     pub acoustid_confidence: Option<f64>,
     /// MusicBrainz recording ID
     pub musicbrainz_recording_id: Option<String>,
+    /// Enrichment level (minimal, basic, enhanced, complete)
+    pub enrichment_level: Option<String>,
+    /// Whether cover art is available
+    pub cover_art_available: Option<i64>,
+}
+
+/// Enrichment level for a track.
+///
+/// Tracks the completeness of metadata enrichment:
+/// - **Minimal**: File metadata only
+/// - **Basic**: + AcoustID fingerprint match (title, artist, album)
+/// - **Enhanced**: + MusicBrainz enrichment (genres, release types, IDs)
+/// - **Complete**: + Cover art downloaded
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EnrichmentLevel {
+    Minimal,
+    Basic,
+    Enhanced,
+    Complete,
+}
+
+impl EnrichmentLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EnrichmentLevel::Minimal => "minimal",
+            EnrichmentLevel::Basic => "basic",
+            EnrichmentLevel::Enhanced => "enhanced",
+            EnrichmentLevel::Complete => "complete",
+        }
+    }
+
+    /// Get a human-readable description of what's included at this level
+    pub fn description(&self) -> &'static str {
+        match self {
+            EnrichmentLevel::Minimal => "File metadata only",
+            EnrichmentLevel::Basic => "AcoustID fingerprint match",
+            EnrichmentLevel::Enhanced => "MusicBrainz enrichment (genres, release info)",
+            EnrichmentLevel::Complete => "Full enrichment with cover art",
+        }
+    }
+}
+
+impl FromStr for EnrichmentLevel {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "minimal" => Ok(EnrichmentLevel::Minimal),
+            "basic" => Ok(EnrichmentLevel::Basic),
+            "enhanced" => Ok(EnrichmentLevel::Enhanced),
+            "complete" => Ok(EnrichmentLevel::Complete),
+            _ => Err(()),
+        }
+    }
 }
 
 impl Track {
@@ -82,5 +137,18 @@ impl Track {
         self.quality_flags
             .map(crate::quality::QualityFlags::from_bits_i64)
             .unwrap_or_default()
+    }
+
+    /// Get enrichment level as typed enum.
+    pub fn enrichment_level(&self) -> EnrichmentLevel {
+        self.enrichment_level
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(EnrichmentLevel::Minimal)
+    }
+
+    /// Check if track has cover art available.
+    pub fn has_cover_art(&self) -> bool {
+        self.cover_art_available.unwrap_or(0) != 0
     }
 }

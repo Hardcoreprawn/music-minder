@@ -58,6 +58,7 @@ pub fn to_identification(response: dto::RecordingResponse) -> TrackIdentificatio
         score: 1.0, // MusicBrainz lookups by ID are exact matches
         track,
         source: EnrichmentSource::MusicBrainz,
+        enrichment_level: crate::enrichment::domain::EnrichmentLevel::Enhanced,
     }
 }
 

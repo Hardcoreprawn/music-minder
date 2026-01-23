@@ -137,6 +137,7 @@ pub mod mocks {
                         ..Default::default()
                     },
                     source: crate::enrichment::domain::EnrichmentSource::AcoustId,
+                    enrichment_level: crate::enrichment::domain::EnrichmentLevel::Basic,
                 }],
                 error: None,
             }
@@ -191,6 +192,7 @@ pub mod mocks {
                         ..Default::default()
                     },
                     source: crate::enrichment::domain::EnrichmentSource::MusicBrainz,
+                    enrichment_level: crate::enrichment::domain::EnrichmentLevel::Enhanced,
                 }),
                 error: None,
             }

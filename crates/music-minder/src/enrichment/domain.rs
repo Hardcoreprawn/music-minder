@@ -14,6 +14,34 @@ pub struct TrackIdentification {
     pub track: IdentifiedTrack,
     /// Where this identification came from
     pub source: EnrichmentSource,
+    /// What level of enrichment was achieved
+    pub enrichment_level: EnrichmentLevel,
+}
+
+/// Enrichment level achieved for a track.
+///
+/// Tracks what metadata we successfully obtained:
+/// - **Minimal**: File metadata only (no external enrichment)
+/// - **Basic**: AcoustID fingerprint match (title, artist, album)
+/// - **Enhanced**: Basic + MusicBrainz enrichment (genres, release types, IDs)
+/// - **Complete**: Enhanced + cover art downloaded
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EnrichmentLevel {
+    Minimal,
+    Basic,
+    Enhanced,
+    Complete,
+}
+
+impl EnrichmentLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EnrichmentLevel::Minimal => "minimal",
+            EnrichmentLevel::Basic => "basic",
+            EnrichmentLevel::Enhanced => "enhanced",
+            EnrichmentLevel::Complete => "complete",
+        }
+    }
 }
 
 /// Track metadata obtained from external services
