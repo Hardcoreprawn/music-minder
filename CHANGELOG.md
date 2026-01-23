@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.11...music-minder-v0.1.12) (2026-01-23)
+
+
+### ✨ Features
+
+* add backup paths in errors and validate command ([#41](https://github.com/Hardcoreprawn/music-minder/issues/41)) ([4962cf0](https://github.com/Hardcoreprawn/music-minder/commit/4962cf092769d21ed06be385020c4b9dd556182c)), closes [#24](https://github.com/Hardcoreprawn/music-minder/issues/24) [#25](https://github.com/Hardcoreprawn/music-minder/issues/25)
+
 ## [0.1.11](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.10...music-minder-v0.1.11) (2026-01-22)
 
 
