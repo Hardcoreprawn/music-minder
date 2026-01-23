@@ -247,7 +247,7 @@ All checks must pass before merge. Use the pre-commit hook (installed via `scrip
 - Batch related commits into a feature branch
 - Create a PR to run CI once on the complete changeset
 - This reduces CI runs by ~10x and saves significant compute time
-- Direct pushes to main trigger full CI (Linux + Windows + CodeQL) on every commit
+- Direct pushes to main trigger full CI (Linux + Windows) on every commit; CodeQL runs on its own schedule and security-focused PR triggers
 
 **When to skip CI:**
 - Use `[ci skip]` in commit messages for docs-only changes

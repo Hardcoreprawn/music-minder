@@ -1,8 +1,8 @@
 name: CodeQL
 
 on:
-  # Only run on schedule and manual trigger - Rust's compiler catches most issues
-  # CodeQL is better suited for languages with runtime vulnerabilities
+  # Run on schedule, manual triggers, and select security-sensitive pull requests
+  # Rust's compiler catches most issues; CodeQL here is mainly for defense-in-depth
   schedule:
     # Weekly scan on Sundays at 2am UTC
     - cron: '0 2 * * 0'
