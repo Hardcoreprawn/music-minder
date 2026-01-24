@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.12...music-minder-v0.1.13) (2026-01-24)
+
+
+### ✨ Features
+
+* **enrichment:** add graceful degradation with enrichment levels ([20eb49c](https://github.com/Hardcoreprawn/music-minder/commit/20eb49c1b0713c69b83dfb87d8a6b9f6662fc7a1))
+
 ## [0.1.12](https://github.com/Hardcoreprawn/music-minder/compare/music-minder-v0.1.11...music-minder-v0.1.12) (2026-01-23)
 
 
